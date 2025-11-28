@@ -9,32 +9,16 @@
 #include "Logging.hpp"
 
 namespace draconis::utils::cache {
-  namespace {
-    using types::Fn;
-    using types::LockGuard;
-    using types::Mutex;
-    using types::None;
-    using types::Option;
-    using types::Pair;
-    using types::Result;
-    using types::Some;
-    using types::String;
-    using types::u64;
-    using types::u8;
-    using types::UniquePointer;
-    using types::Unit;
-    using types::UnorderedMap;
-    using types::Vec;
+  namespace types = ::draconis::utils::types;
 
-    using std::chrono::days;
-    using std::chrono::duration_cast;
-    using std::chrono::seconds;
-    using std::chrono::system_clock;
+  using std::chrono::days;
+  using std::chrono::duration_cast;
+  using std::chrono::seconds;
+  using std::chrono::system_clock;
 
-    namespace fs = std::filesystem;
-  } // namespace
+  namespace fs = std::filesystem;
 
-  enum class CacheLocation : u8 {
+  enum class CacheLocation : types::u8 {
     InMemory,      ///< Volatile, lost on app exit. Fastest.
     TempDirectory, ///< Persists until next reboot or system cleanup.
     Persistent     ///< Stored in a user-level cache dir (e.g., ~/.cache).
@@ -43,18 +27,18 @@ namespace draconis::utils::cache {
   struct CachePolicy {
     CacheLocation location = CacheLocation::Persistent;
 
-    Option<seconds> ttl = days(1); ///< Default to 1 day.
+    types::Option<seconds> ttl = days(1); ///< Default to 1 day.
 
     static fn inMemory() -> CachePolicy {
-      return { .location = CacheLocation::InMemory, .ttl = None };
+      return { .location = CacheLocation::InMemory, .ttl = types::None };
     }
 
     static fn neverExpire() -> CachePolicy {
-      return { .location = CacheLocation::Persistent, .ttl = None };
+      return { .location = CacheLocation::Persistent, .ttl = types::None };
     }
 
     static fn tempDirectory() -> CachePolicy {
-      return { .location = CacheLocation::TempDirectory, .ttl = None };
+      return { .location = CacheLocation::TempDirectory, .ttl = types::None };
     }
   };
 
@@ -72,29 +56,29 @@ namespace draconis::utils::cache {
 
     CacheManager() : m_globalPolicy { .location = CacheLocation::Persistent, .ttl = days(1) } {}
 
-    fn setGlobalPolicy(const CachePolicy& policy) -> Unit {
-      LockGuard lock(m_cacheMutex);
+    fn setGlobalPolicy(const CachePolicy& policy) -> types::Unit {
+      types::LockGuard lock(m_cacheMutex);
       m_globalPolicy = policy;
     }
 
     template <typename T>
     struct CacheEntry {
-      T           data;
-      Option<u64> expires; // store as UNIX timestamp (seconds since epoch), None if no expiry
+      T                         data;
+      types::Option<types::u64> expires; // store as UNIX timestamp (seconds since epoch), None if no expiry
     };
 
     template <typename T>
     fn getOrSet(
-      const String&       key,
-      Option<CachePolicy> overridePolicy,
-      Fn<Result<T>()>     fetcher
-    ) -> Result<T> {
+      const types::String&          key,
+      types::Option<CachePolicy>    overridePolicy,
+      types::Fn<types::Result<T>()> fetcher
+    ) -> types::Result<T> {
       if constexpr (DRAC_ENABLE_CACHING) {
         /* Early-exit if caching is globally disabled for this run. */
         if (ignoreCache)
           return fetcher();
 
-        LockGuard lock(m_cacheMutex);
+        types::LockGuard lock(m_cacheMutex);
 
         const CachePolicy& policy = overridePolicy.value_or(m_globalPolicy);
 
@@ -107,7 +91,7 @@ namespace draconis::utils::cache {
             return entry.data;
 
         // 2. Check filesystem cache
-        const Option<fs::path> filePath = getCacheFilePath(key, policy.location);
+        const types::Option<fs::path> filePath = getCacheFilePath(key, policy.location);
 
         if (filePath && fs::exists(*filePath)) {
           if (std::ifstream ifs(*filePath, std::ios::binary); ifs) {
@@ -128,13 +112,13 @@ namespace draconis::utils::cache {
         }
 
         // 3. Cache miss: call fetcher (move the callable to indicate consumption)
-        Result<T> fetchedResult = fetcher();
+        types::Result<T> fetchedResult = fetcher();
 
         if (!fetchedResult)
           return fetchedResult;
 
         // 4. Store in cache
-        Option<u64> expiryTs;
+        types::Option<types::u64> expiryTs;
         if (policy.ttl.has_value()) {
           system_clock::time_point now        = system_clock::now();
           system_clock::time_point expiryTime = now + *policy.ttl;
@@ -171,8 +155,8 @@ namespace draconis::utils::cache {
     }
 
     template <typename T>
-    fn getOrSet(const String& key, Fn<Result<T>()> fetcher) -> Result<T> {
-      return getOrSet(key, None, fetcher);
+    fn getOrSet(const types::String& key, types::Fn<types::Result<T>()> fetcher) -> types::Result<T> {
+      return getOrSet(key, types::None, fetcher);
     }
 
     /**
@@ -184,16 +168,16 @@ namespace draconis::utils::cache {
      *
      * @param key Cache key to invalidate.
      */
-    fn invalidate(const String& key) -> Unit {
+    fn invalidate(const types::String& key) -> types::Unit {
       if constexpr (DRAC_ENABLE_CACHING) {
-        LockGuard lock(m_cacheMutex);
+        types::LockGuard lock(m_cacheMutex);
 
         // Erase from in-memory cache (no harm if the key is absent).
         m_inMemoryCache.erase(key);
 
         // Attempt to remove the on-disk copies for both possible locations.
         for (const CacheLocation loc : { CacheLocation::TempDirectory, CacheLocation::Persistent })
-          if (const Option<fs::path> filePath = getCacheFilePath(key, loc); filePath && fs::exists(*filePath)) {
+          if (const types::Option<fs::path> filePath = getCacheFilePath(key, loc); filePath && fs::exists(*filePath)) {
             std::error_code errc;
             fs::remove(*filePath, errc);
           }
@@ -209,15 +193,15 @@ namespace draconis::utils::cache {
      * persistent and temporary cache directories while preserving the
      * directory structure.
      */
-    fn invalidateAll(bool logRemovals = false) -> u8 {
+    fn invalidateAll(bool logRemovals = false) -> types::u8 {
       if constexpr (DRAC_ENABLE_CACHING) {
-        LockGuard lock(m_cacheMutex);
+        types::LockGuard lock(m_cacheMutex);
 
-        u8 removedCount = 0;
+        types::u8 removedCount = 0;
 
         // Record keys currently present so we can clean their temp-dir copies
         // after we clear the map.
-        Vec<String> keys;
+        types::Vec<types::String> keys;
         keys.reserve(m_inMemoryCache.size());
         for (const auto& [key, val] : m_inMemoryCache)
           keys.emplace_back(key);
@@ -239,7 +223,7 @@ namespace draconis::utils::cache {
               fs::remove(entry.path(), errc);
               removedCount++;
               if (logRemovals)
-                logging::Println("Removed persistent cache file: {}", entry.path().string());
+                info_log("Removed persistent cache file: {}", entry.path().string());
             }
         }
 
@@ -254,7 +238,7 @@ namespace draconis::utils::cache {
               bool shouldRemove = false;
 
               // Remove files that match our known keys
-              for (const String& key : keys)
+              for (const types::String& key : keys)
                 if (entry.path().filename() == key) {
                   shouldRemove = true;
                   break;
@@ -269,7 +253,7 @@ namespace draconis::utils::cache {
                 fs::remove(entry.path(), errc);
                 removedCount++;
                 if (logRemovals)
-                  logging::Println("Removed temp-directory cache file: {}", entry.path().string());
+                  info_log("Removed temp-directory cache file: {}", entry.path().string());
               }
             }
           }
@@ -285,26 +269,26 @@ namespace draconis::utils::cache {
    private:
     CachePolicy m_globalPolicy;
 
-    UnorderedMap<String, Pair<String, system_clock::time_point>> m_inMemoryCache;
+    types::UnorderedMap<types::String, types::Pair<types::String, system_clock::time_point>> m_inMemoryCache;
 
-    Mutex m_cacheMutex;
+    types::Mutex m_cacheMutex;
 
-    static fn getCacheFilePath(const String& key, const CacheLocation location) -> Option<fs::path> {
+    static fn getCacheFilePath(const types::String& key, const CacheLocation location) -> types::Option<fs::path> {
       using matchit::match, matchit::is, matchit::_;
 
-      Option<fs::path> cacheDir = None;
+      types::Option<fs::path> cacheDir = types::None;
 
       if (location == CacheLocation::InMemory)
-        return None; // In-memory cache does not have a file path
+        return types::None; // In-memory cache does not have a file path
 
       if (location == CacheLocation::TempDirectory)
-        return Some(fs::temp_directory_path() / key);
+        return types::Some(fs::temp_directory_path() / key);
 
       if (location == CacheLocation::Persistent)
 #ifdef __APPLE__
-        return Some(std::format("{}/Library/Caches/draconis++/{}", draconis::utils::env::GetEnv("HOME").value_or("."), key));
+        return types::Some(std::format("{}/Library/Caches/draconis++/{}", draconis::utils::env::GetEnv("HOME").value_or("."), key));
 #else
-        return Some(std::format("{}/.cache/draconis++/{}", draconis::utils::env::GetEnv("HOME").value_or("."), key));
+        return types::Some(std::format("{}/.cache/draconis++/{}", draconis::utils::env::GetEnv("HOME").value_or("."), key));
 #endif
 
       if (cacheDir) {
@@ -312,7 +296,7 @@ namespace draconis::utils::cache {
         return *cacheDir / key;
       }
 
-      return None;
+      return types::None;
     }
   };
 } // namespace draconis::utils::cache

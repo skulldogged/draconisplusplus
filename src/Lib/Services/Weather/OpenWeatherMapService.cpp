@@ -39,8 +39,7 @@ namespace {
       ERR(ApiUnavailable, "Failed to initialize cURL (Easy handle is invalid after construction)");
     }
 
-    if (Result res = curl.perform(); !res)
-      ERR_FROM(res.error());
+    TRY_VOID(curl.perform());
 
     draconis::services::weather::dto::owm::OWMResponse owmResponse;
 
@@ -83,11 +82,9 @@ fn OpenWeatherMapService::getWeatherInfo() const -> Result<Report> {
       if (std::holds_alternative<String>(m_location)) {
         const auto& city = std::get<String>(m_location);
 
-        Result<String> escapedUrl = Curl::Easy::escape(city);
-        if (!escapedUrl)
-          ERR_FROM(escapedUrl.error());
+        String escapedUrl = TRY(Curl::Easy::escape(city));
 
-        const String apiUrl = std::format("https://api.openweathermap.org/data/2.5/weather?q={}&appid={}&units={}", *escapedUrl, m_apiKey, m_units);
+        const String apiUrl = std::format("https://api.openweathermap.org/data/2.5/weather?q={}&appid={}&units={}", escapedUrl, m_apiKey, m_units);
 
         return MakeApiRequest(apiUrl);
       }

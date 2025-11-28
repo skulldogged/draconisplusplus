@@ -345,17 +345,23 @@ namespace draconis::ui {
         group.labelWidths.push_back(labelWidth);
         group.valueWidths.push_back(valueW);
 
-        String coloredIcon  = Colorize(row.icon, DEFAULT_THEME.icon);
-        String coloredLabel = Colorize(row.label, DEFAULT_THEME.label);
-        String coloredValue = Colorize(row.value, DEFAULT_THEME.value);
+        String coloredIcon  = Stylize(row.icon, { .color = DEFAULT_THEME.icon });
+        String coloredLabel = Stylize(row.label, { .color = DEFAULT_THEME.label });
+        String coloredValue = Stylize(row.value, { .color = DEFAULT_THEME.value });
 
         // Debug: check if colored strings have different visual widths
         usize coloredIconW  = GetVisualWidth(coloredIcon);
         usize coloredLabelW = GetVisualWidth(coloredLabel);
         usize coloredValueW = GetVisualWidth(coloredValue);
-        if (coloredIconW != iconW || coloredLabelW != labelWidth || coloredValueW != valueW) {
-          debug_log("Width mismatch! Icon: {} vs {}, Label: {} vs {}, Value: {} vs {}", iconW, coloredIconW, labelWidth, coloredLabelW, valueW, coloredValueW);
-        }
+        if (coloredIconW != iconW || coloredLabelW != labelWidth || coloredValueW != valueW)
+          debug_log(
+            "Width mismatch! Icon: {} vs {}, Label: {} vs {}, Value: {} vs {}",
+            // clang-format off
+            iconW, coloredIconW,
+            labelWidth, coloredLabelW,
+            valueW, coloredValueW
+            // clang-format on
+          );
 
         group.coloredIcons.push_back(coloredIcon);
         group.coloredLabels.push_back(coloredLabel);
@@ -630,14 +636,14 @@ namespace draconis::ui {
     out += hBorder;
     out += "╮\n";
 
-    createLeftAlignedLine(Colorize(greetingLine, DEFAULT_THEME.icon));
+    createLeftAlignedLine(Stylize(greetingLine, { .color = DEFAULT_THEME.icon }));
 
     // Palette line
     out += "├";
     out += hBorder;
     out += "┤\n";
 
-    const String paletteIcon    = Colorize(iconType.palette, DEFAULT_THEME.icon);
+    const String paletteIcon    = Stylize(iconType.palette, { .color = DEFAULT_THEME.icon });
     const usize  availableWidth = maxContentWidth - GetVisualWidth(paletteIcon);
     createLeftAlignedLine(paletteIcon + CreateDistributedColorCircles(availableWidth));
 
@@ -654,7 +660,7 @@ namespace draconis::ui {
           out += "┤\n";
         }
 
-        const String leftPart      = Colorize(iconType.music, DEFAULT_THEME.icon) + Colorize(_("playing"), DEFAULT_THEME.label);
+        const String leftPart      = Stylize(iconType.music, { .color = DEFAULT_THEME.icon }) + Stylize(_("playing"), { .color = DEFAULT_THEME.label });
         const usize  leftPartWidth = GetVisualWidth(leftPart);
 
         const usize availableWidth = maxContentWidth - leftPartWidth;
@@ -662,12 +668,12 @@ namespace draconis::ui {
         const Vec<String> wrappedLines = WordWrap(npText, availableWidth);
 
         if (!wrappedLines.empty()) {
-          createLine(leftPart, Colorize(wrappedLines[0], LogColor::Magenta));
+          createLine(leftPart, Stylize(wrappedLines[0], { .color = LogColor::Magenta }));
 
           const String indent(leftPartWidth, ' ');
 
           for (usize i = 1; i < wrappedLines.size(); ++i) {
-            String rightPart      = Colorize(wrappedLines[i], LogColor::Magenta);
+            String rightPart      = Stylize(wrappedLines[i], { .color = LogColor::Magenta });
             usize  rightPartWidth = GetVisualWidth(rightPart);
 
             usize padding = (maxContentWidth > leftPartWidth + rightPartWidth)
@@ -737,6 +743,7 @@ namespace draconis::ui {
     asciiPadTop = (totalHeight - asciiHeight) / 2;
 
     String newOut;
+
     for (usize i = 0; i < totalHeight; ++i) {
       String outputLine;
 
@@ -758,6 +765,7 @@ namespace draconis::ui {
 
       newOut += outputLine + "\n";
     }
+
     return newOut;
   }
 } // namespace draconis::ui

@@ -11,20 +11,11 @@
   #include "../Utils/Types.hpp"
 
 namespace draconis::services::weather {
-  namespace {
-    using utils::cache::CacheManager;
+  namespace types = ::draconis::utils::types;
+  namespace cache = ::draconis::utils::cache;
 
-    using utils::types::f64;
-    using utils::types::None;
-    using utils::types::Option;
-    using utils::types::Result;
-    using utils::types::String;
-    using utils::types::u8;
-    using utils::types::UniquePointer;
-  } // namespace
-
-  inline fn GetCacheManager() -> UniquePointer<CacheManager>& {
-    static UniquePointer<CacheManager> CacheManager;
+  inline fn GetCacheManager() -> types::UniquePointer<cache::CacheManager>& {
+    static types::UniquePointer<cache::CacheManager> CacheManager;
     return CacheManager;
   }
 
@@ -32,7 +23,7 @@ namespace draconis::services::weather {
    * @brief Specifies the weather service provider.
    * @see config::DRAC_WEATHER_PROVIDER in `config(.example).hpp`.
    */
-  enum class Provider : u8 {
+  enum class Provider : types::u8 {
     OpenWeatherMap, ///< OpenWeatherMap API. Requires an API key. @see config::DRAC_API_KEY
     OpenMeteo,      ///< OpenMeteo API. Does not require an API key.
     MetNo,          ///< Met.no API. Does not require an API key.
@@ -42,7 +33,7 @@ namespace draconis::services::weather {
    * @brief Specifies the unit system for weather information.
    * @see config::DRAC_WEATHER_UNIT in `config(.example).hpp`.
    */
-  enum class UnitSystem : u8 {
+  enum class UnitSystem : types::u8 {
     Metric,   ///< Metric units (Celsius, kph, etc.).
     Imperial, ///< Imperial units (Fahrenheit, mph, etc.).
   };
@@ -54,28 +45,28 @@ namespace draconis::services::weather {
    * Contains temperature, conditions, and timestamp.
    */
   struct Report {
-    f64            temperature; ///< Degrees (C/F)
-    Option<String> name;        ///< Optional town/city name (may be missing for some providers)
-    String         description; ///< Weather description (e.g., "clear sky", "rain")
+    types::f64                   temperature; ///< Degrees (C/F)
+    types::Option<types::String> name;        ///< Optional town/city name (may be missing for some providers)
+    types::String                description; ///< Weather description (e.g., "clear sky", "rain")
   };
 
   struct Coords {
-    f64 lat;
-    f64 lon;
+    types::f64 lat;
+    types::f64 lon;
   };
 
   /**
    * @brief Location information from IP geolocation
    */
   struct IPLocationInfo {
-    Coords coords;
-    String city;
-    String region;
-    String country;
-    String locationName; // Formatted location string
+    Coords        coords;
+    types::String city;
+    types::String region;
+    types::String country;
+    types::String locationName; // Formatted location string
   };
 
-  using Location = std::variant<String, Coords>;
+  using Location = std::variant<types::String, Coords>;
 
   class IWeatherService {
    public:
@@ -87,26 +78,31 @@ namespace draconis::services::weather {
 
     virtual ~IWeatherService() = default;
 
-    [[nodiscard]] virtual fn getWeatherInfo() const -> Result<Report> = 0;
+    [[nodiscard]] virtual fn getWeatherInfo() const -> types::Result<Report> = 0;
 
    protected:
     IWeatherService() = default;
   };
 
-  fn CreateWeatherService(Provider provider, const Location& location, UnitSystem units, const Option<String>& apiKey = None) -> UniquePointer<IWeatherService>;
+  fn CreateWeatherService(
+    Provider                            provider,
+    const Location&                     location,
+    UnitSystem                          units,
+    const types::Option<types::String>& apiKey = types::None
+  ) -> types::UniquePointer<IWeatherService>;
 
   /**
    * @brief Convert a place name to coordinates using Nominatim
    * @param placeName The name of the place (e.g., "New York, NY", "London, UK")
    * @return Coordinates if found, error otherwise
    */
-  fn Geocode(const String& placeName) -> Result<Coords>;
+  fn Geocode(const types::String& placeName) -> types::Result<Coords>;
 
   /**
    * @brief Get detailed current location information from IP address
    * @return Location info with coordinates and place names if found, error otherwise
    */
-  fn GetCurrentLocationInfoFromIP() -> Result<IPLocationInfo>;
+  fn GetCurrentLocationInfoFromIP() -> types::Result<IPLocationInfo>;
 } // namespace draconis::services::weather
 
 template <>

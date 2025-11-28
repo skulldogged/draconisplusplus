@@ -322,21 +322,21 @@ namespace {
 
     SystemInfoResponse info;
 
-    if (Result res = GetOperatingSystem(cacheManager); res)
+    if (Result<OSInfo> res = GetOperatingSystem(cacheManager); res)
       info.operatingSystem = *res;
-    if (Result res = GetKernelVersion(cacheManager); res)
+    if (Result<String> res = GetKernelVersion(cacheManager); res)
       info.kernelVersion = *res;
-    if (Result res = GetHost(cacheManager); res)
+    if (Result<String> res = GetHost(cacheManager); res)
       info.host = *res;
-    if (Result res = GetShell(cacheManager); res)
+    if (Result<String> res = GetShell(cacheManager); res)
       info.shell = *res;
-    if (Result res = GetDesktopEnvironment(cacheManager); res)
+    if (Result<String> res = GetDesktopEnvironment(cacheManager); res)
       info.desktopEnv = *res;
-    if (Result res = GetWindowManager(cacheManager); res)
+    if (Result<String> res = GetWindowManager(cacheManager); res)
       info.windowMgr = *res;
-    if (Result res = GetCPUModel(cacheManager); res)
+    if (Result<String> res = GetCPUModel(cacheManager); res)
       info.cpuModel = *res;
-    if (Result res = GetCPUCores(cacheManager); res)
+    if (Result<CPUCores> res = GetCPUCores(cacheManager); res)
       info.cpuCores = *res;
 
     return { makeSuccessResult(info) };
@@ -347,15 +347,15 @@ namespace {
 
     HardwareInfoResponse info;
 
-    if (Result res = GetCPUModel(cacheManager); res)
+    if (Result<String> res = GetCPUModel(cacheManager); res)
       info.cpuModel = *res;
-    if (Result res = GetCPUCores(cacheManager); res)
+    if (Result<CPUCores> res = GetCPUCores(cacheManager); res)
       info.cpuCores = *res;
-    if (Result res = GetGPUModel(cacheManager); res)
+    if (Result<String> res = GetGPUModel(cacheManager); res)
       info.gpuModel = *res;
-    if (Result res = GetMemInfo(cacheManager); res)
+    if (Result<ResourceUsage> res = GetMemInfo(cacheManager); res)
       info.memInfo = *res;
-    if (Result res = GetDiskUsage(cacheManager); res)
+    if (Result<ResourceUsage> res = GetDiskUsage(cacheManager); res)
       info.diskUsage = *res;
 
     return { makeSuccessResult(info) };
@@ -374,7 +374,7 @@ namespace {
         if (!coordsResult)
           return { makeErrorResult("Failed to geocode location '" + location + "': " + coordsResult.error().message), true };
       } else {
-        Result locationInfoResult = GetCurrentLocationInfoFromIP();
+        Result<IPLocationInfo> locationInfoResult = GetCurrentLocationInfoFromIP();
         if (!locationInfoResult)
           return { makeErrorResult("Failed to get current location from IP: " + locationInfoResult.error().message), true };
 
@@ -482,9 +482,9 @@ namespace {
     CacheManager& cacheManager = GetCacheManager();
 
     NetworkInfoResponse info;
-    if (Result res = GetNetworkInterfaces(cacheManager); res)
+    if (Result<Vec<NetworkInterface>> res = GetNetworkInterfaces(cacheManager); res)
       info.interfaces = *res;
-    if (Result res = GetPrimaryNetworkInterface(cacheManager); res)
+    if (Result<NetworkInterface> res = GetPrimaryNetworkInterface(cacheManager); res)
       info.primaryInterface = *res;
 
     return { makeSuccessResult(info) };
@@ -521,7 +521,7 @@ namespace {
 
   fn NowPlayingHandler() -> ToolResponse {
     if constexpr (DRAC_ENABLE_NOWPLAYING) {
-      Result nowPlayingResult = GetNowPlaying();
+      Result<MediaInfo> nowPlayingResult = GetNowPlaying();
       if (!nowPlayingResult)
         return { makeErrorResult("Failed to get now playing info: " + nowPlayingResult.error().message), true };
 
@@ -536,41 +536,32 @@ namespace {
 
     ComprehensiveInfo info;
 
-    if (Result res = GetOperatingSystem(cacheManager); res)
-      info.system.operatingSystem = *res;
-    if (Result res = GetKernelVersion(cacheManager); res)
-      info.system.kernelVersion = *res;
-    if (Result res = GetHost(cacheManager); res)
-      info.system.host = *res;
-    if (Result res = GetShell(cacheManager); res)
-      info.system.shell = *res;
-    if (Result res = GetDesktopEnvironment(cacheManager); res)
-      info.system.desktopEnv = *res;
-    if (Result res = GetWindowManager(cacheManager); res)
-      info.system.windowMgr = *res;
+    // Helper lambda to safely assign optional results
+    auto tryAssign = [](auto& dest, auto result) {
+      if (result)
+        dest = *result;
+    };
 
-    if (Result res = GetCPUModel(cacheManager); res)
-      info.hardware.cpuModel = *res;
-    if (Result res = GetCPUCores(cacheManager); res)
-      info.hardware.cpuCores = *res;
-    if (Result res = GetGPUModel(cacheManager); res)
-      info.hardware.gpuModel = *res;
-    if (Result res = GetMemInfo(cacheManager); res)
-      info.hardware.memInfo = *res;
-    if (Result res = GetDiskUsage(cacheManager); res)
-      info.hardware.diskUsage = *res;
+    tryAssign(info.system.operatingSystem, GetOperatingSystem(cacheManager));
+    tryAssign(info.system.kernelVersion, GetKernelVersion(cacheManager));
+    tryAssign(info.system.host, GetHost(cacheManager));
+    tryAssign(info.system.shell, GetShell(cacheManager));
+    tryAssign(info.system.desktopEnv, GetDesktopEnvironment(cacheManager));
+    tryAssign(info.system.windowMgr, GetWindowManager(cacheManager));
 
-    if (Result res = GetNetworkInterfaces(cacheManager); res)
-      info.network.interfaces = *res;
-    if (Result res = GetPrimaryNetworkInterface(cacheManager); res)
-      info.network.primaryInterface = *res;
+    tryAssign(info.hardware.cpuModel, GetCPUModel(cacheManager));
+    tryAssign(info.hardware.cpuCores, GetCPUCores(cacheManager));
+    tryAssign(info.hardware.gpuModel, GetGPUModel(cacheManager));
+    tryAssign(info.hardware.memInfo, GetMemInfo(cacheManager));
+    tryAssign(info.hardware.diskUsage, GetDiskUsage(cacheManager));
 
-    if (Result res = GetOutputs(cacheManager); res)
-      info.display.displays = *res;
-    if (Result res = GetPrimaryOutput(cacheManager); res)
-      info.display.primaryDisplay = *res;
+    tryAssign(info.network.interfaces, GetNetworkInterfaces(cacheManager));
+    tryAssign(info.network.primaryInterface, GetPrimaryNetworkInterface(cacheManager));
 
-    if (Result res = GetUptime(); res) {
+    tryAssign(info.display.displays, GetOutputs(cacheManager));
+    tryAssign(info.display.primaryDisplay, GetPrimaryOutput(cacheManager));
+
+    if (Result<std::chrono::seconds> res = GetUptime(); res) {
       u32 seconds          = res->count();
       u32 hours            = seconds / 3600;
       u32 minutes          = (seconds % 3600) / 60;
@@ -580,26 +571,27 @@ namespace {
 
     if constexpr (DRAC_ENABLE_WEATHER) {
       if (auto locIter = params.find("location"); locIter != params.end() && !locIter->second.empty()) {
-        if (Result coords = Geocode(locIter->second); coords)
+        if (Result<Coords> coords = Geocode(locIter->second); coords) {
           if (UniquePointer<IWeatherService> weatherService = CreateWeatherService(Provider::MetNo, *coords, UnitSystem::Imperial)) {
             String weatherCacheKey = "weather_" + locIter->second;
-            if (Result weather = cacheManager.getOrSet<Report>(weatherCacheKey, [&]() -> Result<Report> { return weatherService->getWeatherInfo(); }); weather)
+            if (Result<Report> weather = cacheManager.getOrSet<Report>(weatherCacheKey, [&]() -> Result<Report> { return weatherService->getWeatherInfo(); }); weather)
               info.weather = *weather;
           }
-      } else if (Result locationInfo = GetCurrentLocationInfoFromIP(); locationInfo)
-        if (UniquePointer<IWeatherService> weatherService = CreateWeatherService(Provider::MetNo, locationInfo->coords, UnitSystem::Imperial)) {
-          String weatherCacheKey = "weather_" + locationInfo->locationName;
-          if (
-            Result weather = cacheManager.getOrSet<Report>(
+        }
+      } else {
+        if (Result<IPLocationInfo> locationInfo = GetCurrentLocationInfoFromIP(); locationInfo) {
+          if (UniquePointer<IWeatherService> weatherService = CreateWeatherService(Provider::MetNo, locationInfo->coords, UnitSystem::Imperial)) {
+            String weatherCacheKey = "weather_" + locationInfo->locationName;
+            if (Result<Report> weather = cacheManager.getOrSet<Report>(
               weatherCacheKey,
               [&]() -> Result<Report> {
                 return weatherService->getWeatherInfo();
               }
-            );
-            weather
-          )
-            info.weather = *weather;
+            ); weather)
+              info.weather = *weather;
+          }
         }
+      }
     }
 
     if constexpr (DRAC_ENABLE_PACKAGECOUNT) {
@@ -623,13 +615,14 @@ namespace {
       enabledManagers |= HaikuPkg;
 #endif
 
-      if (Result packages = GetIndividualCounts(cacheManager, enabledManagers); packages)
+      if (Result<Map<String, u64>> packages = GetIndividualCounts(cacheManager, enabledManagers); packages)
         info.packages = *packages;
     }
 
-    if constexpr (DRAC_ENABLE_NOWPLAYING)
-      if (Result nowPlaying = GetNowPlaying(); nowPlaying)
+    if constexpr (DRAC_ENABLE_NOWPLAYING) {
+      if (Result<MediaInfo> nowPlaying = GetNowPlaying(); nowPlaying)
         info.nowPlaying = *nowPlaying;
+    }
 
     return { makeSuccessResult(info) };
   }
@@ -679,7 +672,7 @@ class DracStdioServer {
       String jsonrpc = requestJson.contains("jsonrpc") ? requestJson["jsonrpc"].get<String>() : "2.0";
 
       try {
-        Result result = processRequest(method, params);
+        Result<GlzJson> result = processRequest(method, params);
 
         if (requestJson.contains("id")) {
           GlzJson idVal = requestJson["id"];
@@ -903,7 +896,7 @@ fn main() -> i32 {
   server.registerTool(nowPlayingTool, NowPlayingHandler);
   server.registerTool(comprehensiveTool, ComprehensiveInfoHandler);
 
-  Result res = server.run();
+  Result<> res = server.run();
 
   if (res)
     return EXIT_SUCCESS;

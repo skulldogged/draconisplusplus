@@ -9,20 +9,8 @@
   #include <Drac++/Utils/Logging.hpp>
   #include <Drac++/Utils/Types.hpp>
 
-namespace Wayland {
-  namespace {
-    using draconis::utils::types::CStr;
-    using draconis::utils::types::DisplayInfo;
-    using draconis::utils::types::f64;
-    using draconis::utils::types::i32;
-    using draconis::utils::types::PCStr;
-    using draconis::utils::types::RawPointer;
-    using draconis::utils::types::StringView;
-    using draconis::utils::types::u32;
-    using draconis::utils::types::Unit;
-    using draconis::utils::types::usize;
-    using draconis::utils::types::Vec;
-  } // namespace
+namespace wl {
+  namespace types = draconis::utils::types;
 
   using Display          = wl_display;
   using Registry         = wl_registry;
@@ -33,7 +21,7 @@ namespace Wayland {
 
   inline const Interface wl_output_interface = ::wl_output_interface;
 
-  constexpr u32 OUTPUT_MODE_CURRENT = WL_OUTPUT_MODE_CURRENT;
+  constexpr types::u32 OUTPUT_MODE_CURRENT = WL_OUTPUT_MODE_CURRENT;
 
   /**
    * @brief Connect to a Wayland display
@@ -44,7 +32,7 @@ namespace Wayland {
    * @param name The name of the display to connect to (or nullptr for default)
    * @return A pointer to the Wayland display object
    */
-  inline fn Connect(PCStr name) -> Display* {
+  inline fn Connect(types::PCStr name) -> Display* {
     return wl_display_connect(name);
   }
 
@@ -56,7 +44,7 @@ namespace Wayland {
    * @param display The Wayland display object to disconnect from
    * @return Unit
    */
-  inline fn Disconnect(Display* display) -> Unit {
+  inline fn Disconnect(Display* display) -> types::Unit {
     wl_display_disconnect(display);
   }
 
@@ -68,7 +56,7 @@ namespace Wayland {
    * @param display The Wayland display object
    * @return The file descriptor for the Wayland display
    */
-  inline fn GetFd(Display* display) -> i32 {
+  inline fn GetFd(Display* display) -> types::i32 {
     return wl_display_get_fd(display);
   }
 
@@ -90,7 +78,7 @@ namespace Wayland {
    * @param data The data to pass to the listener
    * @return 0 on success, -1 on failure
    */
-  inline fn AddRegistryListener(Registry* registry, const RegistryListener* listener, RawPointer data) -> i32 {
+  inline fn AddRegistryListener(Registry* registry, const RegistryListener* listener, types::RawPointer data) -> types::i32 {
     return wl_registry_add_listener(registry, listener, data);
   }
 
@@ -100,7 +88,7 @@ namespace Wayland {
    * @param display The Wayland display object
    * @return The number of events dispatched
    */
-  inline fn Roundtrip(Display* display) -> i32 {
+  inline fn Roundtrip(Display* display) -> types::i32 {
     return wl_display_roundtrip(display);
   }
 
@@ -113,7 +101,7 @@ namespace Wayland {
    * @param version The version of the interface to bind to
    * @return A pointer to the bound object
    */
-  inline fn BindRegistry(Registry* registry, const u32 name, const Interface* interface, const u32 version) -> RawPointer {
+  inline fn BindRegistry(Registry* registry, const types::u32 name, const Interface* interface, const types::u32 version) -> types::RawPointer {
     return wl_registry_bind(registry, name, interface, version);
   }
 
@@ -125,7 +113,7 @@ namespace Wayland {
    * @param data The data to pass to the listener
    * @return 0 on success, -1 on failure
    */
-  inline fn AddOutputListener(Output* output, const OutputListener* listener, RawPointer data) -> i32 {
+  inline fn AddOutputListener(Output* output, const OutputListener* listener, types::RawPointer data) -> types::i32 {
     return wl_output_add_listener(output, listener, data);
   }
 
@@ -134,7 +122,7 @@ namespace Wayland {
    *
    * @param output The Wayland output object
    */
-  inline fn DestroyOutput(Output* output) -> Unit {
+  inline fn DestroyOutput(Output* output) -> types::Unit {
     wl_output_destroy(output);
   }
 
@@ -143,7 +131,7 @@ namespace Wayland {
    *
    * @param registry The Wayland registry object
    */
-  inline fn DestroyRegistry(Registry* registry) -> Unit {
+  inline fn DestroyRegistry(Registry* registry) -> types::Unit {
     wl_registry_destroy(registry);
   }
 
@@ -164,10 +152,10 @@ namespace Wayland {
      * establishes a connection to the Wayland display.
      */
     DisplayGuard() {
-      wl_log_set_handler_client([](PCStr fmt, va_list args) -> Unit {
+      wl_log_set_handler_client([](types::PCStr fmt, va_list args) -> types::Unit {
         va_list argsCopy;
         va_copy(argsCopy, args);
-        i32 size = std::vsnprintf(nullptr, 0, fmt, argsCopy);
+        types::i32 size = std::vsnprintf(nullptr, 0, fmt, argsCopy);
         va_end(argsCopy);
 
         if (size < 0) {
@@ -175,16 +163,16 @@ namespace Wayland {
           return;
         }
 
-        Vec<CStr> buffer(static_cast<usize>(size) + 1);
+        types::Vec<types::CStr> buffer(static_cast<types::usize>(size) + 1);
 
-        i32 writeSize = std::vsnprintf(buffer.data(), buffer.size(), fmt, args);
+        types::i32 writeSize = std::vsnprintf(buffer.data(), buffer.size(), fmt, args);
 
         if (writeSize < 0 || writeSize >= static_cast<int>(buffer.size())) {
           error_log("Wayland: Internal log formatting error (vsnprintf write failed).");
           return;
         }
 
-        StringView msgView(buffer.data(), static_cast<usize>(writeSize));
+        types::StringView msgView(buffer.data(), static_cast<types::usize>(writeSize));
 
         if (!msgView.empty() && msgView.back() == '\n')
           msgView.remove_suffix(1);
@@ -263,7 +251,7 @@ namespace Wayland {
      *
      * @return The file descriptor for the Wayland display
      */
-    [[nodiscard]] fn fd() const -> i32 {
+    [[nodiscard]] fn fd() const -> types::i32 {
       return GetFd(m_display);
     }
 
@@ -281,7 +269,7 @@ namespace Wayland {
      *
      * @return The number of events dispatched
      */
-    [[nodiscard]] fn roundtrip() const -> i32 {
+    [[nodiscard]] fn roundtrip() const -> types::i32 {
       return Roundtrip(m_display);
     }
   };
@@ -301,7 +289,7 @@ namespace Wayland {
      *
      * @return A vector of DisplayInfo objects
      */
-    [[nodiscard]] fn getOutputs() -> Vec<DisplayInfo> {
+    [[nodiscard]] fn getOutputs() -> types::Vec<types::DisplayInfo> {
       m_callbackData     = {};
       Registry* registry = GetRegistry(m_display);
       if (!registry)
@@ -316,11 +304,11 @@ namespace Wayland {
       Roundtrip(m_display);
       DestroyRegistry(registry);
 
-      Vec<DisplayInfo> displays;
+      types::Vec<types::DisplayInfo> displays;
       for (const auto& output : m_callbackData.outputs) {
         displays.emplace_back(
           output.id,
-          DisplayInfo::Resolution { .width = output.width, .height = output.height },
+          types::DisplayInfo::Resolution { .width = output.width, .height = output.height },
           output.refreshRate / 1000.0,
           displays.empty()
         );
@@ -334,7 +322,7 @@ namespace Wayland {
      *
      * @return A DisplayInfo object for the primary display
      */
-    [[nodiscard]] fn getPrimary() -> DisplayInfo {
+    [[nodiscard]] fn getPrimary() -> types::DisplayInfo {
       m_primaryDisplayData = {};
       Registry* registry   = GetRegistry(m_display);
       if (!registry)
@@ -362,13 +350,13 @@ namespace Wayland {
      */
     struct CallbackData {
       struct Inner {
-        usize id;
-        usize width;
-        usize height;
-        f64   refreshRate;
+        types::usize id;
+        types::usize width;
+        types::usize height;
+        types::f64   refreshRate;
       };
 
-      Vec<Inner> outputs;
+      types::Vec<Inner> outputs;
     };
 
     CallbackData m_callbackData; ///< Data for all outputs
@@ -377,9 +365,9 @@ namespace Wayland {
      * @brief Data for primary display callbacks
      */
     struct PrimaryDisplayData {
-      Output*     output = nullptr;
-      DisplayInfo display;
-      bool        done = false;
+      Output*            output = nullptr;
+      types::DisplayInfo display;
+      bool               done = false;
     };
 
     PrimaryDisplayData m_primaryDisplayData; ///< Data for the primary output
@@ -392,7 +380,7 @@ namespace Wayland {
      * @param height The height of the output
      * @param refresh The refresh rate of the output
      */
-    fn outputMode(u32 flags, i32 width, i32 height, i32 refresh) -> Unit {
+    fn outputMode(types::u32 flags, types::i32 width, types::i32 height, types::i32 refresh) -> types::Unit {
       if (!(flags & WL_OUTPUT_MODE_CURRENT))
         return;
 
@@ -414,7 +402,7 @@ namespace Wayland {
      * @param height The height of the output
      * @param refresh The refresh rate of the output
      */
-    static fn outputMode(RawPointer data, wl_output* /*output*/, u32 flags, i32 width, i32 height, i32 refresh) -> Unit {
+    static fn outputMode(types::RawPointer data, wl_output* /*output*/, types::u32 flags, types::i32 width, types::i32 height, types::i32 refresh) -> types::Unit {
       static_cast<DisplayManager*>(data)->outputMode(flags, width, height, refresh);
     }
 
@@ -426,7 +414,7 @@ namespace Wayland {
      * @param interface The interface name
      * @param version The interface version
      */
-    fn registryHandler(Registry* registry, u32 objectId, PCStr interface, u32 version) -> Unit {
+    fn registryHandler(Registry* registry, types::u32 objectId, types::PCStr interface, types::u32 version) -> types::Unit {
       if (std::strcmp(interface, "wl_output") != 0)
         return;
 
@@ -462,7 +450,7 @@ namespace Wayland {
      * @param interface The interface name
      * @param version The interface version
      */
-    static fn registryHandler(RawPointer data, wl_registry* registry, u32 name, PCStr interface, u32 version) -> Unit {
+    static fn registryHandler(types::RawPointer data, wl_registry* registry, types::u32 name, types::PCStr interface, types::u32 version) -> types::Unit {
       static_cast<DisplayManager*>(data)->registryHandler(registry, name, interface, version);
     }
 
@@ -474,11 +462,11 @@ namespace Wayland {
      * @param height The height of the output
      * @param refresh The refresh rate of the output
      */
-    fn primaryMode(u32 flags, i32 width, i32 height, i32 refresh) -> Unit {
+    fn primaryMode(types::u32 flags, types::i32 width, types::i32 height, types::i32 refresh) -> types::Unit {
       if (!(flags & WL_OUTPUT_MODE_CURRENT) || m_primaryDisplayData.done)
         return;
 
-      m_primaryDisplayData.display.resolution  = { .width = static_cast<usize>(width), .height = static_cast<usize>(height) };
+      m_primaryDisplayData.display.resolution  = { .width = static_cast<types::usize>(width), .height = static_cast<types::usize>(height) };
       m_primaryDisplayData.display.refreshRate = refresh > 0 ? refresh / 1000 : 0;
     }
 
@@ -492,14 +480,14 @@ namespace Wayland {
      * @param height The height of the output
      * @param refresh The refresh rate of the output
      */
-    static fn primaryMode(RawPointer data, wl_output* /*output*/, u32 flags, i32 width, i32 height, i32 refresh) -> Unit {
+    static fn primaryMode(types::RawPointer data, wl_output* /*output*/, types::u32 flags, types::i32 width, types::i32 height, types::i32 refresh) -> types::Unit {
       static_cast<DisplayManager*>(data)->primaryMode(flags, width, height, refresh);
     }
 
     /**
      * @brief Wayland primary display done callback
      */
-    fn primaryDone() -> Unit {
+    fn primaryDone() -> types::Unit {
       if (m_primaryDisplayData.display.resolution.width > 0)
         m_primaryDisplayData.done = true;
     }
@@ -510,12 +498,12 @@ namespace Wayland {
      * @param data The user data
      * @param wl_output The Wayland output object
      */
-    static fn primaryDone(RawPointer data, wl_output* /*wl_output*/) -> Unit {
+    static fn primaryDone(types::RawPointer data, wl_output* /*wl_output*/) -> types::Unit {
       static_cast<DisplayManager*>(data)->primaryDone();
     }
 
-    static fn primaryScale(RawPointer /*data*/, wl_output* /*wl_output*/, i32 /*scale*/) -> Unit {}
-    static fn primaryGeometry(void* /*data*/, struct wl_output* /*wl_output*/, int32_t /*x*/, int32_t /*y*/, int32_t /*physical_width*/, int32_t /*physical_height*/, int32_t /*subpixel*/, const char* /*make*/, const char* /*model*/, int32_t /*transform*/) -> Unit {}
+    static fn primaryScale(types::RawPointer /*data*/, wl_output* /*wl_output*/, types::i32 /*scale*/) -> types::Unit {}
+    static fn primaryGeometry(void* /*data*/, struct wl_output* /*wl_output*/, int32_t /*x*/, int32_t /*y*/, int32_t /*physical_width*/, int32_t /*physical_height*/, int32_t /*subpixel*/, const char* /*make*/, const char* /*model*/, int32_t /*transform*/) -> types::Unit {}
 
     /**
      * @brief Wayland primary display registry handler
@@ -525,7 +513,7 @@ namespace Wayland {
      * @param interface The interface name
      * @param version The interface version
      */
-    fn primaryRegistry(Registry* registry, u32 name, PCStr interface, u32 version) -> Unit {
+    fn primaryRegistry(Registry* registry, types::u32 name, types::PCStr interface, types::u32 version) -> types::Unit {
       if (m_primaryDisplayData.output != nullptr || std::strcmp(interface, "wl_output") != 0)
         return;
 
@@ -563,10 +551,10 @@ namespace Wayland {
      * @param interface The interface name
      * @param version The interface version
      */
-    static fn primaryRegistry(RawPointer data, wl_registry* registry, u32 name, PCStr interface, u32 version) -> Unit {
+    static fn primaryRegistry(types::RawPointer data, wl_registry* registry, types::u32 name, types::PCStr interface, types::u32 version) -> types::Unit {
       static_cast<DisplayManager*>(data)->primaryRegistry(registry, name, interface, version);
     }
   };
-} // namespace Wayland
+} // namespace wl
 
 #endif // (defined(__linux__) || defined(__FreeBSD__) || defined(__DragonFly__) || defined(__NetBSD__)) && DRAC_USE_WAYLAND

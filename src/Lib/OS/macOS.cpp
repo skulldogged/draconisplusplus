@@ -15,7 +15,6 @@
   #include <net/route.h>                     // RTA_DST, RTF_GATEWAY, rt_msghdr
   #include <netdb.h>                         // NI_MAXHOST, NI_NUMERICHOST, getnameinfo
   #include <netinet/in.h>                    // sockaddr_in
-  #include <sys/statvfs.h>                   // statvfs
   #include <sys/sysctl.h>                    // {CTL_KERN, KERN_PROC, KERN_PROC_ALL, kinfo_proc, sysctl, sysctlbyname}
 
   #include <Drac++/Core/System.hpp>
@@ -27,6 +26,7 @@
   #include <Drac++/Utils/Logging.hpp>
   #include <Drac++/Utils/Types.hpp>
 
+  #include "OS/Unix.hpp"
   #include "OS/macOS/Bridge.hpp"
 
 using namespace draconis::utils::types;
@@ -401,12 +401,7 @@ namespace draconis::core::system {
   }
 
   fn GetDiskUsage(CacheManager& /*cache*/) -> Result<ResourceUsage> {
-    struct statvfs vfs;
-
-    if (statvfs("/", &vfs) != 0)
-      ERR_FMT(ResourceExhausted, "statvfs('/') failed: {}", std::system_category().message(errno));
-
-    return ResourceUsage((vfs.f_blocks - vfs.f_bfree) * vfs.f_frsize, vfs.f_blocks * vfs.f_frsize);
+    return os::unix_shared::GetRootDiskUsage();
   }
 
   fn GetShell(CacheManager& cache) -> Result<String> {

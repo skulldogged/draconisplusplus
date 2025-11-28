@@ -49,16 +49,14 @@ fn OpenMeteoService::getWeatherInfo() const -> Result<Report> {
         ERR(ApiUnavailable, "Failed to initialize cURL (Easy handle is invalid after construction)");
       }
 
-      if (Result res = curl.perform(); !res)
-        ERR_FROM(res.error());
+      TRY_VOID(curl.perform());
 
       draconis::services::weather::dto::openmeteo::Response apiResp {};
 
       if (error_ctx errc = read<glz::opts { .error_on_unknown_keys = false }>(apiResp, responseBuffer.data()); errc.ec != error_code::none)
         ERR_FMT(ParseError, "Failed to parse JSON response: {}", format_error(errc, responseBuffer.data()));
 
-      if (Result<usize> timestamp = draconis::services::weather::utils::ParseIso8601ToEpoch(apiResp.currentWeather.time); !timestamp)
-        ERR_FROM(timestamp.error());
+      TRY_VOID(draconis::services::weather::utils::ParseIso8601ToEpoch(apiResp.currentWeather.time));
 
       Report out = {
         .temperature = apiResp.currentWeather.temperature,

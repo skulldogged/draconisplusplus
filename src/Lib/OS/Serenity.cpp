@@ -1,6 +1,9 @@
 #ifdef __serenity__
 
 // clang-format off
+#include <cerrno>                 // errno
+#include <climits>                // HOST_NAME_MAX
+#include <cstring>                // strerror
 #include <format>                 // std::format
 #include <fstream>                // std::ifstream
 #include <glaze/core/common.hpp>  // glz::object
@@ -12,26 +15,26 @@
 #include <iterator>               // std::istreambuf_iterator
 #include <pwd.h>                  // getpwuid, passwd
 #include <string>                 // std::string (String)
-#include <sys/statvfs.h>          // statvfs
 #include <sys/types.h>            // uid_t
-#include <sys/utsname.h>          // utsname, uname
 #include <unistd.h>               // getuid, gethostname
 #include <unordered_set>          // std::unordered_set
 
-#include "Services/PackageCounting.hpp"
-#include "Util/Error.hpp"
-#include "Util/Env.hpp"
-#include "Util/Logging.hpp"
-#include "Util/Types.hpp"
-#include "Util/Caching.hpp"
-#include "Util/CacheManager.hpp"
+#include <Drac++/Core/System.hpp>
 
-#include "OperatingSystem.hpp"
+#include <Drac++/Utils/CacheManager.hpp>
+#include <Drac++/Utils/Env.hpp>
+#include <Drac++/Utils/Error.hpp>
+#include <Drac++/Utils/Logging.hpp>
+#include <Drac++/Utils/Types.hpp>
+
+#include "OS/Unix.hpp"
 // clang-format on
 
 using namespace draconis::utils::types;
-using draconis::utils::error::DracError, draconis::utils::error::DracErrorCode;
+using draconis::utils::cache::CacheManager;
 using draconis::utils::env::GetEnv;
+using draconis::utils::error::DracError;
+using enum draconis::utils::error::DracErrorCode;
 
 namespace {
   using glz::opts, glz::detail::Object, glz::object;
@@ -69,29 +72,29 @@ namespace {
 } // namespace
 
 namespace draconis::core::system {
-  fn GetOSVersion(draconis::utils::cache::CacheManager& cache) -> Result<String> {
-    return cache.getOrSet<String>("serenity_os_version", []() -> Result<String> {
-        utsname uts;
+  fn GetOperatingSystem(CacheManager& cache) -> Result<OSInfo> {
+    return cache.getOrSet<OSInfo>("serenity_os_info", []() -> Result<OSInfo> {
+      Result<os::unix_shared::UnameInfo> unameInfo = os::unix_shared::GetUnameInfo();
 
-        if (uname(&uts) == -1)
-            return Err(DracError("uname call failed for OS Version"));
+      if (!unameInfo)
+        return Err(unameInfo.error());
 
-        return uts.sysname;
+      return OSInfo(unameInfo->sysname, unameInfo->release, "serenity");
     });
   }
 
-  fn GetMemInfo() -> Result<u64> {
-    CStr          path = "/sys/kernel/memstat";
-    std::ifstream file(path);
+  fn GetMemInfo(CacheManager& /*cache*/) -> Result<ResourceUsage> {
+    constexpr PCStr path = "/sys/kernel/memstat";
+    std::ifstream   file(path);
 
     if (!file)
-      return Err(DracError(DracErrorCode::NotFound, std::format("Could not open {}", path)));
+      return Err(DracError(NotFound, std::format("Could not open {}", path)));
 
     String buffer((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
     file.close();
 
     if (buffer.empty())
-      return Err(DracError(DracErrorCode::IoError, std::format("File is empty: {}", path)));
+      return Err(DracError(IoError, std::format("File is empty: {}", path)));
 
     MemStatData data;
 
@@ -99,94 +102,79 @@ namespace draconis::core::system {
 
     if (error_context)
       return Err(DracError(
-        DracErrorCode::ParseError,
+        ParseError,
         std::format("Failed to parse JSON from {}: {}", path, glz::format_error(error_context, buffer))
       ));
 
     if (data.physical_allocated > std::numeric_limits<u64>::max() - data.physical_available)
-      return Err(DracError(DracErrorCode::InternalError, "Memory size overflow during calculation"));
+      return Err(DracError(InternalError, "Memory size overflow during calculation"));
 
-    return (data.physical_allocated + data.physical_available) * PAGE_SIZE;
+    const u64 totalMem = (data.physical_allocated + data.physical_available) * PAGE_SIZE;
+    const u64 usedMem  = data.physical_allocated * PAGE_SIZE;
+
+    return ResourceUsage(usedMem, totalMem);
   }
 
+  #if DRAC_ENABLE_NOWPLAYING
   fn GetNowPlaying() -> Result<MediaInfo> {
-    return Err(DracError(DracErrorCode::NotSupported, "Now playing is not supported on SerenityOS"));
+    return Err(DracError(NotSupported, "Now playing is not supported on SerenityOS"));
   }
+  #endif
 
-  fn GetWindowManager(draconis::utils::cache::CacheManager& cache) -> Result<String> {
+  fn GetWindowManager(CacheManager& cache) -> Result<String> {
     return cache.getOrSet<String>("serenity_wm", []() -> Result<String> {
-        return "WindowManager";
+      return "WindowManager";
     });
   }
 
-  fn GetDesktopEnvironment(draconis::utils::cache::CacheManager& cache) -> Result<String> {
+  fn GetDesktopEnvironment(CacheManager& cache) -> Result<String> {
     return cache.getOrSet<String>("serenity_desktop_environment", []() -> Result<String> {
-        return "SerenityOS Desktop";
+      return "SerenityOS Desktop";
     });
   }
 
-  fn GetShell(draconis::utils::cache::CacheManager& cache) -> Result<String> {
+  fn GetShell(CacheManager& cache) -> Result<String> {
     return cache.getOrSet<String>("serenity_shell", []() -> Result<String> {
-        uid_t   userId = getuid();
-        passwd* pw     = getpwuid(userId);
+      uid_t   userId = getuid();
+      passwd* pw     = getpwuid(userId);
 
-        if (pw == nullptr)
-            return Err(DracError(DracErrorCode::NotFound, std::format("User ID {} not found in /etc/passwd", userId)));
+      if (pw == nullptr)
+        return Err(DracError(NotFound, std::format("User ID {} not found in /etc/passwd", userId)));
 
-        if (pw->pw_shell == nullptr || *(pw->pw_shell) == '\0')
-            return Err(DracError(
-                DracErrorCode::NotFound, std::format("User shell entry is empty in /etc/passwd for user ID {}", userId)
-            ));
+      if (pw->pw_shell == nullptr || *(pw->pw_shell) == '\0')
+        return Err(DracError(
+          NotFound, std::format("User shell entry is empty in /etc/passwd for user ID {}", userId)
+        ));
 
-        String shell = pw->pw_shell;
+      String shell = pw->pw_shell;
 
-        if (shell.starts_with("/bin/"))
-            shell = shell.substr(5);
+      if (shell.starts_with("/bin/"))
+        shell = shell.substr(5);
 
-        return shell;
+      return shell;
     });
   }
 
-  fn GetHost(draconis::utils::cache::CacheManager& cache) -> Result<String> {
+  fn GetHost(CacheManager& cache) -> Result<String> {
     return cache.getOrSet<String>("serenity_host", []() -> Result<String> {
-        Array<char, HOST_NAME_MAX> hostname_buffer;
+      Array<char, HOST_NAME_MAX> hostname_buffer {};
 
-        if (gethostname(hostname_buffer.data(), hostname_buffer.size()) != 0)
-            return Err(DracError("gethostname() failed: {}"));
+      if (gethostname(hostname_buffer.data(), hostname_buffer.size()) != 0)
+        return Err(DracError(ApiUnavailable, std::format("gethostname() failed: {} (errno {})", strerror(errno), errno)));
 
-        return String(hostname_buffer.data());
+      return String(hostname_buffer.data());
     });
   }
 
-  fn GetKernelVersion(draconis::utils::cache::CacheManager& cache) -> Result<String> {
+  fn GetKernelVersion(CacheManager& cache) -> Result<String> {
     return cache.getOrSet<String>("serenity_kernel_version", []() -> Result<String> {
-        utsname uts;
-
-        if (uname(&uts) == -1)
-            return Err(DracError("uname call failed for Kernel Version"));
-
-        return uts.release;
+      return os::unix_shared::GetKernelRelease();
     });
   }
 
-  fn GetDiskUsage() -> Result<DiskSpace> {
-    struct statvfs stat;
-
-    if (statvfs("/", &stat) == -1)
-      return Err(DracError("statvfs call failed for '/'"));
-
-    const u64 totalBytes = static_cast<u64>(stat.f_blocks) * stat.f_frsize;
-    const u64 freeBytes  = static_cast<u64>(stat.f_bfree) * stat.f_frsize;
-    const u64 usedBytes  = totalBytes - freeBytes;
-
-    return DiskSpace { usedBytes, totalBytes };
+  fn GetDiskUsage(CacheManager& /*cache*/) -> Result<ResourceUsage> {
+    return os::unix_shared::GetRootDiskUsage();
   }
 } // namespace draconis::core::system
-
-namespace package {
-  fn GetSerenityCount() -> Result<u64> {
-    return CountUniquePackages("/usr/Ports/installed.db");
-  }
-} // namespace package
 
 #endif // __serenity__

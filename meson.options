@@ -5,66 +5,49 @@
 #  `include/Config.hpp`, depending on the `precompiled_config` option.  #
 # ===================================================================== #
 
-option('build_examples', type: 'boolean', value: true)
-option('build_tests', type: 'boolean', value: true)
+# ===================== #
+#  Build Configuration  #
+# ===================== #
+
+option(
+  'build_examples',
+  type: 'boolean',
+  value: true,
+  description: 'Build example applications',
+)
+
+option('build_tests', type: 'boolean', value: true, description: 'Build test suite')
+
 option(
   'build_switch_example',
   type: 'boolean',
   value: false,
-  description: 'Build the Nintendo Switch example if devkitPro is available',
+  description: 'Build Nintendo Switch example (requires devkitPro)',
 )
 
-# Note: These are primarily intended for use with Nix.
-option('build_for_musl', type: 'boolean', value: false)
-option('use_linked_pci_ids', type: 'boolean', value: false)
-
-# Note: Enabling this disables runtime TOML parsing and configuration overriding.
-option('precompiled_config', type: 'boolean', value: false)
-
-# Linux-specific
-option(
-  'pugixml',
-  type: 'feature',
-  value: 'auto',
-  description: 'Use pugixml to parse XBPS package metadata on Void Linux',
-)
-
-# Linux/BSD-specific
-option(
-  'xcb',
-  type: 'feature',
-  value: 'enabled',
-  description: 'Use libxcb to get the X11 window manager/display(s)',
-)
-
-# Linux/BSD-specific
-option(
-  'wayland',
-  type: 'feature',
-  value: 'enabled',
-  description: 'Use wayland-client to get the Wayland compositor/display(s)',
-)
-
-# Note: Requires DBus on Linux/BSD and MediaRemote.framework (private API) on macOS.
-option(
-  'nowplaying',
-  type: 'feature',
-  value: 'enabled',
-  description: 'Enable nowplaying functionality',
-)
+# ===================== #
+#     Core Features     #
+# ===================== #
 
 option(
   'weather',
   type: 'feature',
   value: 'enabled',
-  description: 'Enable fetching weather data',
+  description: 'Enable weather data fetching',
 )
 
 option(
   'packagecount',
   type: 'feature',
   value: 'enabled',
-  description: 'Enable getting package count',
+  description: 'Enable package count functionality',
+)
+
+option(
+  'nowplaying',
+  type: 'feature',
+  value: 'enabled',
+  description: 'Enable now playing media info (requires DBus on Linux/BSD, MediaRemote.framework on macOS)',
 )
 
 option(
@@ -75,8 +58,78 @@ option(
 )
 
 option(
+  'plugins',
+  type: 'feature',
+  value: 'enabled',
+  description: 'Enable plugin support',
+)
+
+option(
+  'precompiled_config',
+  type: 'boolean',
+  value: false,
+  description: 'Use precompiled configuration (disables runtime TOML parsing)',
+)
+
+option(
   'default_language',
   type: 'string',
   value: 'en',
   description: 'Default language for localization (en, es, fr, de)',
+)
+
+# ===================== #
+#     Plugin System     #
+# ===================== #
+
+option(
+  'static_plugins',
+  type: 'array',
+  value: [],
+  description: 'List of plugins to compile statically into the binary',
+)
+
+# ===================== #
+#   Platform Specific   #
+# ===================== #
+
+# Linux-specific
+option(
+  'pugixml',
+  type: 'feature',
+  value: 'auto',
+  description: 'Use pugixml for XBPS package metadata on Void Linux',
+)
+
+# Linux/BSD-specific
+option(
+  'xcb',
+  type: 'feature',
+  value: 'enabled',
+  description: 'Use libxcb for X11 window manager/display support',
+)
+
+option(
+  'wayland',
+  type: 'feature',
+  value: 'enabled',
+  description: 'Use wayland-client for Wayland compositor/display support',
+)
+
+# ===================== #
+#    Development/Nix    #
+# ===================== #
+
+option(
+  'build_for_musl',
+  type: 'boolean',
+  value: false,
+  description: 'Build for musl libc (primarily for Nix)',
+)
+
+option(
+  'use_linked_pci_ids',
+  type: 'boolean',
+  value: false,
+  description: 'Use linked PCI IDs database (primarily for Nix)',
 )

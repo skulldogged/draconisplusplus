@@ -12,26 +12,6 @@
 #include "../Utils/Types.hpp"
 
 namespace draconis::core::system {
-  namespace {
-    using utils::types::Battery;
-    using utils::types::CPUCores;
-    using utils::types::DisplayInfo;
-    using utils::types::f64;
-    using utils::types::i64;
-    using utils::types::MediaInfo;
-    using utils::types::NetworkInterface;
-    using utils::types::None;
-    using utils::types::Option;
-    using utils::types::OSInfo;
-    using utils::types::ResourceUsage;
-    using utils::types::Result;
-    using utils::types::String;
-    using utils::types::u64;
-    using utils::types::usize;
-    using utils::types::Vec;
-
-    using utils::cache::CacheManager;
-  } // namespace
 
   /**
    * @brief Fetches memory information.
@@ -73,7 +53,7 @@ namespace draconis::core::system {
    * }
    * @endcode
    */
-  fn GetMemInfo(CacheManager& cache) -> Result<ResourceUsage>;
+  fn GetMemInfo(utils::cache::CacheManager& cache) -> utils::types::Result<utils::types::ResourceUsage>;
 
 #if DRAC_ENABLE_NOWPLAYING
   /**
@@ -109,7 +89,7 @@ namespace draconis::core::system {
    * }
    * @endcode
    */
-  fn GetNowPlaying() -> Result<MediaInfo>;
+  fn GetNowPlaying() -> utils::types::Result<utils::types::MediaInfo>;
 #endif
 
   /**
@@ -149,7 +129,7 @@ namespace draconis::core::system {
    * }
    * @endcode
    */
-  fn GetOperatingSystem(CacheManager& cache) -> Result<OSInfo>;
+  fn GetOperatingSystem(utils::cache::CacheManager& cache) -> utils::types::Result<utils::types::OSInfo>;
 
   /**
    * @brief Fetches the desktop environment.
@@ -184,7 +164,7 @@ namespace draconis::core::system {
    * }
    * @endcode
    */
-  fn GetDesktopEnvironment(CacheManager& cache) -> Result<String>;
+  fn GetDesktopEnvironment(utils::cache::CacheManager& cache) -> utils::types::Result<utils::types::String>;
 
   /**
    * @brief Fetches the window manager.
@@ -220,7 +200,7 @@ namespace draconis::core::system {
    * }
    * @endcode
    */
-  fn GetWindowManager(CacheManager& cache) -> Result<String>;
+  fn GetWindowManager(utils::cache::CacheManager& cache) -> utils::types::Result<utils::types::String>;
 
   /**
    * @brief Fetches the shell.
@@ -253,7 +233,7 @@ namespace draconis::core::system {
    * }
    * @endcode
    */
-  fn GetShell(CacheManager& cache) -> Result<String>;
+  fn GetShell(utils::cache::CacheManager& cache) -> utils::types::Result<utils::types::String>;
 
   /**
    * @brief Fetches the host.
@@ -294,7 +274,7 @@ namespace draconis::core::system {
    * }
    * @endcode
    */
-  fn GetHost(CacheManager& cache) -> Result<String>;
+  fn GetHost(utils::cache::CacheManager& cache) -> utils::types::Result<utils::types::String>;
 
   /**
    * @brief Fetches the CPU model.
@@ -329,7 +309,7 @@ namespace draconis::core::system {
    * }
    * @endcode
    */
-  fn GetCPUModel(CacheManager& cache) -> Result<String>;
+  fn GetCPUModel(utils::cache::CacheManager& cache) -> utils::types::Result<utils::types::String>;
 
   /**
    * @brief Fetches the number of physical and logical cores on the CPU.
@@ -361,7 +341,7 @@ namespace draconis::core::system {
    * }
    * @endcode
    */
-  fn GetCPUCores(CacheManager& cache) -> Result<CPUCores>;
+  fn GetCPUCores(utils::cache::CacheManager& cache) -> utils::types::Result<utils::types::CPUCores>;
 
   /**
    * @brief Fetches the GPU model.
@@ -394,7 +374,7 @@ namespace draconis::core::system {
    * }
    * @endcode
    */
-  fn GetGPUModel(CacheManager& cache) -> Result<String>;
+  fn GetGPUModel(utils::cache::CacheManager& cache) -> utils::types::Result<utils::types::String>;
 
   /**
    * @brief Fetches the kernel version.
@@ -429,7 +409,7 @@ namespace draconis::core::system {
    * }
    * @endcode
    */
-  fn GetKernelVersion(CacheManager& cache) -> Result<String>;
+  fn GetKernelVersion(utils::cache::CacheManager& cache) -> utils::types::Result<utils::types::String>;
 
   /**
    * @brief Fetches the disk usage.
@@ -461,7 +441,11 @@ namespace draconis::core::system {
    * }
    * @endcode
    */
-  fn GetDiskUsage(CacheManager& cache) -> Result<ResourceUsage>;
+  fn GetDiskUsage(utils::cache::CacheManager& cache) -> utils::types::Result<utils::types::ResourceUsage>;
+
+  fn GetDisks(utils::cache::CacheManager& cache) -> utils::types::Result<utils::types::Vec<utils::types::DiskInfo>>;
+  fn GetSystemDisk(utils::cache::CacheManager& cache) -> utils::types::Result<utils::types::DiskInfo>;
+  fn GetDiskByPath(const utils::types::String& path, utils::cache::CacheManager& cache) -> utils::types::Result<utils::types::DiskInfo>;
 
   /**
    * @brief Fetches the uptime.
@@ -494,7 +478,7 @@ namespace draconis::core::system {
    * }
    * @endcode
    */
-  fn GetUptime() -> Result<std::chrono::seconds>;
+  fn GetUptime() -> utils::types::Result<std::chrono::seconds>;
 
   /**
    * @brief Fetches the outputs.
@@ -527,7 +511,7 @@ namespace draconis::core::system {
    * }
    * @endcode
    */
-  fn GetOutputs(CacheManager& cache) -> Result<Vec<DisplayInfo>>;
+  fn GetOutputs(utils::cache::CacheManager& cache) -> utils::types::Result<utils::types::Vec<utils::types::DisplayInfo>>;
 
   /**
    * @brief Fetches the primary output.
@@ -560,7 +544,7 @@ namespace draconis::core::system {
    * }
    * @endcode
    */
-  fn GetPrimaryOutput(CacheManager& cache) -> Result<DisplayInfo>;
+  fn GetPrimaryOutput(utils::cache::CacheManager& cache) -> utils::types::Result<utils::types::DisplayInfo>;
 
   /**
    * @brief Fetches the network interfaces.
@@ -593,7 +577,7 @@ namespace draconis::core::system {
    * }
    * @endcode
    */
-  fn GetNetworkInterfaces(CacheManager& cache) -> Result<Vec<NetworkInterface>>;
+  fn GetNetworkInterfaces(utils::cache::CacheManager& cache) -> utils::types::Result<utils::types::Vec<utils::types::NetworkInterface>>;
 
   /**
    * @brief Fetches the primary network interface.
@@ -626,7 +610,7 @@ namespace draconis::core::system {
    * }
    * @endcode
    */
-  fn GetPrimaryNetworkInterface(CacheManager& cache) -> Result<NetworkInterface>;
+  fn GetPrimaryNetworkInterface(utils::cache::CacheManager& cache) -> utils::types::Result<utils::types::NetworkInterface>;
 
   /**
    * @brief Fetches the battery information.
@@ -659,7 +643,7 @@ namespace draconis::core::system {
    * }
    * @endcode
    */
-  fn GetBatteryInfo(CacheManager& cache) -> Result<Battery>;
+  fn GetBatteryInfo(utils::cache::CacheManager& cache) -> utils::types::Result<utils::types::Battery>;
 
 #ifdef __linux__
   namespace linux {
@@ -669,7 +653,7 @@ namespace draconis::core::system {
      *
      * @details Obtained from /etc/os-release.
      */
-    fn GetDistroID(CacheManager& cache) -> Result<String>;
+    fn GetDistroID(utils::cache::CacheManager& cache) -> utils::types::Result<utils::types::String>;
   } // namespace linux
 #endif
 } // namespace draconis::core::system

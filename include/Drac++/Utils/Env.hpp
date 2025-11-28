@@ -10,15 +10,10 @@
 #include "Types.hpp"
 
 namespace draconis::utils::env {
-  namespace {
-    using types::i32;
-    using types::Result;
-    using types::UniquePointer;
-    using types::Unit;
-    using types::usize;
+  namespace types = ::draconis::utils::types;
+  namespace error = ::draconis::utils::error;
 
-    using enum error::DracErrorCode;
-  } // namespace
+  using enum error::DracErrorCode;
 
 #ifdef _WIN32
   /**
@@ -28,18 +23,18 @@ namespace draconis::utils::env {
    * @return A Result containing the value of the environment variable.
    */
   template <typename CharT>
-  [[nodiscard]] inline fn GetEnv(const CharT* name) -> Result<const CharT*> {
-    CharT* rawPtr     = nullptr;
-    usize  bufferSize = 0;
+  [[nodiscard]] inline fn GetEnv(const CharT* name) -> types::Result<std::basic_string<CharT>> {
+    CharT*       rawPtr     = nullptr;
+    types::usize bufferSize = 0;
 
-    i32 err = 0;
+    types::i32 err = 0;
 
     if constexpr (std::is_same_v<CharT, char>)
       err = _dupenv_s(&rawPtr, &bufferSize, name);
     else
       err = _wdupenv_s(&rawPtr, &bufferSize, name);
 
-    const UniquePointer<CharT, decltype(&free)> ptrManager(rawPtr, free);
+    const types::UniquePointer<CharT, decltype(&free)> ptrManager(rawPtr, free);
 
     if (err != 0)
       ERR(PermissionDenied, "Failed to retrieve environment variable");
@@ -47,7 +42,7 @@ namespace draconis::utils::env {
     if (!ptrManager)
       ERR(NotFound, "Environment variable not found");
 
-    return ptrManager.get();
+    return std::basic_string<CharT>(ptrManager.get());
   }
 
   /**
@@ -57,7 +52,7 @@ namespace draconis::utils::env {
    * @param value The value to set the environment variable to.
    */
   template <typename CharT>
-  inline fn SetEnv(const CharT* name, const CharT* value) -> Unit {
+  inline fn SetEnv(const CharT* name, const CharT* value) -> types::Unit {
     if constexpr (std::is_same_v<CharT, char>)
       _putenv_s(name, value);
     else
@@ -70,7 +65,7 @@ namespace draconis::utils::env {
    * @param name The name of the environment variable to unset.
    */
   template <typename CharT>
-  inline fn UnsetEnv(const CharT* name) -> Unit {
+  inline fn UnsetEnv(const CharT* name) -> types::Unit {
     if constexpr (std::is_same_v<CharT, char>)
       _putenv_s(name, "");
     else
@@ -84,7 +79,7 @@ namespace draconis::utils::env {
    * @return A Result containing the value of the environment variable.
    */
   template <typename CharT>
-  [[nodiscard]] inline fn GetEnv(const CharT* name) -> Result<const CharT*> {
+  [[nodiscard]] inline fn GetEnv(const CharT* name) -> Result<std::basic_string<CharT>> {
     static_assert(std::is_same_v<CharT, char>, "Only char is supported on POSIX systems");
 
     const CharT* value = std::getenv(name);
@@ -92,7 +87,7 @@ namespace draconis::utils::env {
     if (!value)
       ERR(NotFound, "Environment variable not found");
 
-    return value;
+    return std::basic_string<CharT>(value);
   }
 
   /**

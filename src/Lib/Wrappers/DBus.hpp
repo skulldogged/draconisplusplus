@@ -10,18 +10,9 @@
   #include <Drac++/Utils/Error.hpp>
   #include <Drac++/Utils/Types.hpp>
 
-namespace DBus {
-  namespace {
-    using enum draconis::utils::error::DracErrorCode;
-
-    using draconis::utils::types::i32;
-    using draconis::utils::types::None;
-    using draconis::utils::types::Option;
-    using draconis::utils::types::RawPointer;
-    using draconis::utils::types::Result;
-    using draconis::utils::types::String;
-    using draconis::utils::types::Unit;
-  } // namespace
+namespace dbus {
+  namespace types = draconis::utils::types;
+  namespace error = draconis::utils::error;
 
   /**
    * @brief RAII wrapper for DBusError. Automatically initializes and frees the error.
@@ -163,7 +154,7 @@ namespace DBus {
      *
      * @note This function is unsafe and should not be called directly.
      */
-    fn getBasic(RawPointer value) -> Unit {
+    fn getBasic(types::RawPointer value) -> types::Unit {
       if (m_isValid)
         dbus_message_iter_get_basic(&m_iter, value);
     }
@@ -191,7 +182,7 @@ namespace DBus {
      * @brief Gets the D-Bus type code of the current argument.
      * @return The D-Bus type code, or DBUS_TYPE_INVALID otherwise.
      */
-    [[nodiscard]] fn getArgType() -> i32 {
+    [[nodiscard]] fn getArgType() -> types::i32 {
       return m_isValid ? dbus_message_iter_get_arg_type(&m_iter) : DBUS_TYPE_INVALID;
     }
 
@@ -200,7 +191,7 @@ namespace DBus {
      * Only valid if the iterator points to an ARRAY or VARIANT.
      * @return The D-Bus type code of the elements, or DBUS_TYPE_INVALID otherwise.
      */
-    [[nodiscard]] fn getElementType() -> i32 {
+    [[nodiscard]] fn getElementType() -> types::i32 {
       return m_isValid ? dbus_message_iter_get_element_type(&m_iter) : DBUS_TYPE_INVALID;
     }
 
@@ -231,18 +222,18 @@ namespace DBus {
      * @brief Helper to safely get a string argument from the iterator.
      * @return An Option containing the string value if the current arg is a valid string, or None otherwise.
      */
-    [[nodiscard]] fn getString() -> Option<String> {
+    [[nodiscard]] fn getString() -> types::Option<types::String> {
       if (m_isValid && getArgType() == DBUS_TYPE_STRING) {
         const char* strPtr = nullptr;
 
         // ReSharper disable once CppRedundantCastExpression
-        getBasic(static_cast<RawPointer>(&strPtr));
+        getBasic(static_cast<types::RawPointer>(&strPtr));
 
         if (strPtr && strlen(strPtr) > 0)
-          return String(strPtr);
+          return types::String(strPtr);
       }
 
-      return None;
+      return types::None;
     }
   };
 
@@ -353,7 +344,9 @@ namespace DBus {
      * @return Result containing a MessageGuard on success, or DracError on failure.
      */
     static fn newMethodCall(const char* destination, const char* path, const char* interface, const char* method)
-      -> Result<Message> {
+      -> types::Result<Message> {
+      using enum error::DracErrorCode;
+
       DBusMessage* rawMsg = dbus_message_new_method_call(destination, path, interface, method);
 
       if (!rawMsg)
@@ -376,7 +369,7 @@ namespace DBus {
 
       if constexpr (std::is_convertible_v<DecayedT, const char*>) {
         const char* valuePtr = static_cast<const char*>(std::forward<T>(arg));
-        return dbus_message_iter_append_basic(&iter, DBUS_TYPE_STRING, static_cast<const RawPointer>(&valuePtr));
+        return dbus_message_iter_append_basic(&iter, DBUS_TYPE_STRING, static_cast<const types::RawPointer>(&valuePtr));
       } else {
         static_assert(!sizeof(T*), "Unsupported type passed to appendArgs");
         return false;
@@ -459,8 +452,10 @@ namespace DBus {
      * @param timeout_milliseconds Timeout duration in milliseconds.
      * @return Result containing the reply MessageGuard on success, or DracError on failure.
      */
-    [[nodiscard]] fn sendWithReplyAndBlock(const Message& message, const i32 timeout_milliseconds = 1000) const
-      -> Result<Message> {
+    [[nodiscard]] fn sendWithReplyAndBlock(const Message& message, const types::i32 timeout_milliseconds = 1000) const
+      -> types::Result<Message> {
+      using enum error::DracErrorCode;
+
       if (!m_conn || !message.get())
         ERR(InvalidArgument, "Invalid connection or message provided to sendWithReplyAndBlock");
 
@@ -494,7 +489,9 @@ namespace DBus {
      * @param bus_type The type of bus (DBUS_BUS_SESSION or DBUS_BUS_SYSTEM).
      * @return Result containing a ConnectionGuard on success, or DracError on failure.
      */
-    static fn busGet(const DBusBusType bus_type) -> Result<Connection> {
+    static fn busGet(const DBusBusType bus_type) -> types::Result<Connection> {
+      using enum error::DracErrorCode;
+
       Error           err;
       DBusConnection* rawConn = dbus_bus_get(bus_type, err.get());
 
@@ -507,6 +504,6 @@ namespace DBus {
       return Connection(rawConn);
     }
   };
-} // namespace DBus
+} // namespace dbus
 
 #endif // (__linux__ || __FreeBSD__ || __DragonFly__ || __NetBSD__) && DRAC_ENABLE_NOWPLAYING

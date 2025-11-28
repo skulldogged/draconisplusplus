@@ -27,9 +27,7 @@
   #include <sys/mman.h>           // mmap, munmap
   #include <sys/socket.h>         // ucred, getsockopt, SOL_SOCKET, SO_PEERCRED
   #include <sys/stat.h>           // fstat
-  #include <sys/statvfs.h>        // statvfs
-  #include <sys/sysinfo.h>        // sysinfo
-  #include <sys/utsname.h>        // utsname, uname
+  #include <sys/sysinfo.h>        // sysinfo (for GetMemInfo)
   #include <unistd.h>             // readlink
   #include <utility>              // std::move
 
@@ -43,6 +41,7 @@
   #include "Drac++/Utils/Logging.hpp"
   #include "Drac++/Utils/Types.hpp"
 
+  #include "OS/Unix.hpp"
   #include "Wrappers/DBus.hpp"
   #include "Wrappers/Wayland.hpp"
   #include "Wrappers/XCB.hpp"
@@ -1110,35 +1109,17 @@ namespace draconis::core::system {
   }
 
   fn GetUptime() -> Result<std::chrono::seconds> {
-    struct sysinfo info;
-
-    if (sysinfo(&info) != 0)
-      ERR(InternalError, "sysinfo call failed");
-
-    return std::chrono::seconds(info.uptime);
+    return os::unix_shared::GetUptimeLinux();
   }
 
   fn GetKernelVersion(CacheManager& cache) -> Result<String> {
     return cache.getOrSet<String>("linux_kernel_version", []() -> Result<String> {
-      utsname uts;
-
-      if (uname(&uts) == -1)
-        ERR(InternalError, "uname call failed");
-
-      if (std::strlen(uts.release) == 0)
-        ERR(ParseError, "uname returned null kernel release");
-
-      return String(uts.release);
+      return os::unix_shared::GetKernelRelease();
     });
   }
 
   fn GetDiskUsage(CacheManager& /*cache*/) -> Result<ResourceUsage> {
-    struct statvfs stat;
-
-    if (statvfs("/", &stat) == -1)
-      ERR(InternalError, "Failed to get filesystem stats for '/' (statvfs call failed)");
-
-    return ResourceUsage((stat.f_blocks * stat.f_frsize) - (stat.f_bfree * stat.f_frsize), stat.f_blocks * stat.f_frsize);
+    return os::unix_shared::GetRootDiskUsage();
   }
 
   fn GetOutputs(CacheManager& /*cache*/) -> Result<Vec<DisplayInfo>> {
@@ -1187,11 +1168,7 @@ namespace draconis::core::system {
 
   fn GetNetworkInterfaces(CacheManager& cache) -> Result<Vec<NetworkInterface>> {
     return cache.getOrSet<Vec<NetworkInterface>>("linux_network_interfaces", []() -> Result<Vec<NetworkInterface>> {
-      Result<Map<String, NetworkInterface>> mapResult = CollectNetworkInterfaces();
-      if (!mapResult)
-        ERR_FROM(mapResult.error());
-
-      const Map<String, NetworkInterface>& interfaceMap = *mapResult;
+      Map<String, NetworkInterface> interfaceMap = TRY(CollectNetworkInterfaces());
 
       Vec<NetworkInterface> interfaces;
       interfaces.reserve(interfaceMap.size());
@@ -1205,12 +1182,7 @@ namespace draconis::core::system {
   fn GetPrimaryNetworkInterface(CacheManager& cache) -> Result<NetworkInterface> {
     return cache.getOrSet<NetworkInterface>("linux_primary_network_interface", []() -> Result<NetworkInterface> {
       // Gather full interface list first
-      Result<Map<String, NetworkInterface>> mapResult = CollectNetworkInterfaces();
-
-      if (!mapResult)
-        ERR_FROM(mapResult.error());
-
-      const Map<String, NetworkInterface>& interfaces = *mapResult;
+      Map<String, NetworkInterface> interfaces = TRY(CollectNetworkInterfaces());
 
       // Attempt to determine primary interface via default route
       String        primaryInterfaceName;

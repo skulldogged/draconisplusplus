@@ -12,23 +12,16 @@
 // clang-format on
 
 namespace draconis::services::weather::dto {
-  namespace {
-    using draconis::utils::types::f64;
-    using draconis::utils::types::i32;
-    using draconis::utils::types::i64;
-    using draconis::utils::types::Option;
-    using draconis::utils::types::String;
-    using draconis::utils::types::Vec;
-  } // namespace
+  namespace types = draconis::utils::types;
 
   // MetNo Data Transfer Objects
   namespace metno {
     struct Details {
-      f64 airTemperature;
+      types::f64 airTemperature;
     };
 
     struct Next1hSummary {
-      String symbolCode;
+      types::String symbolCode;
     };
 
     struct Next1h {
@@ -40,17 +33,17 @@ namespace draconis::services::weather::dto {
     };
 
     struct Data {
-      Instant        instant;
-      Option<Next1h> next1Hours;
+      Instant               instant;
+      types::Option<Next1h> next1Hours;
     };
 
     struct Timeseries {
-      String time;
-      Data   data;
+      types::String time;
+      Data          data;
     };
 
     struct Properties {
-      Vec<Timeseries> timeseries;
+      types::Vec<Timeseries> timeseries;
     };
 
     struct Response {
@@ -62,9 +55,9 @@ namespace draconis::services::weather::dto {
   namespace openmeteo {
     struct Response {
       struct Current {
-        f64    temperature;
-        i32    weathercode;
-        String time;
+        types::f64    temperature;
+        types::i32    weathercode;
+        types::String time;
       } currentWeather;
     };
   } // namespace openmeteo
@@ -73,19 +66,19 @@ namespace draconis::services::weather::dto {
   namespace owm {
     struct OWMResponse {
       struct Main {
-        f64 temp;
+        types::f64 temp;
       };
 
       struct Weather {
-        String description;
+        types::String description;
       };
 
-      Main           main;
-      Vec<Weather>   weather;
-      String         name;
-      i64            dt;
-      Option<i32>    cod;
-      Option<String> message;
+      Main                         main;
+      types::Vec<Weather>          weather;
+      types::String                name;
+      types::i64                   dt;
+      types::Option<types::i32>    cod;
+      types::Option<types::String> message;
     };
   } // namespace owm
 } // namespace draconis::services::weather::dto

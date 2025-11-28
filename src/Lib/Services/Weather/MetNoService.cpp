@@ -43,8 +43,7 @@ fn MetNoService::getWeatherInfo() const -> Result<Report> {
         ERR(ApiUnavailable, "Failed to initialize cURL (Easy handle is invalid after construction)");
       }
 
-      if (Result res = curl.perform(); !res)
-        ERR_FROM(res.error());
+      TRY_VOID(curl.perform());
 
       draconis::services::weather::dto::metno::Response apiResp {};
 
@@ -59,7 +58,7 @@ fn MetNoService::getWeatherInfo() const -> Result<Report> {
       f64 temp = data.instant.details.airTemperature;
 
       if (m_units == UnitSystem::Imperial)
-        temp = temp * 9.0 / 5.0 + 32.0;
+        temp = (temp * 9.0 / 5.0) + 32.0;
 
       String symbolCode = data.next1Hours ? data.next1Hours->summary.symbolCode : "";
 
@@ -70,8 +69,7 @@ fn MetNoService::getWeatherInfo() const -> Result<Report> {
           symbolCode = iter->second;
       }
 
-      if (Result<usize> timestamp = draconis::services::weather::utils::ParseIso8601ToEpoch(time); !timestamp)
-        ERR_FROM(timestamp.error());
+      TRY_VOID(draconis::services::weather::utils::ParseIso8601ToEpoch(time));
 
       Report out = {
         .temperature = temp,

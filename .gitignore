@@ -32,3 +32,6 @@ dev_profile*
 
 /config.hpp
 pci_ids.o
+
+local.ini
+vcpkg_installed/

@@ -90,11 +90,9 @@ namespace draconis::services::weather {
   }
 
   fn Geocode(const String& placeName) -> Result<Coords> {
-    Result<String> escapedPlaceName = Curl::Easy::escape(placeName);
-    if (!escapedPlaceName)
-      ERR_FROM(escapedPlaceName.error());
+    String escapedPlaceName = TRY(Curl::Easy::escape(placeName));
 
-    String url = std::format("https://nominatim.openstreetmap.org/search?q={}&format=json&limit=1", *escapedPlaceName);
+    String url = std::format("https://nominatim.openstreetmap.org/search?q={}&format=json&limit=1", escapedPlaceName);
 
     String responseBuffer;
 
@@ -113,8 +111,7 @@ namespace draconis::services::weather {
       ERR(ApiUnavailable, "Failed to initialize cURL for Nominatim request");
     }
 
-    if (Result res = curl.perform(); !res)
-      ERR_FROM(res.error());
+    TRY_VOID(curl.perform());
 
     Vec<NominatimResult> results;
 
@@ -155,8 +152,7 @@ namespace draconis::services::weather {
       ERR(ApiUnavailable, "Failed to initialize cURL for IP geolocation");
     }
 
-    if (Result res = curl.perform(); !res)
-      ERR_FROM(res.error());
+    TRY_VOID(curl.perform());
 
     try {
       IPApiResponse        response;

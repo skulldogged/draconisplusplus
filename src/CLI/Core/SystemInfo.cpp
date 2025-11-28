@@ -2,6 +2,10 @@
 
 #include <Drac++/Core/System.hpp>
 
+#if DRAC_ENABLE_PLUGINS
+  #include <Drac++/Core/PluginManager.hpp>
+#endif
+
 #include <Drac++/Utils/Error.hpp>
 #include <Drac++/Utils/Logging.hpp>
 #include <Drac++/Utils/Types.hpp>
@@ -57,41 +61,183 @@ namespace draconis::core::system {
   } // namespace
 
   SystemInfo::SystemInfo(utils::cache::CacheManager& cache, const Config& config) {
+    debug_log("SystemInfo: Starting construction");
+
     // I'm not sure if AMD uses trademark symbols in their CPU models, but I know
     // Intel does. Might as well replace them with their unicode counterparts.
     auto replaceTrademarkSymbols = [](Result<String> str) -> Result<String> {
-      if (!str)
-        ERR_FROM(str.error());
+      String value = TRY(str);
 
       usize pos = 0;
 
-      while ((pos = str->find("(TM)")) != String::npos)
-        str->replace(pos, 4, "™");
+      while ((pos = value.find("(TM)")) != String::npos)
+        value.replace(pos, 4, "™");
 
-      while ((pos = str->find("(R)")) != String::npos)
-        str->replace(pos, 3, "®");
+      while ((pos = value.find("(R)")) != String::npos)
+        value.replace(pos, 3, "®");
 
-      return str;
+      return value;
     };
 
-    this->desktopEnv      = GetDesktopEnvironment(cache);
-    this->windowMgr       = GetWindowManager(cache);
+    debug_log("SystemInfo: Getting desktop environment");
+    this->desktopEnv = GetDesktopEnvironment(cache);
+    debug_log("SystemInfo: Getting window manager");
+    this->windowMgr = GetWindowManager(cache);
+    debug_log("SystemInfo: Getting operating system");
     this->operatingSystem = GetOperatingSystem(cache);
-    this->kernelVersion   = GetKernelVersion(cache);
-    this->host            = GetHost(cache);
-    this->cpuModel        = replaceTrademarkSymbols(GetCPUModel(cache));
-    this->cpuCores        = GetCPUCores(cache);
-    this->gpuModel        = GetGPUModel(cache);
-    this->shell           = GetShell(cache);
-    this->memInfo         = GetMemInfo(cache);
-    this->diskUsage       = GetDiskUsage(cache);
-    this->uptime          = GetUptime();
-    this->date            = GetDate();
+    debug_log("SystemInfo: Getting kernel version");
+    this->kernelVersion = GetKernelVersion(cache);
+    debug_log("SystemInfo: Getting host");
+    this->host = GetHost(cache);
+    debug_log("SystemInfo: Getting CPU model");
+    this->cpuModel = replaceTrademarkSymbols(GetCPUModel(cache));
+    debug_log("SystemInfo: Getting CPU cores");
+    this->cpuCores = GetCPUCores(cache);
+    debug_log("SystemInfo: Getting GPU model");
+    this->gpuModel = GetGPUModel(cache);
+    debug_log("SystemInfo: Getting shell");
+    this->shell = GetShell(cache);
+    debug_log("SystemInfo: Getting memory info");
+    this->memInfo = GetMemInfo(cache);
+    debug_log("SystemInfo: Getting disk usage");
+    this->diskUsage = GetDiskUsage(cache);
+    debug_log("SystemInfo: Getting uptime");
+    this->uptime = GetUptime();
+    debug_log("SystemInfo: Getting date");
+    this->date = GetDate();
 
-    if constexpr (DRAC_ENABLE_PACKAGECOUNT)
+    if constexpr (DRAC_ENABLE_PACKAGECOUNT) {
+      debug_log("SystemInfo: Getting package count");
       this->packageCount = draconis::services::packages::GetTotalCount(cache, config.enabledPackageManagers);
+    }
 
-    if constexpr (DRAC_ENABLE_NOWPLAYING)
+    if constexpr (DRAC_ENABLE_NOWPLAYING) {
+      debug_log("SystemInfo: Getting now playing");
       this->nowPlaying = config.nowPlaying.enabled ? GetNowPlaying() : Err(DracError(ApiUnavailable, "Now Playing API disabled"));
+    }
+
+#if DRAC_ENABLE_PLUGINS
+    debug_log("SystemInfo: Collecting plugin data");
+    // Collect plugin data efficiently (only if plugins are enabled and initialized)
+    collectPluginData(cache);
+#endif
+    debug_log("SystemInfo: Construction complete");
   }
+
+#if DRAC_ENABLE_PLUGINS
+  // Proper cache wrapper that uses the full CacheManager infrastructure with TTL support
+  class CacheWrapper : public IPluginCache {
+   public:
+    explicit CacheWrapper(utils::cache::CacheManager& manager) : m_manager(manager) {}
+
+    fn get(const String& key) -> Option<String> override {
+      // Use a fetcher that always fails - we only want cached data, not to fetch fresh data
+      fn fetcher = []() -> utils::types::Result<String> {
+        return utils::types::Err(utils::error::DracError(utils::error::DracErrorCode::Other, "Cache miss - no fetcher provided"));
+      };
+
+      // Try to get from cache. If it's a cache miss, the fetcher will fail and we'll return nullopt
+      Result<String> result = m_manager.getOrSet<String>(key, fetcher);
+
+      if (result)
+        return *result;
+
+      return std::nullopt;
+    }
+
+    fn set(const String& key, const String& value, utils::types::u32 ttlSeconds) -> void override {
+      // First invalidate any existing cache entry to ensure we store fresh data
+      m_manager.invalidate(key);
+
+      // Create a fetcher that returns the provided value
+      fn fetcher = [&value]() -> utils::types::Result<String> {
+        return value;
+      };
+
+      // Set cache policy with the specified TTL
+      using namespace std::chrono;
+      utils::cache::CachePolicy policy {
+        .location = utils::cache::CacheLocation::Persistent, // Use persistent cache for plugins
+        .ttl      = seconds(ttlSeconds)
+      };
+
+      // Store the value with TTL - ignore the return value since we just want to cache it
+      [[maybe_unused]] auto cacheResult = m_manager.getOrSet<String>(key, policy, fetcher);
+    }
+
+   private:
+    utils::cache::CacheManager& m_manager; // NOLINT(cppcoreguidelines-avoid-const-or-ref-data-members)
+  };
+
+  fn SystemInfo::collectPluginData(utils::cache::CacheManager& cache) -> Unit {
+    using draconis::core::plugin::GetPluginManager;
+
+    auto& pluginManager = GetPluginManager();
+
+    // Early exit if plugin system not initialized (zero-cost when disabled)
+    if (!pluginManager.isInitialized())
+      return;
+
+    // Load discovered plugins automatically
+    Vec<String> discoveredPlugins = pluginManager.listDiscoveredPlugins();
+    debug_log("Attempting to load {} discovered plugins", discoveredPlugins.size());
+
+    for (const auto& pluginName : discoveredPlugins) {
+      if (!pluginManager.isPluginLoaded(pluginName)) {
+        debug_log("Loading plugin: {}", pluginName);
+        if (auto result = pluginManager.loadPlugin(pluginName, cache); !result) {
+          debug_log("Failed to load plugin '{}': {}", pluginName, result.error().message);
+        } else {
+          debug_log("Successfully loaded plugin: {}", pluginName);
+        }
+      } else {
+        debug_log("Plugin '{}' is already loaded", pluginName);
+      }
+    }
+
+    // Get all system info plugins (high-performance lookup)
+    Vec<ISystemInfoPlugin*> systemInfoPlugins = pluginManager.getSystemInfoPlugins();
+
+    debug_log("Found {} system info plugins", systemInfoPlugins.size());
+
+    if (systemInfoPlugins.empty()) {
+      return;
+    }
+
+    // Collect data from each plugin efficiently
+    for (ISystemInfoPlugin* plugin : systemInfoPlugins) {
+      if (!plugin || !plugin->isReady()) {
+        debug_log("Skipping plugin - null or not ready");
+        continue;
+      }
+
+      const auto& metadata = plugin->getMetadata();
+      debug_log("Collecting data from plugin: {}", metadata.name);
+
+      try {
+        // Collect plugin data with error handling
+        CacheWrapper cacheWrapper(cache);
+        if (auto result = plugin->collectInfo(cacheWrapper); result) {
+          debug_log("Plugin '{}' collected {} fields", metadata.name, result->size());
+
+          // Move data efficiently to avoid copying
+          for (auto&& [key, value] : *result) {
+            debug_log("Adding plugin field: {} = {}", key, value);
+            pluginData.emplace(key, std::move(value));
+          }
+
+          // Plugin contributed successfully
+        } else {
+          debug_log("Plugin '{}' failed to collect data: {}", metadata.name, result.error().message);
+        }
+      } catch (const std::exception& e) {
+        debug_log("Exception in plugin '{}': {}", metadata.name, e.what());
+      } catch (...) {
+        debug_log("Unknown exception in plugin '{}'", metadata.name);
+      }
+    }
+
+    debug_log("Total plugin fields collected: {}", pluginData.size());
+  }
+#endif
 } // namespace draconis::core::system

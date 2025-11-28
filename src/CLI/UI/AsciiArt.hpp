@@ -6,18 +6,10 @@
 #include <Drac++/Utils/Types.hpp>
 
 namespace draconis::ui::ascii {
-  namespace {
-    using utils::types::Array;
-    using utils::types::Pair;
-    using utils::types::Result;
-    using utils::types::String;
-    using utils::types::StringView;
-    using utils::types::usize;
-    using utils::types::Vec;
-  } // namespace
+  namespace types = ::draconis::utils::types;
 
   namespace logos {
-    constexpr StringView NIXOS =
+    constexpr types::StringView NIXOS =
       "\033[1m\033[38;5;12m          ▗▄▄▄       \033[38;5;14m▗▄▄▄▄    ▄▄▄▖\n"
       "\033[1m\033[38;5;12m          ▜███▙       \033[38;5;14m▜███▙  ▟███▛\n"
       "\033[1m\033[38;5;12m           ▜███▙       \033[38;5;14m▜███▙▟███▛\n"
@@ -39,7 +31,7 @@ namespace draconis::ui::ascii {
       "\033[1m\033[38;5;12m         ▟███▛  ▜███▙       \033[38;5;14m▜███▙\n"
       "\033[1m\033[38;5;12m         ▝▀▀▀    ▀▀▀▀▘       \033[38;5;14m▀▀▀▘\033[0m";
 
-    constexpr StringView MACOS =
+    constexpr types::StringView MACOS =
       "\033[1m\033[38;5;10m                     ..'\n"
       "\033[1m\033[38;5;10m                 ,xNMM.\n"
       "\033[1m\033[38;5;10m               .OMMMMo\n"
@@ -58,7 +50,7 @@ namespace draconis::ui::ascii {
       "\033[1m\033[38;5;12m     ;KMMMMMMMWXXWMMMMMMMk.\n"
       "\033[1m\033[38;5;12m       \"cooc*\"    \"*coo'\"\033[0m";
 
-    constexpr StringView UBUNTU =
+    constexpr types::StringView UBUNTU =
       "\033[1m\033[38;5;9m                             ....\n"
       "\033[1m\033[38;5;9m              .',:clooo:  .:looooo:.\n"
       "\033[1m\033[38;5;9m           .;looooooooc  .oooooooooo'\n"
@@ -80,7 +72,7 @@ namespace draconis::ui::ascii {
       "\033[1m\033[38;5;9m           .':loooooo;  ,oooooooooc\n"
       "\033[1m\033[38;5;9m               ..';::c'  .;loooo:'\033[0m";
 
-    constexpr StringView ARCH =
+    constexpr types::StringView ARCH =
       "\033[1m\033[38;5;14m                  -`\n"
       "\033[1m\033[38;5;14m                 .o+`\n"
       "\033[1m\033[38;5;14m                `ooo/\n"
@@ -101,7 +93,7 @@ namespace draconis::ui::ascii {
       "\033[1m\033[38;5;14m`++:.                           `-/+/\n"
       "\033[1m\033[38;5;14m.`                                 `/`\033[0m";
 
-    constexpr StringView DEBIAN =
+    constexpr types::StringView DEBIAN =
       "\033[1m\033[38;5;15m       _,met$$$$$gg.\n"
       "\033[1m\033[38;5;15m    ,g$$$$$$$$$$$$$$$P.\n"
       "\033[1m\033[38;5;15m  ,g$$P\"        \"\"\"Y$$.\".\n"
@@ -120,7 +112,7 @@ namespace draconis::ui::ascii {
       "\033[1m\033[38;5;15m          `\"Y$b._\n"
       "\033[1m\033[38;5;15m              `\"\"\"\033[0m";
 
-    constexpr StringView FEDORA =
+    constexpr types::StringView FEDORA =
       "\033[1m\033[38;5;12m             .',;::::;,'.\n"
       "\033[1m\033[38;5;12m         .';:cccccccccccc:;,.\n"
       "\033[1m\033[38;5;12m      .;cccccccccccccccccccccc;.\n"
@@ -141,7 +133,7 @@ namespace draconis::ui::ascii {
       "\033[1m\033[38;5;12m:ccccccccccccccccccccccc:;,..\n"
       "\033[1m\033[38;5;12m ':cccccccccccccccc::;,.\033[0m";
 
-    constexpr StringView WINDOWS =
+    constexpr types::StringView WINDOWS =
       "\033[1m\033[38;5;12m/////////////////  \033[38;5;12m/////////////////\n"
       "\033[1m\033[38;5;12m/////////////////  \033[38;5;12m/////////////////\n"
       "\033[1m\033[38;5;12m/////////////////  \033[38;5;12m/////////////////\n"
@@ -161,11 +153,11 @@ namespace draconis::ui::ascii {
       "\033[1m\033[38;5;12m/////////////////  \033[38;5;12m/////////////////\033[0m";
   } // namespace logos
 
-  constexpr fn GetAsciiArt(StringView operatingSystem) -> Vec<StringView> {
+  constexpr fn GetAsciiArt(types::StringView operatingSystem) -> types::Vec<types::StringView> {
     using namespace logos;
 
     // clang-format off
-    static constexpr Array<Pair<StringView, StringView>, 7> LOGOS = {{
+    static constexpr types::Array<types::Pair<types::StringView, types::StringView>, 7> LOGOS = {{
        {    "arch",    ARCH },
        {   "macos",   MACOS },
        {   "nixos",   NIXOS },
@@ -176,10 +168,10 @@ namespace draconis::ui::ascii {
     }};
     // clang-format on
 
-    StringView asciiArt;
+    types::StringView asciiArt;
 
     for (const auto& [key, art] : LOGOS)
-      if (operatingSystem.find(key) != String::npos) {
+      if (operatingSystem.find(key) != types::String::npos) {
         asciiArt = art;
         break;
       }
@@ -187,9 +179,9 @@ namespace draconis::ui::ascii {
     if (asciiArt.empty())
       return {};
 
-    Vec<StringView> lines;
-    usize           pos   = 0;
-    usize           start = 0;
+    types::Vec<types::StringView> lines;
+    types::usize                  pos   = 0;
+    types::usize                  start = 0;
 
     while (pos < asciiArt.size()) {
       if (asciiArt[pos] == '\n') {

@@ -4,75 +4,135 @@
 
 #include <Drac++/Core/System.hpp>
 
+#if DRAC_ENABLE_PLUGINS
+  #include <Drac++/Core/PluginManager.hpp>
+#endif
+
 #include <Drac++/Utils/Error.hpp>
 #include <Drac++/Utils/Types.hpp>
 
 #include "Config/Config.hpp"
 
 namespace draconis::core::system {
-  namespace {
-    using config::Config;
+  namespace types = ::draconis::utils::types;
 
-    using utils::types::MediaInfo;
-    using utils::types::OSInfo;
-    using utils::types::ResourceUsage;
-    using utils::types::Result;
-    using utils::types::String;
-    using utils::types::u64;
-    using utils::types::usize;
+  using config::Config;
 
-    using std::chrono::seconds;
-  } // namespace
+  using std::chrono::seconds;
+
+#if DRAC_ENABLE_PLUGINS
+  using plugin::GetPluginManager;
+  using plugin::ISystemInfoPlugin;
+#endif
 
   /**
    * @brief Utility struct for storing system information.
+   *
+   * @details Performance optimizations:
+   * - Plugin data stored in a flat map for O(1) access
+   * - Lazy plugin loading only when accessed
+   * - Minimal memory allocations
    */
   struct SystemInfo {
-    Result<String>        date;
-    Result<String>        host;
-    Result<String>        kernelVersion;
-    Result<OSInfo>        operatingSystem;
-    Result<ResourceUsage> memInfo;
-    Result<String>        desktopEnv;
-    Result<String>        windowMgr;
-    Result<ResourceUsage> diskUsage;
-    Result<String>        shell;
-    Result<String>        cpuModel;
-    Result<CPUCores>      cpuCores;
-    Result<String>        gpuModel;
-    Result<seconds>       uptime;
+    types::Result<types::String>        date;
+    types::Result<types::String>        host;
+    types::Result<types::String>        kernelVersion;
+    types::Result<types::OSInfo>        operatingSystem;
+    types::Result<types::ResourceUsage> memInfo;
+    types::Result<types::String>        desktopEnv;
+    types::Result<types::String>        windowMgr;
+    types::Result<types::ResourceUsage> diskUsage;
+    types::Result<types::String>        shell;
+    types::Result<types::String>        cpuModel;
+    types::Result<types::CPUCores>      cpuCores;
+    types::Result<types::String>        gpuModel;
+    types::Result<seconds>              uptime;
 #if DRAC_ENABLE_PACKAGECOUNT
-    Result<u64> packageCount;
+    types::Result<types::u64> packageCount;
 #endif
 #if DRAC_ENABLE_NOWPLAYING
-    Result<MediaInfo> nowPlaying;
+    types::Result<types::MediaInfo> nowPlaying;
+#endif
+
+#if DRAC_ENABLE_PLUGINS
+    // Plugin-contributed data (high-performance flat map)
+    types::Map<types::String, types::String> pluginData;
+
+    /**
+     * @brief Get plugin-contributed field value
+     * @param fieldName Name of the field to retrieve
+     * @return Field value or empty string if not found
+     */
+    [[nodiscard]] fn getPluginField(const types::String& fieldName) const noexcept -> types::String {
+      if (auto iter = pluginData.find(fieldName); iter != pluginData.end())
+        return iter->second;
+
+      return {};
+    }
+
+    /**
+     * @brief Check if plugin field exists
+     * @param fieldName Name of the field to check
+     * @return True if field exists
+     */
+    [[nodiscard]] fn hasPluginField(const types::String& fieldName) const noexcept -> bool {
+      return pluginData.contains(fieldName);
+    }
+
+    /**
+     * @brief Get all plugin field names (for iteration)
+     * @return Vector of field names
+     */
+    [[nodiscard]] fn getPluginFieldNames() const -> types::Vec<types::String> {
+      types::Vec<types::String> names;
+      names.reserve(pluginData.size());
+
+      for (const auto& [name, value] : pluginData) {
+        names.push_back(name);
+      }
+
+      return names;
+    }
 #endif
 
     explicit SystemInfo(utils::cache::CacheManager& cache, const Config& config);
+
+   private:
+#if DRAC_ENABLE_PLUGINS
+    /**
+     * @brief Collect data from all system info plugins efficiently
+     * @param cache Cache manager for plugin data persistence
+     */
+    fn collectPluginData(utils::cache::CacheManager& cache) -> types::Unit;
+#endif
   };
 
   struct JsonInfo {
-    std::optional<String>        date;
-    std::optional<String>        host;
-    std::optional<String>        kernelVersion;
-    std::optional<OSInfo>        operatingSystem;
-    std::optional<ResourceUsage> memInfo;
-    std::optional<String>        desktopEnv;
-    std::optional<String>        windowMgr;
-    std::optional<ResourceUsage> diskUsage;
-    std::optional<String>        shell;
-    std::optional<String>        cpuModel;
-    std::optional<CPUCores>      cpuCores;
-    std::optional<String>        gpuModel;
-    std::optional<i64>           uptimeSeconds;
+    types::Option<types::String>        date;
+    types::Option<types::String>        host;
+    types::Option<types::String>        kernelVersion;
+    types::Option<types::OSInfo>        operatingSystem;
+    types::Option<types::ResourceUsage> memInfo;
+    types::Option<types::String>        desktopEnv;
+    types::Option<types::String>        windowMgr;
+    types::Option<types::ResourceUsage> diskUsage;
+    types::Option<types::String>        shell;
+    types::Option<types::String>        cpuModel;
+    types::Option<types::CPUCores>      cpuCores;
+    types::Option<types::String>        gpuModel;
+    types::Option<types::i64>           uptimeSeconds;
 #if DRAC_ENABLE_PACKAGECOUNT
-    std::optional<u64> packageCount;
+    types::Option<types::u64> packageCount;
 #endif
 #if DRAC_ENABLE_NOWPLAYING
-    std::optional<MediaInfo> nowPlaying;
+    types::Option<types::MediaInfo> nowPlaying;
 #endif
 #if DRAC_ENABLE_WEATHER
-    std::optional<services::weather::Report> weather;
+    types::Option<services::weather::Report> weather;
+#endif
+#if DRAC_ENABLE_PLUGINS
+    // Plugin-contributed fields (dynamic JSON object)
+    types::Map<types::String, types::String> pluginFields;
 #endif
   };
 
@@ -109,6 +169,9 @@ namespace glz {
 #endif
 #if DRAC_ENABLE_WEATHER
     "weather",         &T::weather,
+#endif
+#if DRAC_ENABLE_PLUGINS
+    "pluginFields",    &T::pluginFields,
 #endif
     "date",            &T::date,
     "host",            &T::host,

@@ -244,9 +244,9 @@ namespace draconis::services::packages {
 
     fs::path cargoPath {};
 
-    if (const Result<PCStr> cargoHome = GetEnv("CARGO_HOME"))
+    if (const Result<String> cargoHome = GetEnv("CARGO_HOME"))
       cargoPath = fs::path(*cargoHome) / "bin";
-    else if (const Result<PCStr> homeDir = GetEnv("HOME"))
+    else if (const Result<String> homeDir = GetEnv("HOME"))
       cargoPath = fs::path(*homeDir) / ".cargo" / "bin";
 
     if (cargoPath.empty() || !fs::exists(cargoPath))

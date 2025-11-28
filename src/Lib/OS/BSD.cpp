@@ -1,36 +1,39 @@
 #if defined(__FreeBSD__) || defined(__DragonFly__) || defined(__NetBSD__)
 
 // clang-format off
+#include <cstring>              // std::strlen
 #include <dbus/dbus-protocol.h> // DBUS_TYPE_*
 #include <dbus/dbus-shared.h>   // DBUS_BUS_SESSION
 #include <fstream>              // ifstream
 #include <sys/socket.h>         // ucred, getsockopt, SOL_SOCKET, SO_PEERCRED
-#include <sys/statvfs.h>        // statvfs
 #include <sys/sysctl.h>         // sysctlbyname
 #include <sys/un.h>             // LOCAL_PEERCRED
-#include <sys/utsname.h>        // uname, utsname
 
 #ifndef __NetBSD__
   #include <kenv.h>      // kenv
   #include <sys/ucred.h> // xucred
 #endif
 
-#include "Services/PackageCounting.hpp"
-#include "Util/Error.hpp"
-#include "Util/Env.hpp"
-#include "Util/Logging.hpp"
-#include "Util/Types.hpp"
-#include "Util/Caching.hpp"
-#include "Util/CacheManager.hpp"
+#include <Drac++/Core/System.hpp>
+
+#include <Drac++/Utils/CacheManager.hpp>
+#include <Drac++/Utils/Env.hpp>
+#include <Drac++/Utils/Error.hpp>
+#include <Drac++/Utils/Logging.hpp>
+#include <Drac++/Utils/Types.hpp>
+
+#include "OS/Unix.hpp"
+
 #include "Wrappers/DBus.hpp"
 #include "Wrappers/Wayland.hpp"
 #include "Wrappers/XCB.hpp"
-
-#include "OperatingSystem.hpp"
 // clang-format on
 
 using namespace draconis::utils::types;
-using draconis::utils::error::DracError, draconis::utils::error::DracErrorCode;
+using draconis::utils::cache::CacheManager;
+using draconis::utils::env::GetEnv;
+using draconis::utils::error::DracError;
+using enum draconis::utils::error::DracErrorCode;
 
 namespace {
   #ifdef __FreeBSD__
@@ -58,12 +61,11 @@ namespace {
   }
   #endif
 
-  #ifdef HAVE_XCB
+  #if DRAC_ENABLE_X11
   fn GetX11WindowManager() -> Result<String> {
     using namespace xcb;
     using namespace matchit;
     using enum ConnError;
-    using drac::types::StringView;
 
     const DisplayGuard conn;
 
@@ -86,8 +88,6 @@ namespace {
         );
 
     fn internAtom = [&conn](const StringView name) -> Result<atom_t> {
-      using drac::types::u16;
-
       const ReplyGuard<intern_atom_reply_t> reply(InternAtomReply(conn.get(), InternAtom(conn.get(), 0, static_cast<u16>(name.size()), name.data()), nullptr));
 
       if (!reply)
@@ -170,12 +170,7 @@ namespace {
     if (peerPid <= 0)
       return Err(DracError(DracErrorCode::PlatformSpecific, "Failed to obtain a valid peer PID"));
 
-    Result<String> exePathResult = GetPathByPid(peerPid);
-
-    if (!exePathResult)
-      return Err(std::move(exePathResult).error());
-
-    const String& exeRealPath = *exePathResult;
+    String exeRealPath = TRY(GetPathByPid(peerPid));
 
     StringView compositorNameView;
 
@@ -204,42 +199,51 @@ namespace {
 } // namespace
 
 namespace draconis::core::system {
-  using drac::env::GetEnv;
 
-  fn GetOSVersion(draconis::utils::cache::CacheManager& cache) -> Result<String> {
-    return cache.getOrSet<String>("bsd_os_version", []() -> Result<String> {
-      constexpr CStr path = "/etc/os-release";
+  fn GetOperatingSystem(CacheManager& cache) -> Result<OSInfo> {
+    return cache.getOrSet<OSInfo>("bsd_os_info", []() -> Result<OSInfo> {
+      constexpr PCStr path = "/etc/os-release";
+      String          name;
+      String          version;
+      String          id;
 
       std::ifstream file(path);
 
       if (file) {
-        String               line;
-        constexpr StringView prefix = "NAME=";
+        String line;
 
         while (std::getline(file, line)) {
-          if (StringView(line).starts_with(prefix)) {
-            String value = line.substr(prefix.size());
+          auto extractValue = [](const String& str, StringView prefix) -> Option<String> {
+            if (!StringView(str).starts_with(prefix))
+              return None;
+
+            String value = str.substr(prefix.size());
 
             if ((value.length() >= 2 && value.front() == '"' && value.back() == '"') ||
                 (value.length() >= 2 && value.front() == '\'' && value.back() == '\''))
               value = value.substr(1, value.length() - 2);
 
-            return String(value);
-          }
+            return value;
+          };
+
+          if (auto val = extractValue(line, "NAME="))
+            name = *val;
+          else if (auto val = extractValue(line, "VERSION="))
+            version = *val;
+          else if (auto val = extractValue(line, "ID="))
+            id = *val;
         }
+
+        if (!name.empty())
+          return OSInfo(std::move(name), std::move(version), std::move(id));
       }
 
-      utsname uts;
+      // Fallback to uname
+      Result<String> sysName = os::unix_shared::GetSystemName();
+      if (!sysName)
+        return Err(sysName.error());
 
-      if (uname(&uts) == -1)
-        return Err(DracError(std::format("Failed to open {} and uname() call also failed", path)));
-
-      String osName = uts.sysname;
-
-      if (osName.empty())
-        return Err(DracError(DracErrorCode::ParseError, "uname() returned empty sysname or release"));
-
-      return String(osName);
+      return OSInfo(*sysName, "", "");
     });
   }
 
@@ -259,25 +263,18 @@ namespace draconis::core::system {
   fn GetNowPlaying() -> Result<MediaInfo> {
     using namespace dbus;
 
-    Result<Connection> connectionResult = Connection::busGet(DBUS_BUS_SESSION);
-    if (!connectionResult)
-      return Err(connectionResult.error());
-
-    const Connection& connection = *connectionResult;
+    Connection connection = TRY(Connection::busGet(DBUS_BUS_SESSION));
 
     Option<String> activePlayer = None;
 
     {
-      Result<Message> listNamesResult =
-        Message::newMethodCall("org.freedesktop.DBus", "/org/freedesktop/DBus", "org.freedesktop.DBus", "ListNames");
-      if (!listNamesResult)
-        return Err(listNamesResult.error());
+      Message listNamesMsg = TRY(
+        Message::newMethodCall("org.freedesktop.DBus", "/org/freedesktop/DBus", "org.freedesktop.DBus", "ListNames")
+      );
 
-      Result<Message> listNamesReplyResult = connection.sendWithReplyAndBlock(*listNamesResult, 100);
-      if (!listNamesReplyResult)
-        return Err(listNamesReplyResult.error());
+      Message listNamesReply = TRY(connection.sendWithReplyAndBlock(listNamesMsg, 100));
 
-      MessageIter iter = listNamesReplyResult->iterInit();
+      MessageIter iter = listNamesReply.iterInit();
       if (!iter.isValid() || iter.getArgType() != DBUS_TYPE_ARRAY)
         return Err(DracError(DracErrorCode::ParseError, "Invalid DBus ListNames reply format: Expected array"));
 
@@ -301,27 +298,17 @@ namespace draconis::core::system {
     if (!activePlayer)
       return Err(DracError(DracErrorCode::NotFound, "No active MPRIS players found"));
 
-    Result<Message> msgResult = Message::newMethodCall(
-      activePlayer->c_str(), "/org/mpris/MediaPlayer2", "org.freedesktop.DBus.Properties", "Get"
-    );
-
-    if (!msgResult)
-      return Err(msgResult.error());
-
-    Message& msg = *msgResult;
+    Message msg = TRY(Message::newMethodCall(activePlayer->c_str(), "/org/mpris/MediaPlayer2", "org.freedesktop.DBus.Properties", "Get"));
 
     if (!msg.appendArgs("org.mpris.MediaPlayer2.Player", "Metadata"))
       return Err(DracError(DracErrorCode::InternalError, "Failed to append arguments to Properties.Get message"));
 
-    Result<Message> replyResult = connection.sendWithReplyAndBlock(msg, 100);
-
-    if (!replyResult)
-      return Err(replyResult.error());
+    Message reply = TRY(connection.sendWithReplyAndBlock(msg, 100));
 
     Option<String> title  = None;
     Option<String> artist = None;
 
-    MessageIter propIter = replyResult->iterInit();
+    MessageIter propIter = reply.iterInit();
     if (!propIter.isValid())
       return Err(DracError(DracErrorCode::ParseError, "Properties.Get reply has no arguments or invalid iterator"));
 
@@ -383,7 +370,7 @@ namespace draconis::core::system {
     return MediaInfo(std::move(title), std::move(artist));
   }
 
-  fn GetWindowManager(draconis::utils::cache::CacheManager& cache) -> Result<String> {
+  fn GetWindowManager(CacheManager& cache) -> Result<String> {
     return cache.getOrSet<String>("bsd_wm", []() -> Result<String> {
       if (!GetEnv("DISPLAY") && !GetEnv("WAYLAND_DISPLAY") && !GetEnv("XDG_SESSION_TYPE"))
         return Err(DracError(DracErrorCode::NotFound, "Could not find a graphical session"));
@@ -398,7 +385,7 @@ namespace draconis::core::system {
     });
   }
 
-  fn GetDesktopEnvironment(draconis::utils::cache::CacheManager& cache) -> Result<String> {
+  fn GetDesktopEnvironment(CacheManager& cache) -> Result<String> {
     return cache.getOrSet<String>("bsd_desktop_environment", []() -> Result<String> {
       if (!GetEnv("DISPLAY") && !GetEnv("WAYLAND_DISPLAY") && !GetEnv("XDG_SESSION_TYPE"))
         return Err(DracError(DracErrorCode::NotFound, "Could not find a graphical session"));
@@ -421,7 +408,7 @@ namespace draconis::core::system {
     });
   }
 
-  fn GetShell(draconis::utils::cache::CacheManager& cache) -> Result<String> {
+  fn GetShell(CacheManager& cache) -> Result<String> {
     return cache.getOrSet<String>("bsd_shell", []() -> Result<String> {
       if (const Result<String> shellPath = GetEnv("SHELL")) {
         // clang-format off
@@ -445,7 +432,7 @@ namespace draconis::core::system {
     });
   }
 
-  fn GetHost(draconis::utils::cache::CacheManager& cache) -> Result<String> {
+  fn GetHost(CacheManager& cache) -> Result<String> {
     return cache.getOrSet<String>("bsd_host", []() -> Result<String> {
       Array<char, 256> buffer {};
       usize            size = buffer.size();
@@ -479,43 +466,15 @@ namespace draconis::core::system {
     });
   }
 
-  fn GetKernelVersion(draconis::utils::cache::CacheManager& cache) -> Result<String> {
+  fn GetKernelVersion(CacheManager& cache) -> Result<String> {
     return cache.getOrSet<String>("bsd_kernel_version", []() -> Result<String> {
-      utsname uts;
-
-      if (uname(&uts) == -1)
-        return Err(DracError("uname call failed"));
-
-      if (std::strlen(uts.release) == 0)
-        return Err(DracError(DracErrorCode::ParseError, "uname returned null kernel release"));
-
-      return String(uts.release);
+      return os::unix_shared::GetKernelRelease();
     });
   }
 
-  fn GetDiskUsage() -> Result<DiskSpace> {
-    struct statvfs stat;
-
-    if (statvfs("/", &stat) == -1)
-      return Err(DracError(std::format("Failed to get filesystem stats for '/' (statvfs call failed)")));
-
-    return DiskSpace {
-      .usedBytes  = (stat.f_blocks * stat.f_frsize) - (stat.f_bfree * stat.f_frsize),
-      .totalBytes = stat.f_blocks * stat.f_frsize,
-    };
+  fn GetDiskUsage(CacheManager& /*cache*/) -> Result<ResourceUsage> {
+    return os::unix_shared::GetRootDiskUsage();
   }
 } // namespace draconis::core::system
-
-namespace package {
-  #ifdef __NetBSD__
-  fn GetPkgSrcCount(draconis::utils::cache::CacheManager& cache) -> Result<u64> {
-    return GetCountFromDirectory(cache, "pkgsrc", fs::current_path().root_path() / "usr" / "pkg" / "pkgdb", true);
-  }
-  #else
-  fn GetPkgNgCount(draconis::utils::cache::CacheManager& cache) -> Result<u64> {
-    return GetCountFromDb(cache, "pkgng", "/var/db/pkg/local.sqlite", "SELECT COUNT(*) FROM packages");
-  }
-  #endif
-} // namespace package
 
 #endif // __FreeBSD__ || __DragonFly__ || __NetBSD__

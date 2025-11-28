@@ -20,6 +20,10 @@
 
 #ifdef _WIN32
 
+  #if defined(_MSC_VER) || defined(__clang__)
+    #include <intrin.h> // __cpuid (MSVC/Clang-cl intrinsic)
+  #endif
+
   #include <dxgi.h>                                 // IDXGIFactory, IDXGIAdapter, DXGI_ADAPTER_DESC
   #include <ranges>                                 // std::ranges::find_if, std::ranges::views::transform
   #include <sysinfoapi.h>                           // GetLogicalProcessorInformationEx, RelationProcessorCore, PSYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX, KAFFINITY
@@ -94,28 +98,44 @@ namespace {
   } // namespace constants
 
   namespace helpers {
+    /**
+     * @brief Converts a wide string (UTF-16) to a UTF-8 encoded string.
+     * @details Uses thread-local buffers to minimize allocations during repeated conversions.
+     *          The buffer grows as needed but is reused across calls within the same thread.
+     * @param wstr The wide string to convert.
+     * @return Result containing the UTF-8 string on success, or an error on failure.
+     */
     fn ConvertWStringToUTF8(const WString& wstr) -> Result<String> {
-      // Likely best to just return an empty string if an empty wide string is provided.
+      // Return early for empty strings to avoid unnecessary work.
       if (wstr.empty())
         return String {};
 
-      // First call WideCharToMultiByte to get the buffer size...
-      const i32 sizeNeeded = WideCharToMultiByte(CP_UTF8, 0, wstr.c_str(), static_cast<int>(wstr.length()), nullptr, 0, nullptr, nullptr);
+      // Thread-local buffer for reuse across repeated calls.
+      // This avoids repeated heap allocations in hot paths.
+      thread_local String TlsBuffer;
+
+      // First call WideCharToMultiByte to get the required buffer size.
+      const i32 sizeNeeded = WideCharToMultiByte(CP_UTF8, 0, wstr.c_str(), static_cast<i32>(wstr.length()), nullptr, 0, nullptr, nullptr);
 
       if (sizeNeeded == 0)
         ERR_FMT(InternalError, "Failed to get buffer size for UTF-8 conversion. Error code: {}", GetLastError());
 
-      // Then make the buffer using that size...
-      String result(sizeNeeded, 0);
+      // Resize the thread-local buffer only if it's too small.
+      // This grows the buffer over time to accommodate the largest string seen,
+      // minimizing reallocations across multiple calls.
+      if (TlsBuffer.size() < static_cast<usize>(sizeNeeded))
+        TlsBuffer.resize(static_cast<usize>(sizeNeeded));
 
-      // ...and finally call WideCharToMultiByte again to convert the wide string to UTF-8.
+      // Convert the wide string to UTF-8 using the thread-local buffer.
       const i32 bytesConverted =
-        WideCharToMultiByte(CP_UTF8, 0, wstr.c_str(), static_cast<int>(wstr.length()), result.data(), sizeNeeded, nullptr, nullptr);
+        WideCharToMultiByte(CP_UTF8, 0, wstr.c_str(), static_cast<i32>(wstr.length()), TlsBuffer.data(), sizeNeeded, nullptr, nullptr);
 
       if (bytesConverted == 0)
         ERR_FMT(InternalError, "Failed to convert wide string to UTF-8. Error code: {}", GetLastError());
 
-      return result;
+      // Return a copy of the converted portion. The copy is necessary since
+      // the caller owns the returned string and we must preserve the TLS buffer.
+      return String(TlsBuffer.data(), static_cast<usize>(bytesConverted));
     }
 
     fn GetDirCount(const WString& path) -> Result<u64> {
@@ -303,11 +323,18 @@ namespace {
      private:
       Result<VersionData> m_versionData;
 
-      // Fetching version data from KUSER_SHARED_DATA is the fastest way to get the version information.
-      // It also avoids the need for a system call or registry access. The biggest downside, though, is
-      // that it's inherently risky/unsafe, and could break in future updates. To mitigate this risk,
-      // this constructor uses SEH (__try/__except) to handle potential exceptions and safely error out.
-      OsVersionCache() {
+      // Helper struct for SEH-safe version reading (POD only - no C++ objects requiring unwinding)
+      struct VersionReadResult {
+        u32  majorVersion;
+        u32  minorVersion;
+        u32  buildNumber;
+        bool success;
+      };
+
+      // SEH helper function - must not use any C++ objects that require unwinding
+      // This is separated because MSVC's __try/__except cannot be used in functions
+      // with objects that have destructors.
+      static fn readVersionDataSEH() -> VersionReadResult {
         // KUSER_SHARED_DATA is a block of memory shared between the kernel and user-mode
         // processes. This address has not changed since its inception. It SHOULD always
         // contain data for the running Windows version.
@@ -318,28 +345,54 @@ namespace {
         constexpr u32 kuserSharedNtMinorVersion = kuserSharedData + 0x270;
         constexpr u32 kuserSharedNtBuildNumber  = kuserSharedData + 0x260;
 
+        VersionReadResult result = { 0, 0, 0, false };
+
         // Considering this file is windows-specific, it's fine to use windows-specific extensions.
-  #pragma clang diagnostic push
-  #pragma clang diagnostic ignored "-Wlanguage-extension-token"
+  #if defined(__clang__)
+    #pragma clang diagnostic push
+    #pragma clang diagnostic ignored "-Wlanguage-extension-token"
+  #endif
         // Use Structured Exception Handling (SEH) to safely read the version data. In case of invalid
         // pointers, this will catch the access violation and return an Error, instead of crashing.
         __try {
           // Read the version data directly from the calculated memory addresses.
           // - reinterpret_cast is required to cast the memory addresses to volatile pointers.
           // - `volatile` tells the compiler that these memory reads should not be optimized away.
-          m_versionData = VersionData {
-            // NOLINTBEGIN(*-pro-type-reinterpret-cast, *-no-int-to-ptr)
-            .majorVersion = *reinterpret_cast<const volatile u32*>(kuserSharedNtMajorVersion),
-            .minorVersion = *reinterpret_cast<const volatile u32*>(kuserSharedNtMinorVersion),
-            .buildNumber  = *reinterpret_cast<const volatile u32*>(kuserSharedNtBuildNumber)
-            // NOLINTEND(*-pro-type-reinterpret-cast, *-no-int-to-ptr)
-          };
+          // NOLINTBEGIN(*-pro-type-reinterpret-cast, *-no-int-to-ptr)
+          result.majorVersion = *reinterpret_cast<const volatile u32*>(kuserSharedNtMajorVersion);
+          result.minorVersion = *reinterpret_cast<const volatile u32*>(kuserSharedNtMinorVersion);
+          result.buildNumber  = *reinterpret_cast<const volatile u32*>(kuserSharedNtBuildNumber);
+          // NOLINTEND(*-pro-type-reinterpret-cast, *-no-int-to-ptr)
+          result.success = true;
         } __except (GetExceptionCode() == EXCEPTION_ACCESS_VIOLATION ? EXCEPTION_EXECUTE_HANDLER : EXCEPTION_CONTINUE_SEARCH) {
+          // If an access violation occurs, then the shared memory couldn't be properly read.
+          result.success = false;
+        }
+  #if defined(__clang__)
+    #pragma clang diagnostic pop
+  #endif
+
+        return result;
+      }
+
+      // Fetching version data from KUSER_SHARED_DATA is the fastest way to get the version information.
+      // It also avoids the need for a system call or registry access. The biggest downside, though, is
+      // that it's inherently risky/unsafe, and could break in future updates. To mitigate this risk,
+      // the SEH helper function handles potential exceptions and returns a POD struct.
+      OsVersionCache() {
+        VersionReadResult readResult = readVersionDataSEH();
+
+        if (readResult.success) {
+          m_versionData = VersionData {
+            .majorVersion = readResult.majorVersion,
+            .minorVersion = readResult.minorVersion,
+            .buildNumber  = readResult.buildNumber
+          };
+        } else {
           // If an access violation occurs, then the shared memory couldn't be properly read.
           // Set the version data to an error instead of crashing.
           m_versionData = Err(DracError(InternalError, "Failed to read kernel version from KUSER_SHARED_DATA"));
         }
-  #pragma clang diagnostic pop
       }
 
       ~OsVersionCache() = default;
@@ -401,21 +454,29 @@ namespace {
       }
 
       fn initialize() -> Result<> {
+        bool initSuccess = false;
+
         // Use std::call_once for thread-safe initialization
-        std::call_once(m_initFlag, [this]() {
+        std::call_once(m_initFlag, [this, &initSuccess]() {
+          debug_log("ProcessTreeCache: Starting initialization...");
+
           // Use the Toolhelp32Snapshot API to get a snapshot of all running processes.
           HandleWrapper<HANDLE> hSnap(CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0));
 
-          if (!hSnap)
+          if (!hSnap) {
+            debug_log("ProcessTreeCache: CreateToolhelp32Snapshot failed, error: {}", GetLastError());
             return;
+          }
 
           // This structure must be initialized with its own size before use; it's a WinAPI requirement.
           PROCESSENTRY32W pe32 {};
           pe32.dwSize = sizeof(PROCESSENTRY32W);
 
           // Get the first process from the snapshot.
-          if (!Process32FirstW(hSnap.get(), &pe32))
+          if (!Process32FirstW(hSnap.get(), &pe32)) {
+            debug_log("ProcessTreeCache: Process32FirstW failed, error: {}", GetLastError());
             return;
+          }
 
           UnorderedMap<DWORD, Data> processMap;
 
@@ -428,6 +489,10 @@ namespace {
             const usize end   = exeFileView.length();
 
             WStringView stemView = exeFileView.substr(start, end - start);
+
+            // Remove .exe extension if present
+            if (stemView.size() > 4 && stemView.substr(stemView.size() - 4) == L".exe")
+              stemView = stemView.substr(0, stemView.size() - 4);
 
             WString baseName(stemView);
             std::ranges::transform(baseName, baseName.begin(), [](const WCStr character) { return towlower(character); });
@@ -444,7 +509,15 @@ namespace {
             LockGuard lock(m_processMutex);
             m_processMap = std::move(processMap);
           }
+
+          initSuccess = true;
+          debug_log("ProcessTreeCache: Initialized with {} processes", m_processMap.size());
         });
+
+        if (!initSuccess && m_processMap.empty()) {
+          debug_log("ProcessTreeCache: Initialization failed or map is empty");
+          ERR(IoError, "Failed to initialize process tree cache");
+        }
 
         return {};
       }
@@ -474,14 +547,16 @@ namespace {
     fn FindShellInProcessTree(const DWORD startPid, const Array<Pair<StringView, StringView>, sz>& shellMap) -> Result<String> {
       using cache::ProcessTreeCache;
 
+      debug_log("FindShellInProcessTree: Starting with PID {}", startPid);
+
       // PID 0 (System Idle Process) is always the root process, and cannot have a parent.
       if (startPid == 0)
         ERR(InvalidArgument, "Start PID cannot be 0");
 
-      if (const Result<> initialized = ProcessTreeCache::getInstance().initialize(); !initialized)
-        ERR_FROM(initialized.error());
+      TRY_VOID(ProcessTreeCache::getInstance().initialize());
 
       const UnorderedMap<DWORD, ProcessTreeCache::Data>& processMap = ProcessTreeCache::getInstance().getProcessMap();
+      debug_log("FindShellInProcessTree: Process map has {} entries", processMap.size());
 
       DWORD currentPid = startPid;
 
@@ -492,11 +567,14 @@ namespace {
 
       while (currentPid != 0 && depth < maxDepth) {
         auto procIt = processMap.find(currentPid);
-        if (procIt == processMap.end())
+        if (procIt == processMap.end()) {
+          debug_log("FindShellInProcessTree: PID {} not found in map, stopping traversal", currentPid);
           break;
+        }
 
         // Get the lowercase name of the process.
         const String& processName = procIt->second.baseExeNameLower;
+        debug_log("FindShellInProcessTree: depth={}, PID={}, name={}", depth, currentPid, processName);
 
         // Check if the process name matches any shell in the map,
         // and return its friendly-name counterpart if it is.
@@ -504,20 +582,84 @@ namespace {
           const auto mapIter =
             std::ranges::find_if(shellMap, [&](const Pair<StringView, StringView>& pair) { return StringView { processName } == pair.first; });
           mapIter != std::ranges::end(shellMap)
-        )
+        ) {
+          debug_log("FindShellInProcessTree: Found shell: {}", mapIter->second);
           return String(mapIter->second);
+        }
 
         // Move up the tree to the parent process.
         currentPid = procIt->second.parentPid;
         depth++;
       }
 
+      debug_log("FindShellInProcessTree: Shell not found after {} iterations", depth);
       ERR(NotFound, "Shell not found");
     }
   } // namespace shell
+
+  fn GetDiskInfoForDrive(const String& driveRoot, CacheManager& /*cache*/) -> Result<DiskInfo> {
+    DiskInfo disk;
+
+    // Set name and mount point (same for Windows drives)
+    disk.name       = driveRoot;
+    disk.mountPoint = driveRoot;
+
+    // Get drive type
+    UINT driveType = GetDriveTypeA(driveRoot.c_str());
+    switch (driveType) {
+      case DRIVE_FIXED:
+        disk.driveType = "Fixed";
+        break;
+      case DRIVE_REMOVABLE:
+        disk.driveType = "Removable";
+        break;
+      case DRIVE_CDROM:
+        disk.driveType = "CD-ROM";
+        break;
+      case DRIVE_REMOTE:
+        disk.driveType = "Network";
+        break;
+      case DRIVE_RAMDISK:
+        disk.driveType = "RAM Disk";
+        break;
+      default:
+        disk.driveType = "Unknown";
+        break;
+    }
+
+    // Get filesystem type
+    Array<char, MAX_PATH> filesystem = {};
+    if (GetVolumeInformationA(driveRoot.c_str(), nullptr, 0, nullptr, nullptr, nullptr, filesystem.data(), MAX_PATH))
+      disk.filesystem = filesystem.data();
+    else
+      disk.filesystem = "Unknown";
+
+    // Get disk space information
+    ULARGE_INTEGER freeBytes, totalBytes, totalFreeBytes;
+    if (GetDiskFreeSpaceExA(driveRoot.c_str(), &freeBytes, &totalBytes, &totalFreeBytes)) {
+      disk.totalBytes = totalBytes.QuadPart;
+      disk.usedBytes  = totalBytes.QuadPart - freeBytes.QuadPart;
+    } else {
+      // If we can't get space info, set to 0
+      disk.totalBytes = 0;
+      disk.usedBytes  = 0;
+    }
+
+    // Get system drive for comparison
+    Array<char, MAX_PATH> systemDir = {};
+    GetSystemDirectoryA(systemDir.data(), MAX_PATH);
+    char systemDrive = systemDir.front();
+
+    // Check if this is the system drive
+    disk.isSystemDrive = (driveRoot[0] == systemDrive);
+
+    return disk;
+  }
 } // namespace
 
 namespace draconis::core::system {
+  using namespace draconis::utils::types;
+  using draconis::utils::cache::CacheManager;
   using namespace cache;
   using namespace constants;
   using namespace helpers;
@@ -586,45 +728,33 @@ namespace draconis::core::system {
       if (!currentVersionKey)
         ERR(NotFound, "Failed to open registry key");
 
-      Result<WString> productName = GetRegistryValue(currentVersionKey, PRODUCT_NAME);
+      WString productName = TRY(GetRegistryValue(currentVersionKey, PRODUCT_NAME));
 
-      if (!productName)
-        ERR_FROM(productName.error());
-
-      if (productName->empty())
+      if (productName.empty())
         ERR(NotFound, "ProductName not found in registry");
 
       // Build 22000+ of Windows are all considered Windows 11, so we can safely replace the product name
       // if it's currently "Windows 10" and the build number is greater than or equal to 22000.
       if (const Result<u64> buildNumberOpt = OsVersionCache::getInstance().getBuildNumber())
         if (const u64 buildNumber = *buildNumberOpt; buildNumber >= 22000)
-          if (const size_t pos = productName->find(windows10); pos != WString::npos) {
+          if (const size_t pos = productName.find(windows10); pos != WString::npos) {
             // Make sure we're not replacing a substring of a larger string. Should never happen,
             // but if it ever does, we'll just leave the product name unchanged.
-            const bool startBoundary = (pos == 0 || !iswalnum(productName->at(pos - 1)));
-            const bool endBoundary   = (pos + windowsLen == productName->length() || !iswalnum(productName->at(pos + windowsLen)));
+            const bool startBoundary = (pos == 0 || !iswalnum(productName.at(pos - 1)));
+            const bool endBoundary   = (pos + windowsLen == productName.length() || !iswalnum(productName.at(pos + windowsLen)));
 
             if (startBoundary && endBoundary)
-              productName->replace(pos, windowsLen, windows11);
+              productName.replace(pos, windowsLen, windows11);
           }
 
       // Append the display version if it exists.
-      const Result<WString> displayVersion = GetRegistryValue(currentVersionKey, DISPLAY_VERSION);
+      WString displayVersion = TRY(GetRegistryValue(currentVersionKey, DISPLAY_VERSION));
 
-      if (!displayVersion)
-        ERR_FROM(displayVersion.error());
+      String productNameUTF8 = TRY(ConvertWStringToUTF8(productName));
 
-      const Result<String> productNameUTF8 = ConvertWStringToUTF8(*productName);
+      String displayVersionUTF8 = TRY(ConvertWStringToUTF8(displayVersion));
 
-      if (!productNameUTF8)
-        ERR_FROM(productNameUTF8.error());
-
-      const Result<String> displayVersionUTF8 = ConvertWStringToUTF8(*displayVersion);
-
-      if (!displayVersionUTF8)
-        ERR_FROM(displayVersionUTF8.error());
-
-      return OSInfo(*productNameUTF8, *displayVersionUTF8, "windows");
+      return OSInfo(productNameUTF8, displayVersionUTF8, "windows");
     });
   }
 
@@ -638,24 +768,16 @@ namespace draconis::core::system {
       if (!hardwareConfigKey)
         ERR(NotFound, "Failed to open registry key");
 
-      const Result<WString> systemFamily = GetRegistryValue(hardwareConfigKey, SYSTEM_FAMILY);
+      WString systemFamily = TRY(GetRegistryValue(hardwareConfigKey, SYSTEM_FAMILY));
 
-      if (!systemFamily)
-        ERR_FROM(systemFamily.error());
-
-      return ConvertWStringToUTF8(*systemFamily);
+      return ConvertWStringToUTF8(systemFamily);
     });
   }
 
   fn GetKernelVersion(CacheManager& cache) -> Result<String> {
     return cache.getOrSet<String>("windows_kernel_version", draconis::utils::cache::CachePolicy::neverExpire(), []() -> Result<String> {
       // See the OsVersionCache class for how the version data is retrieved.
-      const Result<OsVersionCache::VersionData>& versionDataResult = OsVersionCache::getInstance().getVersionData();
-
-      if (!versionDataResult)
-        ERR_FROM(versionDataResult.error());
-
-      const auto& [majorVersion, minorVersion, buildNumber] = *versionDataResult;
+      const auto& [majorVersion, minorVersion, buildNumber] = TRY(OsVersionCache::getInstance().getVersionData());
 
       return std::format("{}.{}.{}", majorVersion, minorVersion, buildNumber);
     });
@@ -688,12 +810,7 @@ namespace draconis::core::system {
       // Windows doesn't really have the concept of a desktop environment,
       // so our next best bet is just displaying the UI design based on the build number.
 
-      const Result<u64> buildResult = OsVersionCache::getInstance().getBuildNumber();
-
-      if (!buildResult)
-        ERR_FROM(buildResult.error());
-
-      const u64 build = *buildResult;
+      u64 build = TRY(OsVersionCache::getInstance().getBuildNumber());
 
       if (build >= 15063)
         return "Fluent";
@@ -748,22 +865,20 @@ namespace draconis::core::system {
 
         // If the SHELL environment variable is not set, we can fall back to checking the process tree.
         // This is slower, but if we don't have the SHELL variable there's not much else we can do.
-        const Result<String> msysShell = FindShellInProcessTree(GetCurrentProcessId(), msysShellMap);
+        if (Result<String> shellResult = FindShellInProcessTree(GetCurrentProcessId(), msysShellMap))
+          return *std::move(shellResult);
 
-        if (msysShell)
-          return *msysShell;
-
-        ERR_FROM(msysShell.error());
+        // If we still can't find it, return "Unknown"
+        return String("Unknown");
       }
 
       // Normal windows shell environments don't set any environment variables we can check,
       // so we have to check the process tree instead.
-      const Result<String> windowsShell = FindShellInProcessTree(GetCurrentProcessId(), windowsShellMap);
+      if (Result<String> shellResult = FindShellInProcessTree(GetCurrentProcessId(), windowsShellMap))
+        return *std::move(shellResult);
 
-      if (windowsShell)
-        return *windowsShell;
-
-      ERR_FROM(windowsShell.error());
+      // If we can't find a shell, return "Unknown" instead of failing
+      return String("Unknown");
     });
   }
 
@@ -780,6 +895,68 @@ namespace draconis::core::system {
     // Calculate the used bytes by subtracting the free bytes from the total bytes.
     // QuadPart corresponds to the 64-bit integer in the union. (LowPart/HighPart are for the 32-bit integers.)
     return ResourceUsage(totalBytes.QuadPart - freeBytes.QuadPart, totalBytes.QuadPart);
+  }
+
+  fn GetDisks(CacheManager& cache) -> Result<Vec<DiskInfo>> {
+    Array<char, MAX_PATH> drives = {};
+
+    DWORD size = GetLogicalDriveStringsA(MAX_PATH, drives.data());
+
+    if (size == 0)
+      ERR(IoError, "Failed to get logical drive strings");
+
+    Vec<DiskInfo> disks;
+
+    usize index = 0;
+    while (index < MAX_PATH && drives.at(index) != '\0') {
+      const char* drive = std::addressof(drives.at(index));
+
+      const Result<DiskInfo> diskInfo = GetDiskInfoForDrive(drive, cache);
+      if (diskInfo)
+        disks.push_back(*diskInfo);
+
+      // Move to next drive string (skip null terminator)
+      index += static_cast<usize>(strlen(drive)) + 1;
+    }
+
+    return disks;
+  }
+
+  fn GetSystemDisk(CacheManager& cache) -> Result<DiskInfo> {
+    // Get the system drive letter directly
+    Array<char, MAX_PATH> systemDir = {};
+    if (GetSystemDirectoryA(systemDir.data(), MAX_PATH) == 0)
+      ERR(IoError, "Failed to get system directory");
+
+    char   systemDrive = systemDir.front();
+    String driveStr    = String(1, systemDrive) + ":\\";
+
+    return GetDiskInfoForDrive(driveStr, cache);
+  }
+
+  fn GetDiskByPath(const String& path, CacheManager& cache) -> Result<DiskInfo> {
+    if (path.empty())
+      ERR(InvalidArgument, "Path cannot be empty");
+
+    char driveLetter = path[0];
+    if (path.length() >= 2 && path[1] == ':') {
+      driveLetter = path[0];
+    } else {
+      Array<char, MAX_PATH> cwd = {};
+      if (GetCurrentDirectoryA(MAX_PATH, cwd.data()) == 0)
+        ERR(IoError, "Failed to get current directory");
+
+      driveLetter = cwd[0];
+    }
+
+    if (driveLetter >= 'a' && driveLetter <= 'z') {
+      const int temp = static_cast<int>(driveLetter) - 'a' + 'A';
+      driveLetter    = static_cast<char>(temp);
+    }
+
+    String driveRoot = String(1, driveLetter) + ":\\";
+
+    return GetDiskInfoForDrive(driveRoot, cache);
   }
 
   fn GetCPUModel(CacheManager& cache) -> Result<String> {
@@ -807,7 +984,12 @@ namespace draconis::core::system {
         Array<char, 49> brandString = {};
 
         // Step 1: Check for brand string support. The result is returned in EAX (cpuInfo[0]).
+  #if defined(_MSC_VER) || (defined(__clang__) && defined(_WIN32))
+        // Use __cpuidex to avoid conflict with Clang's __cpuid macro from cpuid.h
+        __cpuidex(cpuInfo.data(), static_cast<i32>(0x80000000), 0);
+  #else
         __cpuid(0x80000000, cpuInfo[0], cpuInfo[1], cpuInfo[2], cpuInfo[3]);
+  #endif
 
         // We must have extended functions support (functions up to 0x80000004).
         if (const u32 maxFunction = cpuInfo[0]; maxFunction >= 0x80000004) {
@@ -815,7 +997,12 @@ namespace draconis::core::system {
           for (u32 i = 0; i < 3; i++) {
             // Call leaves 0x80000002, 0x80000003, and 0x80000004. Each call
             // returns a 16-byte chunk of the brand string.
+  #if defined(_MSC_VER) || (defined(__clang__) && defined(_WIN32))
+            // Use __cpuidex to avoid conflict with Clang's __cpuid macro from cpuid.h
+            __cpuidex(cpuInfo.data(), static_cast<i32>(0x80000002 + i), 0);
+  #else
             __cpuid(0x80000002 + i, cpuInfo[0], cpuInfo[1], cpuInfo[2], cpuInfo[3]);
+  #endif
 
             // Copy the chunk into the brand string buffer.
             std::memcpy(&brandString.at(i * 16), cpuInfo.data(), sizeof(cpuInfo));
@@ -915,7 +1102,10 @@ namespace draconis::core::system {
 
       Microsoft::WRL::ComPtr<IDXGIFactory> factory;
 
+  #pragma clang diagnostic push
+  #pragma clang diagnostic ignored "-Wlanguage-extension-token"
       HRESULT result = CreateDXGIFactory(IID_PPV_ARGS(&factory));
+  #pragma clang diagnostic pop
 
       if (FAILED(result))
         ERR_FMT(ApiUnavailable, "Failed to create DXGI factory: {}", result);
@@ -1214,7 +1404,7 @@ namespace draconis::services::packages {
 
       // If the ChocolateyInstall environment variable is set, use that instead.
       // Most of the time it's set to C:\ProgramData\chocolatey, but it can be overridden.
-      if (const Result<PWCStr> chocoEnv = GetEnv(L"ChocolateyInstall"); chocoEnv)
+      if (const Result<WString> chocoEnv = GetEnv(L"ChocolateyInstall"); chocoEnv)
         chocoPath = *chocoEnv;
 
       // The lib directory contains the package metadata.
@@ -1222,12 +1412,7 @@ namespace draconis::services::packages {
 
       // Get the number of directories in the lib directory.
       // This corresponds to the number of packages installed.
-      const Result<u64> dirCount = GetDirCount(chocoPath);
-
-      if (dirCount)
-        return *dirCount;
-
-      ERR_FROM(dirCount.error());
+      return TRY(GetDirCount(chocoPath));
     });
   }
 
@@ -1236,10 +1421,10 @@ namespace draconis::services::packages {
       WString scoopAppsPath;
 
       // The SCOOP environment variable should be used first if it's set.
-      if (const Result<PWCStr> scoopEnv = GetEnv(L"SCOOP"); scoopEnv) {
+      if (const Result<WString> scoopEnv = GetEnv(L"SCOOP"); scoopEnv) {
         scoopAppsPath = *scoopEnv;
         scoopAppsPath.append(L"\\apps");
-      } else if (const Result<PWCStr> userProfile = GetEnv(L"USERPROFILE"); userProfile) {
+      } else if (const Result<WString> userProfile = GetEnv(L"USERPROFILE"); userProfile) {
         // Otherwise, we can try finding the scoop folder in the user's home directory.
         scoopAppsPath = *userProfile;
         scoopAppsPath.append(L"\\scoop\\apps");
@@ -1250,12 +1435,7 @@ namespace draconis::services::packages {
 
       // Get the number of directories in the apps directory.
       // This corresponds to the number of packages installed.
-      const Result<u64> dirCount = GetDirCount(scoopAppsPath);
-
-      if (dirCount)
-        return *dirCount;
-
-      ERR_FROM(dirCount.error());
+      return TRY(GetDirCount(scoopAppsPath));
     });
   }
 

@@ -9,6 +9,7 @@
 #pragma once
 
 #include <chrono>
+#include <utility>
 
 #include <Drac++/Utils/Types.hpp>
 
@@ -24,8 +25,20 @@ namespace draconis::utils::types {
 
     OSInfo() = default;
 
-    OSInfo(const String& name, const String& version, const String& identifier)
-      : name(name), version(version), id(identifier) {}
+    OSInfo(String name, String version, String identifier)
+      : name(std::move(name)),
+        version(std::move(version)),
+        id(std::move(identifier)) {}
+  };
+
+  struct DiskInfo {
+    String name;          // Drive/device name (e.g., "C:", "/dev/sda1")
+    String mountPoint;    // Mount path (e.g., "C:\", "/home")
+    String filesystem;    // Filesystem type (e.g., "NTFS", "ext4", "APFS")
+    String driveType;     // Drive type (e.g., "Fixed", "Removable", "CD-ROM", "Network", "RAM Disk")
+    u64    totalBytes;    // Total capacity
+    u64    usedBytes;     // Used space
+    bool   isSystemDrive; // Whether this is the system/boot drive
   };
 
   /**

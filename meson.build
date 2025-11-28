@@ -56,6 +56,7 @@ feature_options = [
   'caching',
   'weather',
   'packagecount',
+  'plugins',
   'xcb',
   'wayland',
   'pugixml',
@@ -65,6 +66,7 @@ foreach option, define : {
   'caching': 'DRAC_ENABLE_CACHING',
   'nowplaying': 'DRAC_ENABLE_NOWPLAYING',
   'packagecount': 'DRAC_ENABLE_PACKAGECOUNT',
+  'plugins': 'DRAC_ENABLE_PLUGINS',
   'precompiled_config': 'DRAC_PRECOMPILED_CONFIG',
   'pugixml': 'DRAC_USE_PUGIXML',
   'use_linked_pci_ids': 'DRAC_USE_LINKED_PCI_IDS',
@@ -84,6 +86,14 @@ foreach option, define : {
   project_flag_defines += {define: enabled}
   feature_states += {option: enabled}
 endforeach
+
+# In precompiled config mode, plugins are enabled if and only if static_plugins is non-empty
+if get_option('precompiled_config')
+  static_plugins = get_option('static_plugins')
+  plugins_enabled = static_plugins.length() > 0
+  project_flag_defines += {'DRAC_ENABLE_PLUGINS': plugins_enabled}
+  feature_states += {'plugins': plugins_enabled}
+endif
 
 cpp_args = []
 
@@ -124,6 +134,7 @@ cpp_args += cpp.get_supported_arguments(
     '-Wno-c++98-compat',
     '-Wno-disabled-macro-expansion',
     '-Wno-gnu-conditional-omitted-operand',
+    '-Wno-gnu-statement-expression-from-macro-expansion',
     '-Wno-missing-prototypes',
     '-Wno-padded',
     '-Wno-pre-c++20-compat-pedantic',
@@ -179,6 +190,16 @@ endif
 
 if feature_states['packagecount'] and host_system in ['darwin', 'linux']
   lib_deps += dependency('SQLiteCpp')
+endif
+
+# Plugin system dependencies
+if feature_states['plugins']
+  if host_system == 'windows'
+    # Windows uses LoadLibrary/FreeLibrary from kernel32.dll (already linked)
+  else
+    # Unix-like systems use dlopen/dlclose from libdl
+    lib_deps += cpp.find_library('dl')
+  endif
 endif
 
 # Platform-specific dependencies
@@ -250,6 +271,11 @@ if get_option('build_tests')
   subdir('src/Lib/Tests')
 endif
 
+# Build example plugins if plugin support is enabled
+if feature_states['plugins']
+  subdir('plugins')
+endif
+
 # =========================== #
 #   Translation Files         #
 # =========================== #
@@ -258,6 +284,11 @@ if not get_option('precompiled_config')
   translations_dir = get_option('datadir') / 'draconis++' / 'translations'
   install_subdir('translations', install_dir: translations_dir, strip_directory: false)
 endif
+
+# =========================== #
+#   Install Headers           #
+# =========================== #
+install_subdir('include/Drac++', install_dir: get_option('includedir') / 'Drac++')
 
 # =========================== #
 #   Configuration Summaries   #
@@ -281,6 +312,7 @@ summary(
     'Package counting': feature_states['packagecount'],
     'Now Playing': feature_states['nowplaying'],
     'Caching': feature_states['caching'],
+    'Plugin system': feature_states['plugins'],
     'Precompiled config': get_option('precompiled_config'),
     'Default language': get_option('default_language'),
   },

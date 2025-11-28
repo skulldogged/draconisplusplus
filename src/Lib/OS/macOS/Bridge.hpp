@@ -16,12 +16,7 @@
   #include <Drac++/Utils/Types.hpp>
 
 namespace draconis::core::system::macOS {
-  namespace {
-    using draconis::utils::types::MediaInfo;
-    using draconis::utils::types::OSInfo;
-    using draconis::utils::types::Result;
-    using draconis::utils::types::String;
-  } // namespace
+  namespace types = draconis::utils::types;
 
   /**
    * @brief Fetches the currently playing song's title and artist from macOS.
@@ -34,7 +29,7 @@ namespace draconis::core::system::macOS {
    * The retrieval is asynchronous, so this function uses a dispatch_semaphore to
    * block and wait for the result from the callback.
    */
-  fn GetNowPlayingInfo() -> Result<MediaInfo>;
+  fn GetNowPlayingInfo() -> types::Result<types::MediaInfo>;
 
   /**
    * @brief Gets the model name of the primary system GPU.
@@ -43,7 +38,7 @@ namespace draconis::core::system::macOS {
    * This function uses the Metal framework, which is Apple's modern graphics API,
    * to identify the default graphics device.
    */
-  fn GetGPUModel() -> Result<String>;
+  fn GetGPUModel() -> types::Result<types::String>;
 
   /**
    * @brief Gets the version of the macOS operating system.
@@ -53,7 +48,7 @@ namespace draconis::core::system::macOS {
    * returns 16, while the actual Tahoe SDK returns 26. To get around that, we simply add 10
    * to the displayed major version.
    */
-  fn GetOSVersion() -> Result<OSInfo>;
+  fn GetOSVersion() -> types::Result<types::OSInfo>;
 } // namespace draconis::core::system::macOS
 
 #endif

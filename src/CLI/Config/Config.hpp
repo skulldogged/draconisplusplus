@@ -1,14 +1,5 @@
 #pragma once
 
-#ifdef _WIN32
-  #include <windows.h> // GetUserNameA, DWORD
-#else
-  #include <pwd.h>    // getpwuid, passwd
-  #include <unistd.h> // getuid
-
-  #include <Drac++/Utils/Env.hpp>
-#endif
-
 #if !DRAC_PRECOMPILED_CONFIG
   #include <memory>                    // std::{make_unique, unique_ptr}
   #include <toml++/impl/node.hpp>      // toml::node
@@ -24,6 +15,15 @@
 
 #if DRAC_ENABLE_PACKAGECOUNT
   #include <Drac++/Services/Packages.hpp>
+#endif
+
+#ifdef _WIN32
+  #include <windows.h> // GetUserNameA, DWORD
+#else
+  #include <pwd.h>    // getpwuid, passwd
+  #include <unistd.h> // getuid
+
+  #include <Drac++/Utils/Env.hpp>
 #endif
 
 #include <Drac++/Utils/Logging.hpp>
@@ -53,7 +53,7 @@ namespace draconis::config {
 
       Array<char, 256> username {};
 
-      DWORD size = username.size();
+      unsigned long size = username.size();
 
       return GetUserNameA(username.data(), &size) ? username.data() : "User";
 #else
@@ -228,6 +228,45 @@ namespace draconis::config {
   };
 #endif // DRAC_ENABLE_WEATHER
 
+#if DRAC_ENABLE_PLUGINS
+  /**
+   * @struct Plugins
+   * @brief Holds configuration settings for plugins.
+   */
+  struct Plugins {
+    draconis::utils::types::Vec<draconis::utils::types::String> autoLoad; ///< List of plugin names to auto-load during initialization.
+
+    bool enabled = true; ///< Flag to enable or disable the plugin system.
+
+  #if !DRAC_PRECOMPILED_CONFIG
+    /**
+     * @brief Parses a TOML table to create a Plugins instance.
+     * @param tbl The TOML table to parse, containing [plugins].
+     * @return A Plugins instance with the parsed values, or defaults otherwise.
+     */
+    static fn fromToml(const toml::table& tbl) -> Plugins {
+      using draconis::utils::types::String, draconis::utils::types::Vec;
+
+      Plugins plugins;
+
+      plugins.enabled = tbl["enabled"].value_or(true);
+
+      if (const toml::node_view<const toml::node> autoLoadNode = tbl["auto_load"]) {
+        if (auto arr = autoLoadNode.as_array()) {
+          for (const auto& elem : *arr) {
+            if (auto valOpt = elem.value<String>()) {
+              plugins.autoLoad.emplace_back(*valOpt);
+            }
+          }
+        }
+      }
+
+      return plugins;
+    }
+  #endif // DRAC_PRECOMPILED_CONFIG
+  };
+#endif // DRAC_ENABLE_PLUGINS
+
   /**
    * @struct Config
    * @brief Holds the application configuration settings.
@@ -242,6 +281,9 @@ namespace draconis::config {
 #endif
 #if DRAC_ENABLE_PACKAGECOUNT
     draconis::services::packages::Manager enabledPackageManagers; ///< Enabled package managers.
+#endif
+#if DRAC_ENABLE_PLUGINS
+    Plugins plugins; ///< Plugin configuration settings.
 #endif
 
     /**

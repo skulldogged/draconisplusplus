@@ -1,17 +1,16 @@
-#ifdef _WIN32
-  #include <fcntl.h>
-  #include <io.h>
-  #include <windows.h>
-#endif
-
 #include <Drac++/Core/System.hpp>
 #include <Drac++/Services/Packages.hpp>
+
+#if DRAC_ENABLE_PLUGINS
+  #include <Drac++/Core/PluginManager.hpp>
+#endif
 
 #if DRAC_ENABLE_WEATHER
   #include <Drac++/Services/Weather.hpp>
 #endif
 
 #include <glaze/glaze.hpp>
+#include <magic_enum/magic_enum.hpp>
 
 #include <Drac++/Utils/ArgumentParser.hpp>
 #include <Drac++/Utils/CacheManager.hpp>
@@ -32,15 +31,6 @@ using namespace draconis::config;
 using namespace draconis::ui;
 
 namespace {
-  fn WriteToConsole(const String& document) -> Unit {
-#ifdef _WIN32
-    if (HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE); hConsole != INVALID_HANDLE_VALUE)
-      WriteConsoleA(hConsole, document.c_str(), static_cast<DWORD>(document.length()), nullptr, nullptr);
-#else
-    Println(document);
-#endif
-  }
-
   fn PrintDoctorReport(
 #if DRAC_ENABLE_WEATHER
     const Result<Report>& weather,
@@ -141,6 +131,10 @@ namespace {
       if (weather)
         output.weather = *weather;
 
+#if DRAC_ENABLE_PLUGINS
+    output.pluginFields = data.pluginData;
+#endif
+
 #undef DRAC_SET_OPTIONAL
 
     String jsonStr;
@@ -151,10 +145,286 @@ namespace {
       : glz::write_json(output, jsonStr);
 
     if (errorContext)
-      WriteToConsole(std::format("Failed to write JSON output: {}", glz::format_error(errorContext, jsonStr)));
+      Print("Failed to write JSON output: {}", glz::format_error(errorContext, jsonStr));
     else
-      WriteToConsole(jsonStr);
+      Print(jsonStr);
   }
+
+#if DRAC_ENABLE_PLUGINS
+  /**
+   * @brief Convert SystemInfo data to generic Map format for plugins
+   * @param data System information data
+   * @param weather Weather data (if available)
+   * @return Generic data map for plugin consumption
+   */
+  fn ConvertSystemInfoToMap(
+    const SystemInfo& data
+  #if DRAC_ENABLE_WEATHER
+    ,
+    const Result<Report>& weather
+  #endif
+  ) -> Map<String, String> {
+    Map<String, String> outputData;
+
+    // Basic system info
+    if (data.date)
+      outputData["date"] = *data.date;
+    if (data.host)
+      outputData["host"] = *data.host;
+    if (data.kernelVersion)
+      outputData["kernel_version"] = *data.kernelVersion;
+    if (data.shell)
+      outputData["shell"] = *data.shell;
+    if (data.cpuModel)
+      outputData["cpu_model"] = *data.cpuModel;
+    if (data.cpuCores) {
+      outputData["cpu_cores_physical"] = std::to_string(data.cpuCores->physical);
+      outputData["cpu_cores_logical"]  = std::to_string(data.cpuCores->logical);
+    }
+    if (data.gpuModel)
+      outputData["gpu_model"] = *data.gpuModel;
+    if (data.desktopEnv)
+      outputData["desktop_environment"] = *data.desktopEnv;
+    if (data.windowMgr)
+      outputData["window_manager"] = *data.windowMgr;
+
+    // Operating system info
+    if (data.operatingSystem) {
+      outputData["operating_system"] = std::format("{} {}", data.operatingSystem->name, data.operatingSystem->version);
+      outputData["os_name"]          = data.operatingSystem->name;
+      outputData["os_version"]       = data.operatingSystem->version;
+      if (!data.operatingSystem->id.empty())
+        outputData["os_id"] = data.operatingSystem->id;
+    }
+
+    // Memory and disk info
+    if (data.memInfo) {
+      outputData["memory_info"]        = std::format("{}/{} GB", BytesToGiB(data.memInfo->usedBytes), BytesToGiB(data.memInfo->totalBytes));
+      outputData["memory_used_bytes"]  = std::to_string(data.memInfo->usedBytes);
+      outputData["memory_total_bytes"] = std::to_string(data.memInfo->totalBytes);
+    }
+
+    if (data.diskUsage) {
+      outputData["disk_usage"]       = std::format("{}/{} GB", BytesToGiB(data.diskUsage->usedBytes), BytesToGiB(data.diskUsage->totalBytes));
+      outputData["disk_used_bytes"]  = std::to_string(data.diskUsage->usedBytes);
+      outputData["disk_total_bytes"] = std::to_string(data.diskUsage->totalBytes);
+    }
+
+    // Uptime
+    if (data.uptime) {
+      outputData["uptime"]         = std::format("{}", SecondsToFormattedDuration { *data.uptime });
+      outputData["uptime_seconds"] = std::to_string(data.uptime->count());
+    }
+
+    // Package count
+  #if DRAC_ENABLE_PACKAGECOUNT
+    if (data.packageCount && *data.packageCount > 0)
+      outputData["package_count"] = std::to_string(*data.packageCount);
+  #endif
+
+    // Now playing
+  #if DRAC_ENABLE_NOWPLAYING
+    if (data.nowPlaying) {
+      outputData["now_playing_artist"] = data.nowPlaying->artist.value_or("Unknown Artist");
+      outputData["now_playing_title"]  = data.nowPlaying->title.value_or("Unknown Title");
+    }
+  #endif
+
+    // Weather
+  #if DRAC_ENABLE_WEATHER
+    if (weather) {
+      const auto& [temperature, townName, description] = *weather;
+      outputData["weather_temperature"]                = std::to_string(temperature);
+      if (townName)
+        outputData["weather_town"] = *townName;
+      outputData["weather_description"] = description;
+    }
+  #endif
+
+    // Plugin data
+    for (const auto& [key, value] : data.pluginData)
+      outputData[std::format("plugin_{}", key)] = value;
+
+    return outputData;
+  }
+
+  fn FormatOutputViaPlugin(
+    const String& formatName,
+  #if DRAC_ENABLE_WEATHER
+    const Result<Report>& weather,
+  #endif
+    const SystemInfo& data
+  ) -> Unit {
+    using draconis::core::plugin::GetPluginManager;
+    using draconis::utils::types::Map, draconis::utils::types::String;
+
+    auto& pluginManager = GetPluginManager();
+    if (!pluginManager.isInitialized()) {
+      Print("Plugin system not initialized.\n");
+      return;
+    }
+
+    // Get all loaded output format plugins directly
+    auto outputPlugins = pluginManager.getOutputFormatPlugins();
+
+    // Look for a plugin that provides the requested format
+    draconis::core::plugin::IOutputFormatPlugin* formatPlugin = nullptr;
+
+    for (auto* plugin : outputPlugins) {
+      for (const auto& name : plugin->getFormatNames()) {
+        if (name == formatName) {
+          formatPlugin = plugin;
+          break;
+        }
+      }
+      if (formatPlugin)
+        break;
+    }
+
+    if (!formatPlugin) {
+      Print("No plugin found that provides '{}' output format.\n", formatName);
+      return;
+    }
+
+    // Convert SystemInfo data to generic Map format using dedicated function
+    Map<String, String> outputData = ConvertSystemInfoToMap(
+      data
+  #if DRAC_ENABLE_WEATHER
+      ,
+      weather
+  #endif
+    );
+
+    // Format output using plugin - format name determines the output mode
+    auto result = formatPlugin->formatOutput(formatName, outputData);
+    if (!result) {
+      Print("Failed to format '{}' output: {}\n", formatName, result.error().message);
+      return;
+    }
+
+    Print(*result);
+  }
+
+#endif
+
+#if DRAC_ENABLE_PLUGINS
+  /**
+   * @brief Handle --list-plugins command with high performance
+   * @param pluginManager Reference to plugin manager
+   * @return Exit code
+   */
+  fn handleListPluginsCommand(const draconis::core::plugin::PluginManager& pluginManager) -> i32 {
+    using draconis::core::plugin::PluginType;
+
+    if (!pluginManager.isInitialized()) {
+      Print("Plugin system not initialized.\n");
+      return EXIT_FAILURE;
+    }
+
+    auto loadedPlugins     = pluginManager.listLoadedPlugins();
+    auto discoveredPlugins = pluginManager.listDiscoveredPlugins();
+
+    Print("Plugin System Status: {} loaded, {} discovered\n\n", loadedPlugins.size(), discoveredPlugins.size());
+
+    if (!loadedPlugins.empty()) {
+      Print("Loaded Plugins:\n");
+      Print("==============\n");
+
+      for (const auto& metadata : loadedPlugins) {
+        Print("  • {} v{} ({})\n", metadata.name, metadata.version, metadata.author);
+        Print("    Description: {}\n", metadata.description);
+        Print("    Type: {}\n", magic_enum::enum_name(metadata.type));
+        Print("\n");
+      }
+    }
+
+    if (!discoveredPlugins.empty()) {
+      Print("Discovered Plugins:\n");
+      Print("==================\n");
+
+      for (const auto& pluginName : discoveredPlugins) {
+        bool isLoaded = std::ranges::any_of(
+          loadedPlugins,
+          [&pluginName](const draconis::core::plugin::PluginMetadata& meta) -> bool {
+            return meta.name == pluginName;
+          }
+        );
+
+        Print("  • {} {}\n", pluginName, isLoaded ? "(loaded)" : "(available)");
+      }
+
+      Print("\n");
+    }
+
+    if (loadedPlugins.empty() && discoveredPlugins.empty()) {
+      Print("No plugins found. Checked directories:\n");
+      for (const auto& path : pluginManager.getSearchPaths())
+        Print("  - {}\n", path.string());
+    }
+
+    return EXIT_SUCCESS;
+  }
+
+  /**
+   * @brief Handle --plugin-info command
+   * @param pluginManager Reference to plugin manager
+   * @param pluginName Name of plugin to show info for
+   * @return Exit code
+   */
+  fn handlePluginInfoCommand(const draconis::core::plugin::PluginManager& pluginManager, const String& pluginName) -> i32 {
+    if (!pluginManager.isInitialized()) {
+      Print("Plugin system not initialized.\n");
+      return EXIT_FAILURE;
+    }
+
+    auto plugin = pluginManager.getPlugin(pluginName);
+    if (!plugin) {
+      Print("Plugin '{}' not found.\n", pluginName);
+      Print("Use --list-plugins to see available plugins.\n");
+      return EXIT_FAILURE;
+    }
+
+    const auto& metadata = (*plugin)->getMetadata();
+
+    Print("Plugin Information: {}\n", metadata.name);
+    Print("========================\n");
+    Print("Name: {}\n", metadata.name);
+    Print("Version: {}\n", metadata.version);
+    Print("Author: {}\n", metadata.author);
+    Print("Description: {}\n", metadata.description);
+    Print("Type: {}\n", magic_enum::enum_name(metadata.type));
+    Print("Status: {}\n", (*plugin)->isReady() ? "Ready" : "Not Ready");
+
+    // Show dependencies
+    const auto& deps = metadata.dependencies;
+    if (deps.requiresNetwork || deps.requiresFilesystem || deps.requiresAdmin || deps.requiresCaching) {
+      Print("\nDependencies:\n");
+      if (deps.requiresNetwork)
+        Print("  • Network access\n");
+      if (deps.requiresFilesystem)
+        Print("  • Filesystem access\n");
+      if (deps.requiresAdmin)
+        Print("  • Administrator privileges\n");
+      if (deps.requiresCaching)
+        Print("  • Caching system\n");
+    }
+
+    // Show fields for SystemInfo plugins
+    if (metadata.type == draconis::core::plugin::PluginType::SystemInfo) {
+      if (const auto* sysInfoPlugin = dynamic_cast<const draconis::core::plugin::ISystemInfoPlugin*>(*plugin)) {
+        const auto& fieldNames = sysInfoPlugin->getFieldNames();
+        if (!fieldNames.empty()) {
+          Print("\nProvided Fields:\n");
+          for (const auto& fieldName : fieldNames)
+            Print("  • {}\n", fieldName);
+        }
+      }
+    }
+
+    return EXIT_SUCCESS;
+  }
+
+#endif
 } // namespace
 
 fn main(const i32 argc, CStr* argv[]) -> i32 try {
@@ -170,8 +440,11 @@ fn main(const i32 argc, CStr* argv[]) -> i32 try {
     noAscii,
     jsonOutput,
     prettyJson,
-    language
-  ] = Tuple(false, false, false, false, false, false, String(""));
+    outputFormat,
+    language,
+    listPlugins,
+    pluginInfo
+  ] = Tuple(false, false, false, false, false, false, String(""), String(""), false, String(""));
   // clang-format on
 
   {
@@ -224,7 +497,24 @@ fn main(const i32 argc, CStr* argv[]) -> i32 try {
       .help("Pretty-print JSON output. Only valid when --json is used.")
       .flag();
 
-    if (Result result = parser.parseArgs({ argv, static_cast<usize>(argc) }); !result) {
+    parser
+      .addArguments("--format")
+      .help("Output system information in the specified format (e.g., 'markdown', 'json').")
+      .defaultValue(String(""));
+
+#if DRAC_ENABLE_PLUGINS
+    parser
+      .addArguments("--list-plugins")
+      .help("List all available and loaded plugins.")
+      .flag();
+
+    parser
+      .addArguments("--plugin-info")
+      .help("Show detailed information about a specific plugin.")
+      .defaultValue(String(""));
+#endif
+
+    if (Result<> result = parser.parseArgs({ argv, static_cast<usize>(argc) }); !result) {
       error_at(result.error());
       return EXIT_FAILURE;
     }
@@ -235,7 +525,13 @@ fn main(const i32 argc, CStr* argv[]) -> i32 try {
     noAscii        = parser.get<bool>("--no-ascii");
     jsonOutput     = parser.get<bool>("--json");
     prettyJson     = parser.get<bool>("--pretty");
+    outputFormat   = parser.get<String>("--format");
     language       = parser.get<String>("--lang");
+
+#if DRAC_ENABLE_PLUGINS
+    listPlugins = parser.get<bool>("--list-plugins");
+    pluginInfo  = parser.get<String>("--plugin-info");
+#endif
 
     SetRuntimeLogLevel(
       parser.get<bool>("-V") || parser.get<bool>("--verbose")
@@ -264,42 +560,6 @@ fn main(const i32 argc, CStr* argv[]) -> i32 try {
     return EXIT_SUCCESS;
   }
 
-#ifndef NDEBUG
-  if (Result<CPUCores> cpuCores = GetCPUCores(cache))
-    debug_log("CPU cores: {} physical, {} logical", cpuCores->physical, cpuCores->logical);
-  else
-    debug_at(cpuCores.error());
-
-  if (Result<NetworkInterface> networkInterface = GetPrimaryNetworkInterface(cache)) {
-    debug_log("Network interface: {}", networkInterface->name);
-    debug_log("Network interface IPv4 address: {}", networkInterface->ipv4Address.value_or("N/A"));
-    debug_log("Network interface MAC address: {}", networkInterface->macAddress.value_or("N/A"));
-    debug_log("Network interface is up: {}", networkInterface->isUp);
-    debug_log("Network interface is loopback: {}", networkInterface->isLoopback);
-  } else
-    debug_at(networkInterface.error());
-
-  if (Result<Battery> battery = GetBatteryInfo(cache)) {
-    debug_log("Battery status: {}", magic_enum::enum_name(battery->status));
-
-    debug_log("Battery percentage: {}%", battery->percentage.value_or(0));
-
-    if (battery->timeRemaining.has_value())
-      debug_log("Battery time remaining: {}", SecondsToFormattedDuration(battery->timeRemaining.value()));
-    else
-      debug_log("Battery time remaining: N/A");
-  } else
-    debug_at(battery.error());
-
-  if (Result<DisplayInfo> primaryOutput = GetPrimaryOutput(cache)) {
-    debug_log("Primary display ID: {}", primaryOutput->id);
-    debug_log("Primary display resolution: {}x{}", primaryOutput->resolution.width, primaryOutput->resolution.height);
-    debug_log("Primary display refresh rate: {:.2f}Hz", primaryOutput->refreshRate);
-    debug_log("Primary display is primary: {}", primaryOutput->isPrimary);
-  } else
-    debug_at(primaryOutput.error());
-#endif
-
   {
     const Config& config = Config::getInstance();
 
@@ -316,7 +576,26 @@ fn main(const i32 argc, CStr* argv[]) -> i32 try {
     debug_log("Current language: {}", translationManager.getCurrentLanguage());
     debug_log("Selected language: {}", language.empty() ? "auto" : language);
 
+#if DRAC_ENABLE_PLUGINS
+    // Initialize plugin system early for maximum performance
+    auto& pluginManager = draconis::core::plugin::GetPluginManager();
+
+    if (auto initResult = pluginManager.initialize(&config); !initResult)
+      warn_log("Plugin system initialization failed: {}", initResult.error().message);
+    else
+      debug_log("Plugin system initialized successfully");
+
+    // Handle plugin-specific commands with early exit for performance
+    if (listPlugins)
+      return handleListPluginsCommand(pluginManager);
+
+    if (!pluginInfo.empty())
+      return handlePluginInfoCommand(pluginManager, pluginInfo);
+#endif
+
+    debug_log("About to construct SystemInfo...");
     SystemInfo data(cache, config);
+    debug_log("SystemInfo constructed successfully");
 
 #if DRAC_ENABLE_WEATHER
     using enum draconis::utils::error::DracErrorCode;
@@ -342,7 +621,19 @@ fn main(const i32 argc, CStr* argv[]) -> i32 try {
       return EXIT_SUCCESS;
     }
 
-    if (jsonOutput)
+    if (!outputFormat.empty()) {
+#if DRAC_ENABLE_PLUGINS
+      FormatOutputViaPlugin(
+        outputFormat,
+  #if DRAC_ENABLE_WEATHER
+        weatherReport,
+  #endif
+        data
+      );
+#else
+      Print("Plugin output formats require plugin support to be enabled.\n");
+#endif
+    } else if (jsonOutput)
       PrintJsonOutput(
 #if DRAC_ENABLE_WEATHER
         weatherReport,
@@ -351,7 +642,7 @@ fn main(const i32 argc, CStr* argv[]) -> i32 try {
         prettyJson
       );
     else
-      WriteToConsole(CreateUI(
+      Print(CreateUI(
         config,
         data,
 #if DRAC_ENABLE_WEATHER
@@ -363,6 +654,7 @@ fn main(const i32 argc, CStr* argv[]) -> i32 try {
 
   return EXIT_SUCCESS;
 } catch (const Exception& e) {
+  error_log("Caught exception: {}", e.what());
   error_at(e);
   return EXIT_FAILURE;
 }

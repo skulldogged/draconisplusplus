@@ -2,36 +2,37 @@
 
 // clang-format off
 #include <AppFileInfo.h>               // For BAppFileInfo and version_info
+#include <cerrno>                      // errno
 #include <Errors.h>                    // B_OK, strerror, status_t
 #include <File.h>                      // For BFile
 #include <OS.h>                        // get_system_info, system_info
-#include <climits>                     // PATH_MAX
-#include <cstring>                     // std::strlen
+#include <climits>                     // HOST_NAME_MAX
+#include <cstring>                     // std::strlen, strerror
 #include <os/package/PackageDefs.h>    // BPackageKit::BPackageInfoSet
 #include <os/package/PackageInfoSet.h> // BPackageKit::BPackageInfo
 #include <os/package/PackageRoster.h>  // BPackageKit::BPackageRoster
-#include <sys/socket.h>                // ucred, getsockopt, SOL_SOCKET, SO_PEERCRED
-#include <sys/statvfs.h>               // statvfs
 #include <utility>                     // std::move
 
-#include "Services/PackageCounting.hpp"
-#include "Util/Error.hpp"
-#include "Util/Env.hpp"
-#include "Util/Logging.hpp"
-#include "Util/Types.hpp"
-#include "Util/Caching.hpp"
-#include "Util/CacheManager.hpp"
+#include <Drac++/Core/System.hpp>
 
-#include "OperatingSystem.hpp"
+#include <Drac++/Utils/CacheManager.hpp>
+#include <Drac++/Utils/Env.hpp>
+#include <Drac++/Utils/Error.hpp>
+#include <Drac++/Utils/Logging.hpp>
+#include <Drac++/Utils/Types.hpp>
+
+#include "OS/Unix.hpp"
 // clang-format on
 
 using namespace draconis::utils::types;
+using draconis::utils::cache::CacheManager;
 using draconis::utils::env::GetEnv;
-using draconis::utils::error::DracError, draconis::utils::error::DracErrorCode;
+using draconis::utils::error::DracError;
+using enum draconis::utils::error::DracErrorCode;
 
 namespace draconis::core::system {
-  fn GetOSVersion(draconis::utils::cache::CacheManager& cache) -> Result<String> {
-    return cache.getOrSet<String>("haiku_os_version", []() -> Result<String> {
+  fn GetOperatingSystem(CacheManager& cache) -> Result<OSInfo> {
+    return cache.getOrSet<OSInfo>("haiku_os_info", []() -> Result<OSInfo> {
       BFile    file;
       status_t status = file.SetTo("/boot/system/lib/libbe.so", B_READ_ONLY);
 
@@ -53,69 +54,74 @@ namespace draconis::core::system {
       String versionShortString = versionInfo.short_info;
 
       if (versionShortString.empty())
-        return Err(DracError(DracErrorCode::InternalError, "Version info short_info is empty"));
+        return Err(DracError(InternalError, "Version info short_info is empty"));
 
-      return String(versionShortString.c_str());
+      return OSInfo("Haiku", String(versionShortString.c_str()), "haiku");
     });
   }
 
-  fn GetMemInfo() -> Result<u64> {
+  fn GetMemInfo(CacheManager& /*cache*/) -> Result<ResourceUsage> {
     system_info    sysinfo;
     const status_t status = get_system_info(&sysinfo);
 
     if (status != B_OK)
-      return Err(DracError(DracErrorCode::InternalError, std::format("get_system_info failed: {}", strerror(status))));
+      return Err(DracError(InternalError, std::format("get_system_info failed: {}", strerror(status))));
 
-    return static_cast<u64>(sysinfo.max_pages) * B_PAGE_SIZE;
+    const u64 totalMem = static_cast<u64>(sysinfo.max_pages) * B_PAGE_SIZE;
+    const u64 usedMem  = static_cast<u64>(sysinfo.used_pages) * B_PAGE_SIZE;
+
+    return ResourceUsage(usedMem, totalMem);
   }
 
+  #if DRAC_ENABLE_NOWPLAYING
   fn GetNowPlaying() -> Result<MediaInfo> {
-    return Err(DracError(DracErrorCode::NotSupported, "Now playing is not supported on Haiku"));
+    return Err(DracError(NotSupported, "Now playing is not supported on Haiku"));
   }
+  #endif
 
-  fn GetWindowManager(draconis::utils::cache::CacheManager& cache) -> Result<String> {
+  fn GetWindowManager(CacheManager& cache) -> Result<String> {
     return cache.getOrSet<String>("haiku_wm", []() -> Result<String> {
       return "app_server";
     });
   }
 
-  fn GetDesktopEnvironment(draconis::utils::cache::CacheManager& cache) -> Result<String> {
+  fn GetDesktopEnvironment(CacheManager& cache) -> Result<String> {
     return cache.getOrSet<String>("haiku_desktop_environment", []() -> Result<String> {
       return "Haiku Desktop Environment";
     });
   }
 
-  fn GetShell(draconis::utils::cache::CacheManager& cache) -> Result<String> {
+  fn GetShell(CacheManager& cache) -> Result<String> {
     return cache.getOrSet<String>("haiku_shell", []() -> Result<String> {
       if (const Result<String> shellPath = GetEnv("SHELL")) {
         // clang-format off
-            constexpr Array<Pair<StringView, StringView>, 5> shellMap {{
-                { "bash",    "Bash" },
-                {  "zsh",     "Zsh" },
-                { "fish",    "Fish" },
-                {   "nu", "Nushell" },
-                {   "sh",      "SH" }, // sh last because other shells contain "sh"
-            }};
+        constexpr Array<Pair<StringView, StringView>, 5> shellMap {{
+          { "bash",    "Bash" },
+          {  "zsh",     "Zsh" },
+          { "fish",    "Fish" },
+          {   "nu", "Nushell" },
+          {   "sh",      "SH" }, // sh last because other shells contain "sh"
+        }};
         // clang-format on
 
         for (const auto& [exe, name] : shellMap)
           if (shellPath->contains(exe))
-            return String(name.c_str());
+            return String(name);
 
         return *shellPath; // fallback to the raw shell path
       }
 
-      return Err(DracError(DracErrorCode::NotFound, "Could not find SHELL environment variable"));
+      return Err(DracError(NotFound, "Could not find SHELL environment variable"));
     });
   }
 
-  fn GetHost(draconis::utils::cache::CacheManager& cache) -> Result<String> {
+  fn GetHost(CacheManager& cache) -> Result<String> {
     return cache.getOrSet<String>("haiku_host", []() -> Result<String> {
       Array<char, HOST_NAME_MAX + 1> hostnameBuffer {};
 
       if (gethostname(hostnameBuffer.data(), hostnameBuffer.size()) != 0)
         return Err(DracError(
-          DracErrorCode::ApiUnavailable, std::format("gethostname() failed: {} (errno {})", strerror(errno), errno)
+          ApiUnavailable, std::format("gethostname() failed: {} (errno {})", strerror(errno), errno)
         ));
 
       hostnameBuffer.at(HOST_NAME_MAX) = '\0';
@@ -124,43 +130,22 @@ namespace draconis::core::system {
     });
   }
 
-  fn GetKernelVersion(draconis::utils::cache::CacheManager& cache) -> Result<String> {
+  fn GetKernelVersion(CacheManager& cache) -> Result<String> {
     return cache.getOrSet<String>("haiku_kernel_version", []() -> Result<String> {
       system_info    sysinfo;
       const status_t status = get_system_info(&sysinfo);
 
       if (status != B_OK)
-        return Err(DracError(DracErrorCode::InternalError, std::format("get_system_info failed: {}", strerror(status))));
+        return Err(DracError(InternalError, std::format("get_system_info failed: {}", strerror(status))));
 
-      return String(std::to_string(sysinfo.kernel_version).c_str());
+      return std::to_string(sysinfo.kernel_version);
     });
   }
 
-  fn GetDiskUsage() -> Result<DiskSpace> {
-    struct statvfs stat;
-
-    if (statvfs("/boot", &stat) == -1)
-      return Err(DracError(std::format("Failed to get filesystem stats for '/boot' (statvfs call failed)")));
-
-    return DiskSpace {
-      .usedBytes  = (stat.f_blocks * stat.f_frsize) - (stat.f_bfree * stat.f_frsize),
-      .totalBytes = stat.f_blocks * stat.f_frsize,
-    };
+  fn GetDiskUsage(CacheManager& /*cache*/) -> Result<ResourceUsage> {
+    // Haiku uses /boot as the primary filesystem
+    return os::unix_shared::GetDiskUsageAt("/boot");
   }
 } // namespace draconis::core::system
-
-namespace package {
-  fn GetHaikuCount() -> Result<u64> {
-    BPackageKit::BPackageRoster  roster;
-    BPackageKit::BPackageInfoSet packageList;
-
-    const status_t status = roster.GetActivePackages(BPackageKit::B_PACKAGE_INSTALLATION_LOCATION_SYSTEM, packageList);
-
-    if (status != B_OK)
-      return Err(DracError(DracErrorCode::ApiUnavailable, "Failed to get active package list"));
-
-    return static_cast<u64>(packageList.CountInfos());
-  }
-} // namespace package
 
 #endif // __HAIKU__

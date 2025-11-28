@@ -7,16 +7,8 @@
 
   #include <Drac++/Utils/Types.hpp>
 
-namespace XCB {
-  namespace {
-    using draconis::utils::types::i32;
-    using draconis::utils::types::PCStr;
-    using draconis::utils::types::RawPointer;
-    using draconis::utils::types::u16;
-    using draconis::utils::types::u32;
-    using draconis::utils::types::u8;
-    using draconis::utils::types::Unit;
-  } // namespace
+namespace xcb {
+  namespace types = draconis::utils::types;
 
   using Connection = xcb_connection_t;
   using Setup      = xcb_setup_t;
@@ -46,9 +38,9 @@ namespace XCB {
   using RandrGetCrtcInfoReply                = xcb_randr_get_crtc_info_reply_t;
   using Timestamp                            = xcb_timestamp_t;
 
-  constexpr Atom      ATOM_WINDOW  = XCB_ATOM_WINDOW;  ///< Window atom
-  constexpr Timestamp CURRENT_TIME = XCB_CURRENT_TIME; ///< Current time for XCB requests
-  constexpr u32       NONE         = XCB_NONE;         ///< None value for XCB requests
+  constexpr Atom       ATOM_WINDOW  = XCB_ATOM_WINDOW;  ///< Window atom
+  constexpr Timestamp  CURRENT_TIME = XCB_CURRENT_TIME; ///< Current time for XCB requests
+  constexpr types::u32 NONE         = XCB_NONE;         ///< None value for XCB requests
 
   /**
    * @brief Enum representing different types of connection errors
@@ -57,7 +49,7 @@ namespace XCB {
    * establishing or maintaining an XCB connection. Each error type
    * corresponds to a specific error code defined in the XCB library.
    */
-  enum ConnError : u8 {
+  enum ConnError : types::u8 {
     Generic         = XCB_CONN_ERROR,                   ///< Generic connection error
     ExtNotSupported = XCB_CONN_CLOSED_EXT_NOTSUPPORTED, ///< Extension not supported
     MemInsufficient = XCB_CONN_CLOSED_MEM_INSUFFICIENT, ///< Memory insufficient
@@ -78,7 +70,7 @@ namespace XCB {
    * @param screenp Pointer to an integer that will store the screen number
    * @return A pointer to the connection object
    */
-  inline fn Connect(PCStr displayname, i32* screenp) -> Connection* {
+  inline fn Connect(types::PCStr displayname, types::i32* screenp) -> Connection* {
     return xcb_connect(displayname, screenp);
   }
 
@@ -90,7 +82,7 @@ namespace XCB {
    *
    * @param conn The connection object to disconnect from
    */
-  inline fn Disconnect(Connection* conn) -> Unit {
+  inline fn Disconnect(Connection* conn) -> types::Unit {
     xcb_disconnect(conn);
   }
 
@@ -103,7 +95,7 @@ namespace XCB {
    * @param conn The connection object to check
    * @return 1 if the connection has an error, 0 otherwise
    */
-  inline fn ConnectionHasError(Connection* conn) -> i32 {
+  inline fn ConnectionHasError(Connection* conn) -> types::i32 {
     return xcb_connection_has_error(conn);
   }
 
@@ -118,7 +110,7 @@ namespace XCB {
    * @param name The name of the atom
    * @return The cookie for the atom
    */
-  inline fn InternAtom(Connection* conn, const u8 only_if_exists, const u16 name_len, PCStr name) -> IntAtomCookie {
+  inline fn InternAtom(Connection* conn, const types::u8 only_if_exists, const types::u16 name_len, types::PCStr name) -> IntAtomCookie {
     return xcb_intern_atom(conn, only_if_exists, name_len, name);
   }
 
@@ -150,13 +142,13 @@ namespace XCB {
    * @param type The type
    */
   inline fn GetProperty(
-    Connection*  conn,
-    const u8     _delete,
-    const Window window,
-    const Atom   property,
-    const Atom   type,
-    const u32    long_offset,
-    const u32    long_length
+    Connection*      conn,
+    const types::u8  _delete,
+    const Window     window,
+    const Atom       property,
+    const Atom       type,
+    const types::u32 long_offset,
+    const types::u32 long_length
   ) -> GetPropCookie {
     return xcb_get_property(conn, _delete, window, property, type, long_offset, long_length);
   }
@@ -182,7 +174,7 @@ namespace XCB {
    * @param reply The reply for the property
    * @return The value length for the property
    */
-  inline fn GetPropertyValueLength(const GetPropReply* reply) -> i32 {
+  inline fn GetPropertyValueLength(const GetPropReply* reply) -> types::i32 {
     return xcb_get_property_value_length(reply);
   }
 
@@ -192,7 +184,7 @@ namespace XCB {
    * @param reply The reply for the property
    * @return The value for the property
    */
-  inline fn GetPropertyValue(const GetPropReply* reply) -> RawPointer {
+  inline fn GetPropertyValue(const GetPropReply* reply) -> types::RawPointer {
     return xcb_get_property_value(reply);
   }
 
@@ -204,7 +196,7 @@ namespace XCB {
    * @param name The name of the extension
    * @return The cookie for the extension query
    */
-  inline fn QueryExtension(Connection* conn, const u16 len, PCStr name) -> QueryExtensionCookie {
+  inline fn QueryExtension(Connection* conn, const types::u16 len, types::PCStr name) -> QueryExtensionCookie {
     return xcb_query_extension(conn, len, name);
   }
 
@@ -259,7 +251,7 @@ namespace XCB {
    * @param reply The reply for the screen resources query
    * @return The length of the outputs from the screen resources reply
    */
-  inline fn GetScreenResourcesCurrentOutputsLength(const RandrGetScreenResourcesCurrentReply* reply) -> i32 {
+  inline fn GetScreenResourcesCurrentOutputsLength(const RandrGetScreenResourcesCurrentReply* reply) -> types::i32 {
     return xcb_randr_get_screen_resources_current_outputs_length(reply);
   }
 
@@ -278,7 +270,7 @@ namespace XCB {
    *
    * @param iter The modes iterator
    */
-  inline fn ModeInfoNext(RandrModeInfoIterator* iter) -> Unit {
+  inline fn ModeInfoNext(RandrModeInfoIterator* iter) -> types::Unit {
     xcb_randr_mode_info_next(iter);
   }
 
@@ -365,7 +357,7 @@ namespace XCB {
      * Opens an XCB connection
      * @param name Display name (nullptr for default)
      */
-    explicit DisplayGuard(const PCStr name = nullptr)
+    explicit DisplayGuard(const types::PCStr name = nullptr)
       : m_connection(Connect(name, nullptr)) {}
 
     ~DisplayGuard() {
@@ -515,6 +507,6 @@ namespace XCB {
       return *m_reply;
     }
   };
-} // namespace XCB
+} // namespace xcb
 
 #endif // (defined(__linux__) || defined(__FreeBSD__) || defined(__DragonFly__) || defined(__NetBSD__)) && DRAC_USE_XCB

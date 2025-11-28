@@ -6,6 +6,15 @@
 #include <format>     // std::format
 #include <utility>    // std::forward
 
+#ifdef _WIN32
+  #ifndef NOMINMAX
+    #define NOMINMAX
+  #endif
+  #include <fcntl.h>
+  #include <io.h>
+  #include <windows.h>
+#endif
+
 #ifdef __cpp_lib_print
   #include <print> // std::print
 #else
@@ -20,24 +29,41 @@
 #include "Types.hpp"
 
 namespace draconis::utils::logging {
-  namespace {
-    using types::Array;
-    using types::LockGuard;
-    using types::Mutex;
-    using types::PCStr;
-    using types::String;
-    using types::StringView;
-    using types::u64;
-    using types::u8;
-    using types::usize;
-  } // namespace
+  namespace types = ::draconis::utils::types;
 
-  inline fn GetLogMutex() -> Mutex& {
-    static Mutex LogMutexInstance;
+  inline fn GetLogMutex() -> types::Mutex& {
+    static types::Mutex LogMutexInstance;
     return LogMutexInstance;
   }
 
-  enum class LogColor : u8 {
+  /**
+   * @brief Helper to write to console handling Windows specifics
+   * @param text The text to write
+   * @param useStderr Whether to write to stderr instead of stdout
+   */
+  inline fn WriteToConsole(const types::StringView text, bool useStderr = false) -> void {
+#ifdef _WIN32
+    HANDLE hConsole = GetStdHandle(useStderr ? STD_ERROR_HANDLE : STD_OUTPUT_HANDLE);
+    if (hConsole != INVALID_HANDLE_VALUE) {
+      WriteConsoleA(hConsole, text.data(), static_cast<DWORD>(text.size()), nullptr, nullptr);
+      return;
+    }
+#endif
+
+#ifdef __cpp_lib_print
+    if (useStderr)
+      std::print(stderr, "{}", text);
+    else
+      std::print("{}", text);
+#else
+    if (useStderr)
+      std::cerr << text;
+    else
+      std::cout << text;
+#endif
+  }
+
+  enum class LogColor : types::u8 {
     Black         = 0,
     Red           = 1,
     Green         = 2,
@@ -56,15 +82,9 @@ namespace draconis::utils::logging {
     BrightWhite   = 15,
   };
 
-  constexpr LogColor DEBUG_COLOR      = LogColor::Cyan;
-  constexpr LogColor INFO_COLOR       = LogColor::Green;
-  constexpr LogColor WARN_COLOR       = LogColor::Yellow;
-  constexpr LogColor ERROR_COLOR      = LogColor::Red;
-  constexpr LogColor DEBUG_INFO_COLOR = LogColor::White;
-
   struct LogLevelConst {
     // clang-format off
-    static constexpr Array<StringView, 16> COLOR_CODE_LITERALS = {
+    static constexpr types::Array<types::StringView, 16> COLOR_CODE_LITERALS = {
       "\033[38;5;0m",  "\033[38;5;1m",  "\033[38;5;2m",  "\033[38;5;3m",
       "\033[38;5;4m",  "\033[38;5;5m",  "\033[38;5;6m",  "\033[38;5;7m",
       "\033[38;5;8m",  "\033[38;5;9m",  "\033[38;5;10m", "\033[38;5;11m",
@@ -78,18 +98,21 @@ namespace draconis::utils::logging {
     static constexpr const char* ITALIC_START = "\033[3m";
     static constexpr const char* ITALIC_END   = "\033[23m";
 
-    static constexpr StringView DEBUG_STR = "DEBUG";
-    static constexpr StringView INFO_STR  = "INFO ";
-    static constexpr StringView WARN_STR  = "WARN ";
-    static constexpr StringView ERROR_STR = "ERROR";
+    // Pre-formatted level strings with ANSI codes (bold + color + text + reset)
+    // These are string literals with static storage duration - never destroyed
+    // Format: BOLD_START + COLOR + TEXT + RESET_CODE
+    static constexpr types::StringView DEBUG_STYLED = "\033[1m\033[38;5;6mDEBUG\033[0m"; // Cyan
+    static constexpr types::StringView INFO_STYLED  = "\033[1m\033[38;5;2mINFO \033[0m"; // Green
+    static constexpr types::StringView WARN_STYLED  = "\033[1m\033[38;5;3mWARN \033[0m"; // Yellow
+    static constexpr types::StringView ERROR_STYLED = "\033[1m\033[38;5;1mERROR\033[0m"; // Red
 
-    static constexpr PCStr TIMESTAMP_FORMAT = "%X";
-    static constexpr PCStr LOG_FORMAT       = "{} {} {}";
+    static constexpr types::PCStr TIMESTAMP_FORMAT = "%X";
+    static constexpr types::PCStr LOG_FORMAT       = "{} {} {}";
 
 #ifndef NDEBUG
-    static constexpr PCStr DEBUG_INFO_FORMAT = "{}{}{}\n";
-    static constexpr PCStr FILE_LINE_FORMAT  = "{}:{}";
-    static constexpr PCStr DEBUG_LINE_PREFIX = "           ╰──── ";
+    static constexpr types::PCStr DEBUG_INFO_FORMAT = "{}{}{}\n";
+    static constexpr types::PCStr FILE_LINE_FORMAT  = "{}:{}";
+    static constexpr types::PCStr DEBUG_LINE_PREFIX = "           ╰──── ";
 #endif
   };
 
@@ -97,7 +120,7 @@ namespace draconis::utils::logging {
    * @enum LogLevel
    * @brief Represents different log levels.
    */
-  enum class LogLevel : u8 {
+  enum class LogLevel : types::u8 {
     Debug,
     Info,
     Warn,
@@ -114,80 +137,58 @@ namespace draconis::utils::logging {
   }
 
   /**
-   * @brief Directly applies ANSI color codes to text
-   * @param text The text to colorize
-   * @param color The color
+   * @struct Style
+   * @brief Options for text styling with ANSI codes.
+   */
+  struct Style {
+    types::Option<LogColor> color  = types::None; ///< Optional color to apply
+    bool                    bold   = false;       ///< Whether to make text bold
+    bool                    italic = false;       ///< Whether to make text italic
+  };
+
+  /**
+   * @brief Applies ANSI styling to text based on the provided style options.
+   * @param text The text to style
+   * @param style The style options (color, bold, italic)
    * @return Styled string with ANSI codes
    */
-  inline fn Colorize(const StringView text, const LogColor color) -> String {
-    return std::format("{}{}{}", LogLevelConst::COLOR_CODE_LITERALS.at(static_cast<usize>(color)), text, LogLevelConst::RESET_CODE);
-  }
+  inline fn Stylize(const types::StringView text, const Style& style) -> types::String {
+    const bool hasStyle = style.bold || style.italic || style.color.has_value();
 
-  /**
-   * @brief Make text bold with ANSI codes
-   * @param text The text to make bold
-   * @return Bold text
-   */
-  inline fn Bold(const StringView text) -> String {
-    return std::format("{}{}{}", LogLevelConst::BOLD_START, text, LogLevelConst::BOLD_END);
-  }
+    if (!hasStyle)
+      return types::String(text);
 
-  /**
-   * @brief Make text italic with ANSI codes
-   * @param text The text to make italic
-   * @return Italic text
-   */
-  inline fn Italic(const StringView text) -> String {
-    return std::format("{}{}{}", LogLevelConst::ITALIC_START, text, LogLevelConst::ITALIC_END);
+    types::String result;
+    result.reserve(text.size() + 24); // Pre-allocate for ANSI codes
+
+    if (style.bold)
+      result += LogLevelConst::BOLD_START;
+    if (style.italic)
+      result += LogLevelConst::ITALIC_START;
+    if (style.color)
+      result += LogLevelConst::COLOR_CODE_LITERALS.at(static_cast<types::usize>(*style.color));
+
+    result += text;
+    result += LogLevelConst::RESET_CODE;
+
+    return result;
   }
 
   /**
    * @brief Returns the pre-formatted and styled log level strings.
-   * @note Uses function-local static for lazy initialization to avoid
-   * static initialization order issues and CERT-ERR58-CPP warnings.
+   * @note Uses constexpr StringViews pointing to string literals, which have
+   *       static storage duration and are never destroyed - safe for use
+   *       during static destruction.
    */
-  inline fn GetLevelInfo() -> const Array<String, 4>& {
-    static const Array<String, 4> LEVEL_INFO_INSTANCE = {
-      Bold(Colorize(LogLevelConst::DEBUG_STR, DEBUG_COLOR)),
-      Bold(Colorize(LogLevelConst::INFO_STR, INFO_COLOR)),
-      Bold(Colorize(LogLevelConst::WARN_STR, WARN_COLOR)),
-      Bold(Colorize(LogLevelConst::ERROR_STR, ERROR_COLOR)),
+  constexpr fn GetLevelInfo() -> const types::Array<types::StringView, 4>& {
+    static constexpr types::Array<types::StringView, 4> LEVEL_INFO_INSTANCE = {
+      LogLevelConst::DEBUG_STYLED,
+      LogLevelConst::INFO_STYLED,
+      LogLevelConst::WARN_STYLED,
+      LogLevelConst::ERROR_STYLED,
     };
+
     return LEVEL_INFO_INSTANCE;
-  }
-
-  /**
-   * @brief Returns the LogColor for a log level
-   * @param level The log level
-   * @return The LogColor for the log level
-   */
-  constexpr fn GetLevelColor(const LogLevel level) -> LogColor {
-    using namespace matchit;
-    using enum LogLevel;
-
-    return match(level)(
-      is | Debug = DEBUG_COLOR,
-      is | Info  = INFO_COLOR,
-      is | Warn  = WARN_COLOR,
-      is | Error = ERROR_COLOR
-    );
-  }
-
-  /**
-   * @brief Returns string representation of a log level
-   * @param level The log level
-   * @return String representation
-   */
-  constexpr fn GetLevelString(const LogLevel level) -> StringView {
-    using namespace matchit;
-    using enum LogLevel;
-
-    return match(level)(
-      is | Debug = LogLevelConst::DEBUG_STR,
-      is | Info  = LogLevelConst::INFO_STR,
-      is | Warn  = LogLevelConst::WARN_STR,
-      is | Error = LogLevelConst::ERROR_STR
-    );
   }
 
   /**
@@ -208,19 +209,7 @@ namespace draconis::utils::logging {
    */
   template <typename... Args>
   inline fn Print(const LogLevel level, std::format_string<Args...> fmt, Args&&... args) {
-#ifdef __cpp_lib_print
-    if (ShouldUseStderr(level)) {
-      std::print(stderr, fmt, std::forward<Args>(args)...);
-    } else {
-      std::print(fmt, std::forward<Args>(args)...);
-    }
-#else
-    if (ShouldUseStderr(level)) {
-      std::cerr << std::format(fmt, std::forward<Args>(args)...);
-    } else {
-      std::cout << std::format(fmt, std::forward<Args>(args)...);
-    }
-#endif
+    WriteToConsole(std::format(fmt, std::forward<Args>(args)...), ShouldUseStderr(level));
   }
 
   /**
@@ -228,20 +217,8 @@ namespace draconis::utils::logging {
    * @param level The log level to determine output stream
    * @param text The pre-formatted text to print
    */
-  inline fn Print(const LogLevel level, const StringView text) {
-#ifdef __cpp_lib_print
-    if (ShouldUseStderr(level)) {
-      std::print(stderr, "{}", text);
-    } else {
-      std::print("{}", text);
-    }
-#else
-    if (ShouldUseStderr(level)) {
-      std::cerr << text;
-    } else {
-      std::cout << text;
-    }
-#endif
+  inline fn Print(const LogLevel level, const types::StringView text) {
+    WriteToConsole(text, ShouldUseStderr(level));
   }
 
   /**
@@ -253,40 +230,20 @@ namespace draconis::utils::logging {
    */
   template <typename... Args>
   inline fn Println(const LogLevel level, std::format_string<Args...> fmt, Args&&... args) {
-#ifdef __cpp_lib_print
-    if (ShouldUseStderr(level)) {
-      std::println(stderr, fmt, std::forward<Args>(args)...);
-    } else {
-      std::println(fmt, std::forward<Args>(args)...);
-    }
-#else
-    if (ShouldUseStderr(level)) {
-      std::cerr << std::format(fmt, std::forward<Args>(args)...) << '\n';
-    } else {
-      std::cout << std::format(fmt, std::forward<Args>(args)...) << '\n';
-    }
-#endif
+    WriteToConsole(std::format(fmt, std::forward<Args>(args)...) + '\n', ShouldUseStderr(level));
   }
 
   /**
-   * @brief Helper function to print pre-formatted text with newline with automatic std::print/std::cout selection
+   * @brief Helper function to print text with newline with automatic std::print/std::cout selection
    * @param level The log level to determine output stream
-   * @param text The pre-formatted text to print
+   * @param text The text to print
    */
-  inline fn Println(const LogLevel level, const StringView text) {
-#ifdef __cpp_lib_print
-    if (ShouldUseStderr(level)) {
-      std::println(stderr, "{}", text);
-    } else {
-      std::println("{}", text);
-    }
-#else
-    if (ShouldUseStderr(level)) {
-      std::cerr << text << '\n';
-    } else {
-      std::cout << text << '\n';
-    }
-#endif
+  inline fn Println(const LogLevel level, const types::StringView text) {
+    // We need to construct a string with newline because WriteToConsole doesn't add it
+    // and we want a single atomic write if possible (though WriteToConsole isn't atomic across calls)
+    types::String textWithNewline(text);
+    textWithNewline += '\n';
+    WriteToConsole(textWithNewline, ShouldUseStderr(level));
   }
 
   /**
@@ -294,42 +251,58 @@ namespace draconis::utils::logging {
    * @param level The log level to determine output stream
    */
   inline fn Println(const LogLevel level) {
-#ifdef __cpp_lib_print
-    if (ShouldUseStderr(level)) {
-      std::println(stderr);
-    } else {
-      std::println();
-    }
-#else
-    if (ShouldUseStderr(level)) {
-      std::cerr << '\n';
-    } else {
-      std::cout << '\n';
-    }
-#endif
+    WriteToConsole("\n", ShouldUseStderr(level));
   }
 
-  // Backward compatibility overloads that default to stdout
+  // ─────────────────────────────────────────────────────────────────────────────
+  // User-Facing Output Functions (no log level, stdout only)
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  /**
+   * @brief Print a formatted message to stdout (user-facing output, not logging)
+   * @tparam Args Format argument types
+   * @param fmt Format string
+   * @param args Format arguments
+   */
   template <typename... Args>
   inline fn Print(std::format_string<Args...> fmt, Args&&... args) {
-    Print(LogLevel::Info, fmt, std::forward<Args>(args)...);
+    WriteToConsole(std::format(fmt, std::forward<Args>(args)...));
   }
 
-  inline fn Print(const StringView text) {
-    Print(LogLevel::Info, text);
+  /**
+   * @brief Print a string to stdout (user-facing output, not logging)
+   * @param text The text to print
+   */
+  inline fn Print(const types::StringView text) {
+    WriteToConsole(text);
   }
 
+  /**
+   * @brief Print a formatted message with newline to stdout (user-facing output, not logging)
+   * @tparam Args Format argument types
+   * @param fmt Format string
+   * @param args Format arguments
+   */
   template <typename... Args>
   inline fn Println(std::format_string<Args...> fmt, Args&&... args) {
-    Println(LogLevel::Info, fmt, std::forward<Args>(args)...);
+    WriteToConsole(std::format(fmt, std::forward<Args>(args)...) + '\n');
   }
 
-  inline fn Println(const StringView text) {
-    Println(LogLevel::Info, text);
+  /**
+   * @brief Print a string with newline to stdout (user-facing output, not logging)
+   * @param text The text to print
+   */
+  inline fn Println(const types::StringView text) {
+    types::String textWithNewline(text);
+    textWithNewline += '\n';
+    WriteToConsole(textWithNewline);
   }
 
+  /**
+   * @brief Print just a newline to stdout (user-facing output, not logging)
+   */
   inline fn Println() {
-    Println(LogLevel::Info);
+    WriteToConsole("\n");
   }
 
   /**
@@ -340,19 +313,20 @@ namespace draconis::utils::logging {
    * @param tt The epoch time (seconds since epoch).
    * @return StringView pointing to a thread-local null-terminated buffer.
    */
-  inline fn GetCachedTimestamp(const std::time_t timeT) -> StringView {
-    thread_local auto           LastTt   = static_cast<std::time_t>(-1);
-    thread_local Array<char, 9> TsBuffer = { '\0' };
+  inline fn GetCachedTimestamp(const std::time_t timeT) -> types::StringView {
+    thread_local auto                  LastTt   = static_cast<std::time_t>(-1);
+    thread_local types::Array<char, 9> TsBuffer = { '\0' };
 
     if (timeT != LastTt) {
       std::tm localTm {};
 
+      if (
 #ifdef _WIN32
-      if (localtime_s(&localTm, &timeT) == 0)
+        localtime_s(&localTm, &timeT) == 0
 #else
-      if (localtime_r(&timeT, &localTm) != nullptr)
+        localtime_r(&timeT, &localTm) != nullptr
 #endif
-      {
+      ) {
         if (std::strftime(TsBuffer.data(), TsBuffer.size(), LogLevelConst::TIMESTAMP_FORMAT, &localTm) == 0)
           std::copy_n("??:??:??", 9, TsBuffer.data());
       } else
@@ -390,23 +364,29 @@ namespace draconis::utils::logging {
     const auto        nowTp = system_clock::now();
     const std::time_t nowTt = system_clock::to_time_t(nowTp);
 
-    const StringView timestamp = GetCachedTimestamp(nowTt);
+    const types::StringView timestamp = GetCachedTimestamp(nowTt);
 
-    const String message          = std::format(fmt, std::forward<Args>(args)...);
-    const String coloredTimestamp = Colorize(std::format("[{}]", timestamp), DEBUG_INFO_COLOR);
+    const types::String message          = std::format(fmt, std::forward<Args>(args)...);
+    const types::String coloredTimestamp = Stylize(std::format("[{}]", timestamp), { .color = LogColor::White });
 
 #ifndef NDEBUG
-    const String fileLine      = std::format(LogLevelConst::FILE_LINE_FORMAT, path(loc.file_name()).lexically_normal().string(), loc.line());
-    const String fullDebugLine = std::format("{}{}", LogLevelConst::DEBUG_LINE_PREFIX, fileLine);
+    const types::String fileLine      = std::format(LogLevelConst::FILE_LINE_FORMAT, path(loc.file_name()).lexically_normal().string(), loc.line());
+    const types::String fullDebugLine = std::format("{}{}", LogLevelConst::DEBUG_LINE_PREFIX, fileLine);
 #endif
 
     {
-      const LockGuard lock(GetLogMutex());
+      const types::LockGuard lock(GetLogMutex());
 
-      Println(level, LogLevelConst::LOG_FORMAT, coloredTimestamp, GetLevelInfo().at(static_cast<usize>(level)), message);
+      Println(
+        level,
+        LogLevelConst::LOG_FORMAT,
+        coloredTimestamp,
+        GetLevelInfo().at(static_cast<types::usize>(level)),
+        message
+      );
 
 #ifndef NDEBUG
-      Print(level, Italic(Colorize(fullDebugLine, DEBUG_INFO_COLOR)));
+      Print(level, Stylize(fullDebugLine, { .color = LogColor::White, .italic = true }));
       Println(level, LogLevelConst::RESET_CODE);
 #else
       Print(level, LogLevelConst::RESET_CODE);
@@ -422,7 +402,7 @@ namespace draconis::utils::logging {
     std::source_location logLocation;
 #endif
 
-    String errorMessagePart;
+    types::String errorMessagePart;
 
     if constexpr (std::is_same_v<DecayedErrorType, error::DracError>) {
 #ifndef NDEBUG

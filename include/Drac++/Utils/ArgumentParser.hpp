@@ -23,38 +23,19 @@
 #include "Types.hpp"
 
 namespace draconis::utils::argparse {
-  namespace {
-    using error::DracError;
-    using error::DracErrorCode;
-    using logging::Print;
-    using logging::Println;
-
-    using types::CStr;
-    using types::Err;
-    using types::f64;
-    using types::i32;
-    using types::Map;
-    using types::Option;
-    using types::Result;
-    using types::Span;
-    using types::String;
-    using types::StringView;
-    using types::u8;
-    using types::UniquePointer;
-    using types::Unit;
-    using types::usize;
-    using types::Vec;
-  } // namespace
+  namespace error   = ::draconis::utils::error;
+  namespace logging = ::draconis::utils::logging;
+  namespace types   = ::draconis::utils::types;
 
   /**
    * @brief Type alias for argument values.
    */
-  using ArgValue = std::variant<bool, i32, f64, String>;
+  using ArgValue = std::variant<bool, types::i32, types::f64, types::String>;
 
   /**
    * @brief Type alias for allowed choices for enum-style arguments.
    */
-  using ArgChoices = Vec<String>;
+  using ArgChoices = types::Vec<types::String>;
 
   /**
    * @brief Generic traits class for enum string conversion using magic_enum.
@@ -79,7 +60,7 @@ namespace draconis::utils::argparse {
       return CACHED_CHOICES;
     }
 
-    static fn stringToEnum(const String& str) -> EnumType {
+    static fn stringToEnum(const types::String& str) -> EnumType {
       static_assert(has_string_conversion, "Enum type must be a scoped enum");
 
       auto result = magic_enum::enum_cast<EnumType>(str);
@@ -88,7 +69,7 @@ namespace draconis::utils::argparse {
 
       const auto enumValues = magic_enum::enum_values<EnumType>();
       for (const auto value : enumValues) {
-        StringView enumName = magic_enum::enum_name(value);
+        types::StringView enumName = magic_enum::enum_name(value);
         if (std::ranges::equal(str, enumName, [](char charA, char charB) { return std::tolower(charA) == std::tolower(charB); }))
           return value;
       }
@@ -96,9 +77,9 @@ namespace draconis::utils::argparse {
       return enumValues[0];
     }
 
-    static fn enumToString(EnumType value) -> String {
+    static fn enumToString(EnumType value) -> types::String {
       static_assert(has_string_conversion, "Enum type must be a scoped enum");
-      return String(magic_enum::enum_name(value));
+      return types::String(magic_enum::enum_name(value));
     }
   };
 
@@ -113,7 +94,7 @@ namespace draconis::utils::argparse {
      * @param help_text Help text for this argument
      * @param is_flag Whether this is a flag (boolean) argument
      */
-    explicit Argument(Vec<String> names, String help_text = "", bool is_flag = false)
+    explicit Argument(types::Vec<types::String> names, types::String help_text = "", bool is_flag = false)
       : m_names(std::move(names)), m_helpText(std::move(help_text)), m_isFlag(is_flag) {
       if (m_isFlag)
         m_defaultValue = false;
@@ -127,9 +108,9 @@ namespace draconis::utils::argparse {
      * @param names One or more argument names
      */
     template <typename... NameTs>
-      requires(sizeof...(NameTs) >= 1 && (std::convertible_to<NameTs, String> && ...))
-    explicit Argument(String help_text, bool is_flag, NameTs&&... names)
-      : m_names { String(std::forward<NameTs>(names))... }, m_helpText(std::move(help_text)), m_isFlag(is_flag) {
+      requires(sizeof...(NameTs) >= 1 && (std::convertible_to<NameTs, types::String> && ...))
+    explicit Argument(types::String help_text, bool is_flag, NameTs&&... names)
+      : m_names { types::String(std::forward<NameTs>(names))... }, m_helpText(std::move(help_text)), m_isFlag(is_flag) {
       if (m_isFlag)
         m_defaultValue = false;
     }
@@ -139,7 +120,7 @@ namespace draconis::utils::argparse {
      * @param help_text The help text
      * @return Reference to this argument for method chaining
      */
-    fn help(String help_text) -> Argument& {
+    fn help(types::String help_text) -> Argument& {
       m_helpText = std::move(help_text);
       return *this;
     }
@@ -165,7 +146,7 @@ namespace draconis::utils::argparse {
     template <typename EnumType>
       requires std::is_enum_v<EnumType> && EnumTraits<EnumType>::has_string_conversion
                                          fn defaultValue(EnumType value) -> Argument& {
-      String strValue = EnumTraits<EnumType>::enumToString(value);
+      types::String strValue = EnumTraits<EnumType>::enumToString(value);
 
       m_defaultValue = strValue;
 
@@ -191,15 +172,15 @@ namespace draconis::utils::argparse {
     fn choices(const ArgChoices& choices) -> Argument& {
       m_choices = choices;
 
-      std::unordered_set<String> lowered;
+      std::unordered_set<types::String> lowered;
       lowered.reserve(choices.size());
 
-      for (const String& choice : choices) {
-        String lower = choice;
+      for (const types::String& choice : choices) {
+        types::String lower = choice;
         std::ranges::transform(
           lower,
           lower.begin(),
-          [](u8 chr) -> CStr { return static_cast<CStr>(std::tolower(chr)); }
+          [](types::u8 chr) -> types::CStr { return static_cast<types::CStr>(std::tolower(chr)); }
         );
         lowered.emplace(std::move(lower));
       }
@@ -233,7 +214,7 @@ namespace draconis::utils::argparse {
     template <typename EnumType>
       requires std::is_enum_v<EnumType> && EnumTraits<EnumType>::has_string_conversion
                                          fn getEnum() const -> EnumType {
-      const auto strValue = get<String>();
+      const auto strValue = get<types::String>();
 
       return EnumTraits<EnumType>::stringToEnum(strValue);
     }
@@ -250,7 +231,7 @@ namespace draconis::utils::argparse {
      * @brief Get the primary name of this argument.
      * @return The first name in the names list
      */
-    [[nodiscard]] fn getPrimaryName() const -> const String& {
+    [[nodiscard]] fn getPrimaryName() const -> const types::String& {
       return m_names.front();
     }
 
@@ -258,7 +239,7 @@ namespace draconis::utils::argparse {
      * @brief Get all names for this argument.
      * @return Vector of all argument names
      */
-    [[nodiscard]] fn getNames() const -> const Vec<String>& {
+    [[nodiscard]] fn getNames() const -> const types::Vec<types::String>& {
       return m_names;
     }
 
@@ -266,12 +247,13 @@ namespace draconis::utils::argparse {
      * @brief Get the help text for this argument.
      * @return The help text
      */
-    [[nodiscard]] fn getHelpText() const -> const String& {
+    [[nodiscard]] fn getHelpText() const -> const types::String& {
       return m_helpText;
     }
 
     /**
      * @brief Check if this argument is a flag.
+// ...
      * @return true if this is a flag argument, false otherwise
      */
     [[nodiscard]] fn isFlag() const -> bool {
@@ -306,19 +288,19 @@ namespace draconis::utils::argparse {
      * @brief Get the default value as a lowercase string (for help text).
      *        Returns an empty string if no default value is set.
      */
-    [[nodiscard]] fn getDefaultAsString() const -> String {
+    [[nodiscard]] fn getDefaultAsString() const -> types::String {
       if (!m_defaultValue.has_value())
         return {};
 
       const ArgValue& value = m_defaultValue.value();
 
-      String result;
+      types::String result;
       std::visit(
         [&](const auto& value) {
           using V = std::decay_t<decltype(value)>;
           if constexpr (std::is_same_v<V, bool>)
             result = value ? "true" : "false";
-          else if constexpr (std::is_same_v<V, String>)
+          else if constexpr (std::is_same_v<V, types::String>)
             result = value;
           else
             result = std::format("{}", value);
@@ -336,16 +318,16 @@ namespace draconis::utils::argparse {
      * @param value The value to set
      * @return Result indicating success or failure
      */
-    fn setValue(ArgValue value) -> Result<> {
-      if (hasChoices() && std::holds_alternative<String>(value)) {
-        const String& strValue = std::get<String>(value);
+    fn setValue(ArgValue value) -> types::Result<> {
+      if (hasChoices() && std::holds_alternative<types::String>(value)) {
+        const types::String& strValue = std::get<types::String>(value);
 
         /* Lower-case once for lookup */
-        String lowerValue = strValue;
+        types::String lowerValue = strValue;
         std::ranges::transform(
           lowerValue,
           lowerValue.begin(),
-          [](u8 chr) { return static_cast<CStr>(std::tolower(chr)); }
+          [](types::u8 chr) { return static_cast<types::CStr>(std::tolower(chr)); }
         );
 
         bool isValid = m_lowerChoices && m_lowerChoices->contains(lowerValue);
@@ -354,20 +336,20 @@ namespace draconis::utils::argparse {
           const ArgChoices& choices = m_choices.value();
 
           std::ostringstream choicesStream;
-          for (usize i = 0; i < choices.size(); ++i) {
+          for (types::usize i = 0; i < choices.size(); ++i) {
             if (i > 0)
               choicesStream << ", ";
-            String lower = choices[i];
+            types::String lower = choices[i];
             std::ranges::transform(
               lower,
               lower.begin(),
-              [](u8 chr) { return static_cast<CStr>(std::tolower(chr)); }
+              [](types::u8 chr) { return static_cast<types::CStr>(std::tolower(chr)); }
             );
             choicesStream << lower;
           }
 
           ERR_FMT(
-            DracErrorCode::InvalidArgument,
+            error::DracErrorCode::InvalidArgument,
             "Invalid value '{}' for argument '{}'. Allowed values: {}",
             strValue,
             getPrimaryName(),
@@ -384,7 +366,7 @@ namespace draconis::utils::argparse {
     /**
      * @brief Mark this argument as used.
      */
-    fn markUsed() -> Unit {
+    fn markUsed() -> types::Unit {
       m_isUsed = true;
 
       if (m_isFlag)
@@ -392,14 +374,14 @@ namespace draconis::utils::argparse {
     }
 
    private:
-    Vec<String>                        m_names;        ///< Argument names (e.g., {"-v", "--verbose"})
-    String                             m_helpText;     ///< Help text for this argument
-    Option<ArgValue>                   m_value;        ///< The actual value provided
-    Option<ArgValue>                   m_defaultValue; ///< Default value if none provided
-    Option<ArgChoices>                 m_choices;      ///< Allowed choices for enum-style arguments
-    Option<std::unordered_set<String>> m_lowerChoices; ///< Lower-cased set for fast validation
-    bool                               m_isFlag {};    ///< Whether this is a flag argument
-    bool                               m_isUsed {};    ///< Whether this argument was used
+    types::Vec<types::String>                        m_names;        ///< Argument names (e.g., {"-v", "--verbose"})
+    types::String                                    m_helpText;     ///< Help text for this argument
+    types::Option<ArgValue>                          m_value;        ///< The actual value provided
+    types::Option<ArgValue>                          m_defaultValue; ///< Default value if none provided
+    types::Option<ArgChoices>                        m_choices;      ///< Allowed choices for enum-style arguments
+    types::Option<std::unordered_set<types::String>> m_lowerChoices; ///< Lower-cased set for fast validation
+    bool                                             m_isFlag {};    ///< Whether this is a flag argument
+    bool                                             m_isUsed {};    ///< Whether this argument was used
   };
 
   /**
@@ -412,7 +394,7 @@ namespace draconis::utils::argparse {
      * @param programName Name of the program
      * @param version Version string of the program
      */
-    explicit ArgumentParser(String programName, String version)
+    explicit ArgumentParser(types::String programName, types::String version)
       : m_programName(std::move(programName)), m_version(std::move(version)) {
       addArguments("-h", "--help")
         .help("Show this help message and exit")
@@ -431,7 +413,7 @@ namespace draconis::utils::argparse {
      *
      * @details Program name is set to argv[0] at runtime.
      */
-    explicit ArgumentParser(String version)
+    explicit ArgumentParser(types::String version)
       : m_version(std::move(version)) {
       addArguments("-h", "--help")
         .help("Show this help message and exit")
@@ -456,12 +438,12 @@ namespace draconis::utils::argparse {
      * @return Reference to the newly created argument
      */
     template <typename... NameTs>
-      requires(sizeof...(NameTs) >= 1 && (std::convertible_to<NameTs, String> && ...))
+      requires(sizeof...(NameTs) >= 1 && (std::convertible_to<NameTs, types::String> && ...))
     fn addArguments(NameTs&&... names) -> Argument& {
-      m_arguments.emplace_back(std::make_unique<Argument>(String {}, false, std::forward<NameTs>(names)...));
+      m_arguments.emplace_back(std::make_unique<Argument>(types::String {}, false, std::forward<NameTs>(names)...));
       Argument& arg = *m_arguments.back();
 
-      for (const String& name : arg.getNames())
+      for (const types::String& name : arg.getNames())
         m_argumentMap[name] = &arg;
 
       return arg;
@@ -472,15 +454,15 @@ namespace draconis::utils::argparse {
      * @param args Span of argument strings
      * @return Result indicating success or failure
      */
-    fn parseArgs(Span<const char* const> args) -> Result<> {
+    fn parseArgs(types::Span<const char* const> args) -> types::Result<> {
       if (args.empty())
         return {};
 
       if (m_programName.empty())
         m_programName = args[0];
 
-      for (usize i = 1; i < args.size(); ++i) {
-        StringView arg = args[i];
+      for (types::usize i = 1; i < args.size(); ++i) {
+        types::StringView arg = args[i];
 
         if (arg == "-h" || arg == "--help") {
           printHelp();
@@ -488,13 +470,13 @@ namespace draconis::utils::argparse {
         }
 
         if (arg == "-v" || arg == "--version") {
-          Println(m_version);
+          logging::Println(m_version);
           std::exit(0);
         }
 
-        auto iter = m_argumentMap.find(arg);
+        auto iter = m_argumentMap.find(types::String(arg));
         if (iter == m_argumentMap.end())
-          ERR_FMT(DracErrorCode::InvalidArgument, "Unknown argument: {}", arg);
+          ERR_FMT(error::DracErrorCode::InvalidArgument, "Unknown argument: {}", arg);
 
         Argument* argument = iter->second;
 
@@ -502,10 +484,10 @@ namespace draconis::utils::argparse {
           argument->markUsed();
         } else {
           if (i + 1 >= args.size())
-            ERR_FMT(DracErrorCode::InvalidArgument, "Argument {} requires a value", arg);
+            ERR_FMT(error::DracErrorCode::InvalidArgument, "Argument {} requires a value", arg);
 
-          String value = args[++i];
-          if (Result result = argument->setValue(value); !result)
+          types::String value = args[++i];
+          if (types::Result<> result = argument->setValue(value); !result)
             return result;
         }
       }
@@ -518,15 +500,15 @@ namespace draconis::utils::argparse {
      * @param args Vector of argument strings
      * @return Result indicating success or failure
      */
-    fn parseArgs(const Vec<String>& args) -> Result<> {
+    fn parseArgs(const types::Vec<types::String>& args) -> types::Result<> {
       if (args.empty())
         return {};
 
       if (m_programName.empty())
         m_programName = args[0];
 
-      for (usize i = 1; i < args.size(); ++i) {
-        const String& arg = args[i];
+      for (types::usize i = 1; i < args.size(); ++i) {
+        const types::String& arg = args[i];
 
         if (arg == "-h" || arg == "--help") {
           printHelp();
@@ -534,13 +516,13 @@ namespace draconis::utils::argparse {
         }
 
         if (arg == "-v" || arg == "--version") {
-          Println(m_version);
+          logging::Println(m_version);
           std::exit(0);
         }
 
         auto iter = m_argumentMap.find(arg);
         if (iter == m_argumentMap.end())
-          ERR_FMT(DracErrorCode::InvalidArgument, "Unknown argument: {}", arg);
+          ERR_FMT(error::DracErrorCode::InvalidArgument, "Unknown argument: {}", arg);
 
         Argument* argument = iter->second;
 
@@ -548,10 +530,10 @@ namespace draconis::utils::argparse {
           argument->markUsed();
         } else {
           if (i + 1 >= args.size())
-            ERR_FMT(DracErrorCode::InvalidArgument, "Argument {} requires a value", arg);
+            ERR_FMT(error::DracErrorCode::InvalidArgument, "Argument {} requires a value", arg);
 
-          String value = args[++i];
-          if (Result result = argument->setValue(value); !result)
+          types::String value = args[++i];
+          if (types::Result<> result = argument->setValue(value); !result)
             return result;
         }
       }
@@ -565,9 +547,9 @@ namespace draconis::utils::argparse {
      * @param name Argument name
      * @return The argument value, or default value if not provided
      */
-    template <typename T = String>
-    fn get(StringView name) const -> T {
-      auto iter = m_argumentMap.find(name);
+    template <typename T = types::String>
+    fn get(types::StringView name) const -> T {
+      auto iter = m_argumentMap.find(types::String(name));
 
       if (iter != m_argumentMap.end())
         return iter->second->get<T>();
@@ -582,8 +564,8 @@ namespace draconis::utils::argparse {
      * @return The argument value converted to the enum type
      */
     template <typename EnumType>
-    fn getEnum(StringView name) const -> EnumType {
-      auto iter = m_argumentMap.find(name);
+    fn getEnum(types::StringView name) const -> EnumType {
+      auto iter = m_argumentMap.find(types::String(name));
 
       if (iter != m_argumentMap.end())
         return iter->second->getEnum<EnumType>();
@@ -598,8 +580,8 @@ namespace draconis::utils::argparse {
      * @param name Argument name
      * @return true if the argument was used, false otherwise
      */
-    [[nodiscard]] fn isUsed(StringView name) const -> bool {
-      auto iter = m_argumentMap.find(name);
+    [[nodiscard]] fn isUsed(types::StringView name) const -> bool {
+      auto iter = m_argumentMap.find(types::String(name));
       if (iter != m_argumentMap.end())
         return iter->second->isUsed();
 
@@ -609,7 +591,7 @@ namespace draconis::utils::argparse {
     /**
      * @brief Print help message.
      */
-    fn printHelp() const -> Unit {
+    fn printHelp() const -> types::Unit {
       std::ostringstream usageStream;
       usageStream << "Usage: " << m_programName;
 
@@ -623,14 +605,14 @@ namespace draconis::utils::argparse {
           usageStream << "]";
         }
 
-      Println(usageStream.str());
-      Println();
+      logging::Println(usageStream.str());
+      logging::Println();
 
       if (!m_arguments.empty()) {
-        Println("Arguments:");
+        logging::Println("Arguments:");
         for (const auto& arg : m_arguments) {
           std::ostringstream namesStream;
-          for (usize i = 0; i < arg->getNames().size(); ++i) {
+          for (types::usize i = 0; i < arg->getNames().size(); ++i) {
             if (i > 0)
               namesStream << ", ";
 
@@ -642,42 +624,42 @@ namespace draconis::utils::argparse {
           if (!arg->isFlag())
             argLineStream << " VALUE";
 
-          Println(argLineStream.str());
+          logging::Println(argLineStream.str());
 
           if (!arg->getHelpText().empty())
-            Println("    " + arg->getHelpText());
+            logging::Println("    " + arg->getHelpText());
 
           if (arg->hasChoices()) {
             std::ostringstream choicesStream;
             choicesStream << "    Available values: ";
             const ArgChoices& choices = arg->getChoices();
 
-            for (usize i = 0; i < choices.size(); ++i) {
+            for (types::usize i = 0; i < choices.size(); ++i) {
               if (i > 0)
                 choicesStream << ", ";
 
-              String lower = choices[i];
+              types::String lower = choices[i];
 
               std::ranges::transform(lower, lower.begin(), [](char character) { return std::tolower(character); });
 
               choicesStream << lower;
             }
 
-            Println(choicesStream.str());
+            logging::Println(choicesStream.str());
           }
 
           if (arg->hasChoices() && arg->hasDefault())
-            Println(std::format("    Default: {}", arg->getDefaultAsString()));
+            logging::Println(std::format("    Default: {}", arg->getDefaultAsString()));
 
-          Println();
+          logging::Println();
         }
       }
     }
 
    private:
-    String                       m_programName; ///< Program name
-    String                       m_version;     ///< Program version
-    Vec<UniquePointer<Argument>> m_arguments;   ///< List of all arguments
-    Map<String, Argument*>       m_argumentMap; ///< Map of argument names to arguments
+    types::String                              m_programName; ///< Program name
+    types::String                              m_version;     ///< Program version
+    types::Vec<types::UniquePointer<Argument>> m_arguments;   ///< List of all arguments
+    types::Map<types::String, Argument*>       m_argumentMap; ///< Map of argument names to arguments
   };
 } // namespace draconis::utils::argparse

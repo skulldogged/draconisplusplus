@@ -9,51 +9,46 @@
 #include "Core/SystemInfo.hpp"
 
 namespace draconis::ui {
-  namespace {
-    using config::Config;
+  namespace types   = ::draconis::utils::types;
+  namespace logging = ::draconis::utils::logging;
+  namespace config  = ::draconis::config;
+  namespace system  = ::draconis::core::system;
+  namespace weather = ::draconis::services::weather;
 
-    using core::system::SystemInfo;
-
-    using services::weather::Report;
-
-    using utils::logging::LogColor;
-    using utils::types::Result;
-    using utils::types::String;
-    using utils::types::StringView;
-  } // namespace
+  using weather::Report;
 
   struct Theme {
-    LogColor icon;
-    LogColor label;
-    LogColor value;
+    logging::LogColor icon;
+    logging::LogColor label;
+    logging::LogColor value;
   };
 
   extern const Theme DEFAULT_THEME;
 
   struct Icons {
-    StringView calendar;
-    StringView desktopEnvironment;
-    StringView disk;
-    StringView host;
-    StringView kernel;
-    StringView memory;
-    StringView cpu;
-    StringView gpu;
-    StringView uptime;
+    types::StringView calendar;
+    types::StringView desktopEnvironment;
+    types::StringView disk;
+    types::StringView host;
+    types::StringView kernel;
+    types::StringView memory;
+    types::StringView cpu;
+    types::StringView gpu;
+    types::StringView uptime;
 #if DRAC_ENABLE_NOWPLAYING
-    StringView music;
+    types::StringView music;
 #endif
-    StringView os;
+    types::StringView os;
 #if DRAC_ENABLE_PACKAGECOUNT
-    StringView package;
+    types::StringView package;
 #endif
-    StringView palette;
-    StringView shell;
-    StringView user;
+    types::StringView palette;
+    types::StringView shell;
+    types::StringView user;
 #if DRAC_ENABLE_WEATHER
-    StringView weather;
+    types::StringView weather;
 #endif
-    StringView windowManager;
+    types::StringView windowManager;
   };
 
   extern const Icons ICON_TYPE;
@@ -66,13 +61,13 @@ namespace draconis::ui {
    * @param weather The weather report, if enabled/available.
    * @return A string containing the formatted UI.
    */
-  fn CreateUI(const Config& config, const SystemInfo& data, Result<Report> weather, bool noAscii) -> String;
+  fn CreateUI(const config::Config& config, const system::SystemInfo& data, types::Result<weather::Report> weather, bool noAscii) -> types::String;
 #else
   /**
    * @brief Creates the main UI element based on system data and configuration.
    * @param config The application configuration.
    * @param data The collected system data. @return A string containing the formatted UI.
    */
-  fn CreateUI(const Config& config, const SystemInfo& data, bool noAscii) -> String;
+  fn CreateUI(const config::Config& config, const system::SystemInfo& data, bool noAscii) -> types::String;
 #endif // DRAC_ENABLE_WEATHER
 } // namespace draconis::ui

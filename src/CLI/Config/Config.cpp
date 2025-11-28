@@ -19,6 +19,10 @@ namespace fs = std::filesystem;
 #else
   #include <Drac++/Services/Weather.hpp>
 
+  #if DRAC_ENABLE_PLUGINS
+    #include <Drac++/Core/StaticPlugins.hpp>
+  #endif
+
   #include "../config.hpp" // user-defined config
 #endif
 
@@ -126,6 +130,16 @@ enabled = [] # List of package managers to count, e.g. ["cargo", "nix", "pacman"
 )toml";
   #endif
 
+  #if DRAC_ENABLE_PLUGINS
+      configContent += R"toml(
+# Plugin settings
+[plugins]
+enabled = true        # Set to false to disable the plugin system entirely
+auto_load = []        # List of plugin names to automatically load on startup
+# Example: auto_load = ["windows_info", "docker_info"]
+)toml";
+  #endif
+
       std::ofstream file(configPath);
       file << configContent;
 
@@ -215,6 +229,13 @@ namespace draconis::config {
 
     if constexpr (DRAC_ENABLE_PACKAGECOUNT)
       cfg.enabledPackageManagers = config::DRAC_ENABLED_PACKAGE_MANAGERS;
+
+  #if DRAC_ENABLE_PLUGINS
+    cfg.plugins.enabled = true;
+    // Auto-load all statically compiled plugins
+    for (const auto& entry : draconis::core::plugin::GetStaticPlugins())
+      cfg.plugins.autoLoad.emplace_back(entry.name);
+  #endif
 
     if constexpr (DRAC_ENABLE_NOWPLAYING)
       cfg.nowPlaying.enabled = true;
@@ -336,6 +357,11 @@ namespace draconis::config {
           }
         }
       }
+    }
+
+    if constexpr (DRAC_ENABLE_PLUGINS) {
+      const toml::node_view pluginTbl = tbl["plugins"];
+      this->plugins                   = pluginTbl.is_table() ? Plugins::fromToml(*pluginTbl.as_table()) : Plugins {};
     }
   }
 #endif // !DRAC_PRECOMPILED_CONFIG

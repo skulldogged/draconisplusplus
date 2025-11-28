@@ -24,10 +24,11 @@ endif
 # ------------------- #
 #  Executable Target  #
 # ------------------- #
+# Use draconis_dep_whole to ensure static plugin self-registration isn't stripped
 executable(
   'draconis++',
   main_app_sources,
-  dependencies: [draconis_dep] + lib_deps,
+  dependencies: [draconis_dep_whole] + lib_deps,
   link_args: link_args,
   objc_args: objc_args,
   install: true,

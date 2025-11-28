@@ -8,6 +8,11 @@
  *
  * To enable these precompiled settings, `DRAC_PRECOMPILED_CONFIG` must be defined
  * in your build system or `meson.options`.
+ *
+ * @note When DRAC_PRECOMPILED_CONFIG is enabled together with DRAC_ENABLE_PLUGINS,
+ * plugins specified via `-Dstatic_plugins=...` meson option will be statically
+ * compiled into the final binary, making it fully portable without needing
+ * separate plugin files.
  */
 #pragma once
 
