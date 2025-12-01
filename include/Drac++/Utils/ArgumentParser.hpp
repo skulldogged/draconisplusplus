@@ -358,6 +358,24 @@ namespace draconis::utils::argparse {
         }
       }
 
+      if (std::holds_alternative<types::String>(value) && m_defaultValue.has_value()) {
+        const types::String& raw = std::get<types::String>(value);
+
+        if (std::holds_alternative<types::i32>(*m_defaultValue)) {
+          try {
+            value = static_cast<types::i32>(std::stoi(raw));
+          } catch (...) {
+            ERR_FMT(error::DracErrorCode::InvalidArgument, "Failed to parse '{}' as integer for argument '{}'", raw, getPrimaryName());
+          }
+        } else if (std::holds_alternative<types::f64>(*m_defaultValue)) {
+          try {
+            value = static_cast<types::f64>(std::stod(raw));
+          } catch (...) {
+            ERR_FMT(error::DracErrorCode::InvalidArgument, "Failed to parse '{}' as number for argument '{}'", raw, getPrimaryName());
+          }
+        }
+      }
+
       m_value  = std::move(value);
       m_isUsed = true;
       return {};

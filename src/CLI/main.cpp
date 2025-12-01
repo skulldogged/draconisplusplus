@@ -9,8 +9,11 @@
   #include <Drac++/Services/Weather.hpp>
 #endif
 
+#include <algorithm>
+#include <cctype>
 #include <glaze/glaze.hpp>
 #include <magic_enum/magic_enum.hpp>
+#include <ranges>
 
 #include <Drac++/Utils/ArgumentParser.hpp>
 #include <Drac++/Utils/CacheManager.hpp>
@@ -442,9 +445,13 @@ fn main(const i32 argc, CStr* argv[]) -> i32 try {
     prettyJson,
     outputFormat,
     language,
+    logoPath,
+    logoProtocol,
+    logoWidth,
+    logoHeight,
     listPlugins,
     pluginInfo
-  ] = Tuple(false, false, false, false, false, false, String(""), String(""), false, String(""));
+  ] = Tuple(false, false, false, false, false, false, String(""), String(""), String(""), String(""), u32(0), u32(0), false, String(""));
   // clang-format on
 
   {
@@ -502,6 +509,26 @@ fn main(const i32 argc, CStr* argv[]) -> i32 try {
       .help("Output system information in the specified format (e.g., 'markdown', 'json').")
       .defaultValue(String(""));
 
+    parser
+      .addArguments("--logo-path")
+      .help("Path to an image to render in the logo area (kitty / kitty-direct only).")
+      .defaultValue(String(""));
+
+    parser
+      .addArguments("--logo-protocol")
+      .help("Logo image protocol: 'kitty' or 'kitty-direct'.")
+      .defaultValue(String(""));
+
+    parser
+      .addArguments("--logo-width")
+      .help("Logo image width in terminal cells.")
+      .defaultValue(i32(0));
+
+    parser
+      .addArguments("--logo-height")
+      .help("Logo image height in terminal cells.")
+      .defaultValue(i32(0));
+
 #if DRAC_ENABLE_PLUGINS
     parser
       .addArguments("--list-plugins")
@@ -527,6 +554,10 @@ fn main(const i32 argc, CStr* argv[]) -> i32 try {
     prettyJson     = parser.get<bool>("--pretty");
     outputFormat   = parser.get<String>("--format");
     language       = parser.get<String>("--lang");
+    logoPath       = parser.get<String>("--logo-path");
+    logoProtocol   = parser.get<String>("--logo-protocol");
+    logoWidth      = static_cast<u32>(std::max<i32>(0, parser.get<i32>("--logo-width")));
+    logoHeight     = static_cast<u32>(std::max<i32>(0, parser.get<i32>("--logo-height")));
 
 #if DRAC_ENABLE_PLUGINS
     listPlugins = parser.get<bool>("--list-plugins");
@@ -561,7 +592,7 @@ fn main(const i32 argc, CStr* argv[]) -> i32 try {
   }
 
   {
-    const Config& config = Config::getInstance();
+    Config config = Config::getInstance();
 
     // Initialize translation manager with language from command line or config
     if (language.empty() && config.general.language)
@@ -572,6 +603,24 @@ fn main(const i32 argc, CStr* argv[]) -> i32 try {
 
     if (!language.empty())
       translationManager.setLanguage(language);
+
+    if (!logoPath.empty())
+      config.logo.imagePath = logoPath;
+
+    if (!logoProtocol.empty()) {
+      String protoLower = logoProtocol;
+      std::ranges::transform(protoLower, protoLower.begin(), [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
+
+      config.logo.protocol = protoLower == "kitty-direct"
+        ? config::LogoProtocol::KittyDirect
+        : config::LogoProtocol::Kitty;
+    }
+
+    if (logoWidth > 0)
+      config.logo.width = logoWidth;
+
+    if (logoHeight > 0)
+      config.logo.height = logoHeight;
 
     debug_log("Current language: {}", translationManager.getCurrentLanguage());
     debug_log("Selected language: {}", language.empty() ? "auto" : language);
@@ -654,7 +703,6 @@ fn main(const i32 argc, CStr* argv[]) -> i32 try {
 
   return EXIT_SUCCESS;
 } catch (const Exception& e) {
-  error_log("Caught exception: {}", e.what());
   error_at(e);
   return EXIT_FAILURE;
 }

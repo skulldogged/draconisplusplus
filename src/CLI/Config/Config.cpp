@@ -102,6 +102,17 @@ enabled = true # Set to true to enable media integration
 )toml";
   #endif
 
+  #if !DRAC_PRECOMPILED_CONFIG
+      configContent += R"toml(
+# Image logo (kitty / kitty-direct)
+[logo]
+# path = ""           # Path to an image file; when empty, ascii art is used
+# protocol = "kitty"  # Options: "kitty" or "kitty-direct"
+# width = 24          # Width in terminal cells
+# height = 12         # Height in terminal cells
+)toml";
+  #endif
+
   #if DRAC_ENABLE_WEATHER
       configContent += R"toml(
 # Weather settings
@@ -279,6 +290,9 @@ namespace draconis::config {
 
     if (!this->general.name)
       this->general.name = General::getDefaultName();
+
+    if (const toml::node_view logoTbl = tbl["logo"]; logoTbl.is_table())
+      this->logo = Logo::fromToml(*logoTbl.as_table());
 
     if constexpr (DRAC_ENABLE_NOWPLAYING) {
       const toml::node_view npTbl = tbl["now_playing"];

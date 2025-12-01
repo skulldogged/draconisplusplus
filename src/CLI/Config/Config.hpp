@@ -1,7 +1,9 @@
 #pragma once
 
 #if !DRAC_PRECOMPILED_CONFIG
+  #include <cctype>                    // std::tolower
   #include <memory>                    // std::{make_unique, unique_ptr}
+  #include <ranges>                    // std::ranges::transform
   #include <toml++/impl/node.hpp>      // toml::node
   #include <toml++/impl/node_view.hpp> // toml::node_view
   #include <toml++/impl/table.hpp>     // toml::table
@@ -30,6 +32,50 @@
 #include <Drac++/Utils/Types.hpp>
 
 namespace draconis::config {
+  enum class LogoProtocol {
+    Kitty,
+    KittyDirect,
+  };
+
+  struct Logo {
+    draconis::utils::types::Option<draconis::utils::types::String> imagePath;
+    LogoProtocol                                                   protocol = LogoProtocol::Kitty;
+    draconis::utils::types::Option<draconis::utils::types::u32>    width;
+    draconis::utils::types::Option<draconis::utils::types::u32>    height;
+
+#if !DRAC_PRECOMPILED_CONFIG
+    static fn fromToml(const toml::table& tbl) -> Logo {
+      using draconis::utils::types::String;
+      using draconis::utils::types::u32;
+
+      Logo logo;
+
+      if (const toml::node_view<const toml::node> pathNode = tbl["path"])
+        if (auto pathVal = pathNode.value<String>())
+          logo.imagePath = *pathVal;
+
+      if (const toml::node_view<const toml::node> protocolNode = tbl["protocol"])
+        if (auto protoVal = protocolNode.value<String>()) {
+          String protoLower = *protoVal;
+
+          std::ranges::transform(protoLower, protoLower.begin(), [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
+
+          logo.protocol = protoLower == "kitty-direct" ? LogoProtocol::KittyDirect : LogoProtocol::Kitty;
+        }
+
+      if (const auto widthNode = tbl["width"])
+        if (auto widthVal = widthNode.value<u32>())
+          logo.width = *widthVal;
+
+      if (const auto heightNode = tbl["height"])
+        if (auto heightVal = heightNode.value<u32>())
+          logo.height = *heightVal;
+
+      return logo;
+    }
+#endif
+  };
+
   /**
    * @struct General
    * @brief Holds general configuration settings.
@@ -276,6 +322,7 @@ namespace draconis::config {
 #if DRAC_ENABLE_WEATHER
     Weather weather; ///< Weather configuration settings.
 #endif
+    Logo logo;
 #if DRAC_ENABLE_NOWPLAYING
     NowPlaying nowPlaying; ///< Now Playing configuration settings.
 #endif

@@ -584,11 +584,12 @@ namespace {
           if (UniquePointer<IWeatherService> weatherService = CreateWeatherService(Provider::MetNo, locationInfo->coords, UnitSystem::Imperial)) {
             String weatherCacheKey = "weather_" + locationInfo->locationName;
             if (Result<Report> weather = cacheManager.getOrSet<Report>(
-              weatherCacheKey,
-              [&]() -> Result<Report> {
-                return weatherService->getWeatherInfo();
-              }
-            ); weather)
+                  weatherCacheKey,
+                  [&]() -> Result<Report> {
+                    return weatherService->getWeatherInfo();
+                  }
+                );
+                weather)
               info.weather = *weather;
           }
         }

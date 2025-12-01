@@ -1,4 +1,4 @@
-#define ASIO_HAS_CO_AWAIT 1
+#define ASIO_HAS_CO_AWAIT      1
 #define ASIO_HAS_STD_COROUTINE 1
 
 #include <asio/error.hpp>            // asio::error::operation_aborted

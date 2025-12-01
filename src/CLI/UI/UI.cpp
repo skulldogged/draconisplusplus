@@ -1,5 +1,7 @@
 #include "UI.hpp"
 
+#include <fstream>
+#include <iostream>
 #include <sstream>
 
 #include <Drac++/Utils/Localization.hpp>
@@ -14,6 +16,7 @@ using namespace draconis::utils::localization;
 
 namespace draconis::ui {
   using config::Config;
+  using config::LogoProtocol;
 
   using core::system::SystemInfo;
 
@@ -137,6 +140,152 @@ namespace draconis::ui {
   };
 
   namespace {
+    struct LogoRender {
+      Vec<String> lines;    // ASCII art lines when using ascii logos
+      String      sequence; // Kitty escape sequence when using kitty logos
+      usize       width   = 0;
+      usize       height  = 0;
+      bool        isKitty = false;
+    };
+
+    constexpr char BASE64_TABLE[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+    fn Base64Encode(const u8* data, usize len) -> String {
+      String out;
+      out.reserve(((len + 2) / 3) * 4);
+
+      usize i = 0;
+
+      while (i + 2 < len) {
+        const u32 triple = (static_cast<u32>(data[i]) << 16) |
+          (static_cast<u32>(data[i + 1]) << 8) |
+          static_cast<u32>(data[i + 2]);
+
+        out.push_back(BASE64_TABLE[(triple >> 18) & 0x3F]);
+        out.push_back(BASE64_TABLE[(triple >> 12) & 0x3F]);
+        out.push_back(BASE64_TABLE[(triple >> 6) & 0x3F]);
+        out.push_back(BASE64_TABLE[triple & 0x3F]);
+
+        i += 3;
+      }
+
+      const usize remaining = len - i;
+
+      if (remaining == 1) {
+        const u32 triple = static_cast<u32>(data[i]) << 16;
+        out.push_back(BASE64_TABLE[(triple >> 18) & 0x3F]);
+        out.push_back(BASE64_TABLE[(triple >> 12) & 0x3F]);
+        out.push_back('=');
+        out.push_back('=');
+      } else if (remaining == 2) {
+        const u32 triple = (static_cast<u32>(data[i]) << 16) |
+          (static_cast<u32>(data[i + 1]) << 8);
+        out.push_back(BASE64_TABLE[(triple >> 18) & 0x3F]);
+        out.push_back(BASE64_TABLE[(triple >> 12) & 0x3F]);
+        out.push_back(BASE64_TABLE[(triple >> 6) & 0x3F]);
+        out.push_back('=');
+      }
+
+      return out;
+    }
+
+    fn Base64Encode(const String& str) -> String {
+      return Base64Encode(reinterpret_cast<const u8*>(str.data()), str.size());
+    }
+
+    fn ReadFileBytes(const String& path) -> Option<Vec<u8>> {
+      std::ifstream file(path, std::ios::binary);
+
+      if (!file)
+        return None;
+
+      file.seekg(0, std::ios::end);
+      const std::streampos size = file.tellg();
+
+      if (size <= 0)
+        return None;
+
+      Vec<u8> buffer(static_cast<usize>(size));
+
+      file.seekg(0, std::ios::beg);
+      file.read(reinterpret_cast<char*>(buffer.data()), size);
+
+      if (!file)
+        return None;
+
+      return buffer;
+    }
+
+    fn BuildKittySequence(const config::Logo& logoCfg, usize widthCells, usize heightCells) -> Option<String> {
+      if (!logoCfg.imagePath)
+        return None;
+
+      String sequence;
+
+      if (logoCfg.protocol == LogoProtocol::KittyDirect) {
+        const String payload = Base64Encode(*logoCfg.imagePath);
+
+        sequence = "\033_Ga=T,f=100,t=f";
+
+        if (widthCells > 0)
+          sequence += std::format(",c={}", widthCells);
+
+        if (heightCells > 0)
+          sequence += std::format(",r={}", heightCells);
+
+        sequence += ";";
+        sequence += payload;
+        sequence += "\033\\";
+
+        return sequence;
+      }
+
+      const Option<Vec<u8>> bytes = ReadFileBytes(*logoCfg.imagePath);
+
+      if (!bytes)
+        return None;
+
+      const String payload = Base64Encode(bytes->data(), bytes->size());
+
+      sequence = "\033_Ga=T,f=100";
+
+      if (widthCells > 0)
+        sequence += std::format(",s={}", widthCells);
+
+      if (heightCells > 0)
+        sequence += std::format(",v={}", heightCells);
+
+      sequence += ";";
+      sequence += payload;
+      sequence += "\033\\";
+
+      return sequence;
+    }
+
+    fn BuildKittyLogo(const config::Logo& logoCfg, usize suggestedHeight) -> Option<LogoRender> {
+      if (!logoCfg.imagePath)
+        return None;
+
+      const usize logoWidth  = std::max<usize>(1, logoCfg.width.value_or(24));
+      usize       logoHeight = logoCfg.height.value_or(suggestedHeight);
+
+      if (logoHeight == 0)
+        logoHeight = suggestedHeight == 0 ? 12 : suggestedHeight;
+
+      const Option<String> sequence = BuildKittySequence(logoCfg, logoWidth, logoHeight);
+
+      if (!sequence)
+        return None;
+
+      LogoRender render;
+      render.width    = logoWidth;
+      render.height   = logoHeight;
+      render.isKitty  = true;
+      render.sequence = *sequence;
+
+      return render;
+    }
+
 #ifdef __linux__
     // clang-format off
     constexpr Array<Pair<StringView, StringView>, 13> distro_icons {{
@@ -271,7 +420,9 @@ namespace draconis::ui {
         const char current = str[pos];
 
         if (inEscape) {
-          inEscape = (current != 'm');
+          if (current == 'm' || current == '\\' || current == '\a')
+            inEscape = false;
+
           pos++;
         } else if (current == '\033') {
           inEscape = true;
@@ -702,66 +853,88 @@ namespace draconis::ui {
     if (!boxLines.empty() && boxLines.back().empty())
       boxLines.pop_back();
 
-    Vec<StringView> asciiLines = ascii::GetAsciiArt(data.operatingSystem->id);
-
-    if (noAscii || asciiLines.empty())
-      return out;
-
-    usize maxAsciiW = 0;
-    for (const auto& line : asciiLines)
-      maxAsciiW = std::max(maxAsciiW, GetVisualWidth(line));
-
-    usize asciiHeight = asciiLines.size();
-
-    String emptyAscii(maxAsciiW, ' ');
-
     usize  boxWidth = GetVisualWidth(boxLines[0]);
     String emptyBox = "│" + String(boxWidth - 2, ' ') + "│";
 
-    usize boxContentHeight = boxLines.size() - 2;
-    usize totalHeight      = std::max(asciiHeight, boxContentHeight + 2);
+    Vec<String> logoLines;
+    usize       maxLogoW      = 0;
+    usize       logoHeightOpt = 0;
+    String      kittySequence;
+    bool        isKittyLogo = false;
 
-    usize asciiPadTop = (totalHeight > asciiHeight) ? (totalHeight - asciiHeight) / 2 : 0;
+    if (!noAscii) {
+      if (const Option<LogoRender> kittyLogo = BuildKittyLogo(config.logo, boxLines.size())) {
+        logoLines     = kittyLogo->lines;
+        maxLogoW      = kittyLogo->width;
+        logoHeightOpt = kittyLogo->height;
+        isKittyLogo   = kittyLogo->isKitty;
+        kittySequence = kittyLogo->sequence;
+      }
 
-    usize boxPadTop    = (totalHeight > boxContentHeight + 2) ? (totalHeight - boxContentHeight - 2) / 2 : 0;
-    usize boxPadBottom = (totalHeight > boxContentHeight + 2) ? (totalHeight - boxContentHeight - 2 - boxPadTop) : 0;
+      if (!isKittyLogo) {
+        if (logoLines.empty()) {
+          const Vec<StringView> asciiLines = ascii::GetAsciiArt(data.operatingSystem->id);
 
-    Vec<String> extendedBox;
+          for (const auto& aLine : asciiLines) {
+            logoLines.emplace_back(aLine);
+            maxLogoW = std::max(maxLogoW, GetVisualWidth(aLine));
+          }
+        }
+      }
+    }
 
-    extendedBox.push_back(boxLines[0]);
+    if (!isKittyLogo && logoLines.empty())
+      return out;
 
-    for (usize j = 0; j < boxPadTop; ++j) extendedBox.push_back(emptyBox);
-    for (usize j = 1; j < boxLines.size() - 1; ++j) extendedBox.push_back(boxLines[j]);
-    for (usize j = 0; j < boxPadBottom; ++j) extendedBox.push_back(emptyBox);
+    const usize logoHeight = isKittyLogo ? (logoHeightOpt ? logoHeightOpt : boxLines.size()) : logoLines.size();
+    String      emptyLogo(maxLogoW, ' ');
 
-    extendedBox.push_back(boxLines.back());
+    // Kitty: emit the image to stdout once, then print the box shifted right by logo width.
+    if (isKittyLogo) {
+      if (!kittySequence.empty())
+        std::cout << "\033[s" << kittySequence << "\033[u" << std::flush;
 
-    usize extendedBoxHeight = extendedBox.size();
+      String      newOut;
+      const usize shift = maxLogoW + 2; // logo width plus gap
 
-    totalHeight = std::max(asciiHeight, extendedBoxHeight);
+      for (const auto& boxLine : boxLines) {
+        newOut += "\r";
+        newOut += std::format("\033[{}C", shift);
+        newOut += boxLine;
+        newOut += "\n";
+      }
 
-    asciiPadTop = (totalHeight - asciiHeight) / 2;
+      return newOut;
+    }
+
+    // ASCII logo: center relative to box height
+    const usize totalHeight = std::max(logoHeight, boxLines.size());
+    const usize logoPadTop  = (totalHeight > logoHeight) ? (totalHeight - logoHeight) / 2 : 0;
+    const usize boxPadTop   = (totalHeight > boxLines.size()) ? (totalHeight - boxLines.size()) / 2 : 0;
 
     String newOut;
 
     for (usize i = 0; i < totalHeight; ++i) {
       String outputLine;
 
-      if (i < asciiPadTop || i >= asciiPadTop + asciiHeight) {
-        outputLine += emptyAscii;
+      if (i < logoPadTop || i >= logoPadTop + logoHeight) {
+        outputLine += emptyLogo;
       } else {
-        const auto& asciiLine = asciiLines[i - asciiPadTop];
-        outputLine.append(asciiLine.data(), asciiLine.size());
-        outputLine.append(maxAsciiW - GetVisualWidth(asciiLine), ' ');
+        const auto& logoLine      = logoLines[i - logoPadTop];
+        const usize logoLineWidth = GetVisualWidth(logoLine);
+        const usize logoPadding   = maxLogoW > logoLineWidth ? maxLogoW - logoLineWidth : 0;
+
+        outputLine.append(logoLine.data(), logoLine.size());
+        outputLine.append(logoPadding, ' ');
         outputLine += "\033[0m";
       }
 
       outputLine += "  ";
 
-      if (i < extendedBoxHeight)
-        outputLine += extendedBox[i];
-      else
+      if (i < boxPadTop || i >= boxPadTop + boxLines.size())
         outputLine += emptyBox;
+      else
+        outputLine += boxLines[i - boxPadTop];
 
       newOut += outputLine + "\n";
     }

@@ -12,8 +12,8 @@
  * it exports factory functions in a namespace instead of extern "C".
  */
 
-#include <format>
 #include <cmath>
+#include <format>
 
 #include <Drac++/Core/Plugin.hpp>
 

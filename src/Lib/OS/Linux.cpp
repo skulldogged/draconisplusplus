@@ -562,7 +562,7 @@ namespace {
       ERR(ApiUnavailable, "Failed to connect to Wayland display");
 
     wl::DisplayManager manager(display.get());
-    DisplayInfo             primaryDisplay = manager.getPrimary();
+    DisplayInfo        primaryDisplay = manager.getPrimary();
 
     if (primaryDisplay.resolution.width == 0 && primaryDisplay.resolution.height == 0)
       ERR(NotFound, "No primary Wayland display found");

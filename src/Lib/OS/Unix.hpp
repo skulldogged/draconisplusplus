@@ -94,10 +94,7 @@ namespace draconis::os::unix_shared {
     struct statvfs stat;
 
     if (statvfs(path, &stat) == -1)
-      return types::Err(error::DracError(
-        IoError,
-        std::format("statvfs('{}') failed: {} (errno {})", path, std::strerror(errno), errno)
-      ));
+      return types::Err(error::DracError(IoError, std::format("statvfs('{}') failed: {} (errno {})", path, std::strerror(errno), errno)));
 
     const types::u64 blockSize  = stat.f_frsize;
     const types::u64 totalBytes = stat.f_blocks * blockSize;
@@ -145,10 +142,7 @@ namespace draconis::os::unix_shared {
     struct utsname uts;
 
     if (uname(&uts) == -1)
-      return types::Err(error::DracError(
-        InternalError,
-        std::format("uname() failed: {} (errno {})", std::strerror(errno), errno)
-      ));
+      return types::Err(error::DracError(InternalError, std::format("uname() failed: {} (errno {})", std::strerror(errno), errno)));
 
     if (std::strlen(uts.sysname) == 0)
       return types::Err(error::DracError(error::DracErrorCode::ParseError, "uname() returned empty system name"));
@@ -164,10 +158,7 @@ namespace draconis::os::unix_shared {
     struct utsname uts;
 
     if (uname(&uts) == -1)
-      return types::Err(error::DracError(
-        InternalError,
-        std::format("uname() failed: {} (errno {})", std::strerror(errno), errno)
-      ));
+      return types::Err(error::DracError(InternalError, std::format("uname() failed: {} (errno {})", std::strerror(errno), errno)));
 
     if (std::strlen(uts.machine) == 0)
       return types::Err(error::DracError(error::DracErrorCode::ParseError, "uname() returned empty machine name"));
@@ -191,10 +182,7 @@ namespace draconis::os::unix_shared {
     struct utsname uts;
 
     if (uname(&uts) == -1)
-      return types::Err(error::DracError(
-        InternalError,
-        std::format("uname() failed: {} (errno {})", std::strerror(errno), errno)
-      ));
+      return types::Err(error::DracError(InternalError, std::format("uname() failed: {} (errno {})", std::strerror(errno), errno)));
 
     return UnameInfo {
       .sysname  = types::String(uts.sysname),
@@ -344,10 +332,7 @@ namespace draconis::os::unix_shared {
     struct sysinfo info;
 
     if (sysinfo(&info) == -1)
-      return types::Err(error::DracError(
-        InternalError,
-        std::format("sysinfo() failed: {} (errno {})", std::strerror(errno), errno)
-      ));
+      return types::Err(error::DracError(InternalError, std::format("sysinfo() failed: {} (errno {})", std::strerror(errno), errno)));
 
     return std::chrono::seconds(info.uptime);
   }
