@@ -48,6 +48,8 @@ namespace draconis::os::unix_shared {
   namespace types = ::draconis::utils::types;
   namespace error = ::draconis::utils::error;
 
+  using enum error::DracErrorCode;
+
   // ─────────────────────────────────────────────────────────────────────────────
   // Disk Usage (statvfs)
   // ─────────────────────────────────────────────────────────────────────────────
@@ -68,7 +70,7 @@ namespace draconis::os::unix_shared {
     const types::u64 blockSize  = stat.f_frsize;
     const types::u64 totalBytes = stat.f_blocks * blockSize;
     const types::u64 freeBytes  = stat.f_bfree * blockSize;
-    const u64        usedBytes  = totalBytes - freeBytes;
+    const types::u64 usedBytes  = totalBytes - freeBytes;
 
     return types::ResourceUsage(usedBytes, totalBytes);
   }
@@ -92,14 +94,14 @@ namespace draconis::os::unix_shared {
     struct statvfs stat;
 
     if (statvfs(path, &stat) == -1)
-      return Err(DracError(
+      return types::Err(error::DracError(
         IoError,
         std::format("statvfs('{}') failed: {} (errno {})", path, std::strerror(errno), errno)
       ));
 
-    const u64 blockSize  = stat.f_frsize;
-    const u64 totalBytes = stat.f_blocks * blockSize;
-    const u64 freeBytes  = stat.f_bfree * blockSize;
+    const types::u64 blockSize  = stat.f_frsize;
+    const types::u64 totalBytes = stat.f_blocks * blockSize;
+    const types::u64 freeBytes  = stat.f_bfree * blockSize;
 
     return types::DiskInfo {
       .name          = name != nullptr ? types::String(name) : types::String(path),
@@ -143,7 +145,7 @@ namespace draconis::os::unix_shared {
     struct utsname uts;
 
     if (uname(&uts) == -1)
-      return Err(DracError(
+      return types::Err(error::DracError(
         InternalError,
         std::format("uname() failed: {} (errno {})", std::strerror(errno), errno)
       ));
@@ -162,7 +164,7 @@ namespace draconis::os::unix_shared {
     struct utsname uts;
 
     if (uname(&uts) == -1)
-      return Err(DracError(
+      return types::Err(error::DracError(
         InternalError,
         std::format("uname() failed: {} (errno {})", std::strerror(errno), errno)
       ));
@@ -189,7 +191,7 @@ namespace draconis::os::unix_shared {
     struct utsname uts;
 
     if (uname(&uts) == -1)
-      return Err(DracError(
+      return types::Err(error::DracError(
         InternalError,
         std::format("uname() failed: {} (errno {})", std::strerror(errno), errno)
       ));
@@ -302,9 +304,9 @@ namespace draconis::os::unix_shared {
           0,
           NI_NUMERICHOST
         ) == 0)
-      return String(buf);
+      return types::String(buf);
 
-    return None;
+    return types::None;
   }
 
   /**
@@ -342,7 +344,7 @@ namespace draconis::os::unix_shared {
     struct sysinfo info;
 
     if (sysinfo(&info) == -1)
-      return Err(DracError(
+      return types::Err(error::DracError(
         InternalError,
         std::format("sysinfo() failed: {} (errno {})", std::strerror(errno), errno)
       ));

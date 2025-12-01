@@ -1,3 +1,6 @@
+#define ASIO_HAS_CO_AWAIT 1
+#define ASIO_HAS_STD_COROUTINE 1
+
 #include <asio/error.hpp>            // asio::error::operation_aborted
 #include <chrono>                    // std::chrono::{minutes, steady_clock, time_point}
 #include <csignal>                   // SIGINT, SIGTERM, SIG_ERR, std::signal

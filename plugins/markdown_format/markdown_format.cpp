@@ -13,6 +13,7 @@
  */
 
 #include <format>
+#include <cmath>
 
 #include <Drac++/Core/Plugin.hpp>
 

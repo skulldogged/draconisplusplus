@@ -13,7 +13,7 @@
 #include <glaze/core/read.hpp>
 #include <glaze/core/write.hpp>
 #include <glaze/glaze.hpp>
-#include <glaze/json/json_t.hpp>
+#include <glaze/json/generic.hpp>
 #include <glaze/json/read.hpp>
 #include <glaze/json/write.hpp>
 #include <iostream>
@@ -34,13 +34,14 @@ using namespace draconis::utils::types;
 using namespace draconis::core::system;
 using namespace draconis::services::weather;
 using namespace draconis::services::packages;
+using namespace draconis::utils::cache;
 using enum draconis::utils::error::DracErrorCode;
 
-using GlzArray   = glz::json_t::array_t;
-using GlzJson    = glz::json_t;
-using GlzObject  = glz::json_t::object_t;
+using GlzArray   = glz::generic::array_t;
+using GlzJson    = glz::generic;
+using GlzObject  = glz::generic::object_t;
 using GlzRawJson = glz::raw_json;
-using GlzVal     = glz::json_t::val_t;
+using GlzVal     = glz::generic::val_t;
 
 struct ToolResponse {
   GlzJson result;
@@ -274,8 +275,8 @@ namespace {
   using NoParamToolHandler = Fn<ToolResponse()>;
 
   fn GetCacheManager() -> CacheManager& {
-    static CacheManager CacheManager;
-    return CacheManager;
+    static CacheManager s_cacheManager;
+    return s_cacheManager;
   }
 
   template <typename T>

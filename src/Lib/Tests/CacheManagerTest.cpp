@@ -29,8 +29,8 @@ using namespace std::chrono_literals;
 class CacheManagerTest : public Test {
  protected:
   // NOLINTBEGIN(*-non-private-member-variables-in-classes)
-  fs::path      m_testDir;
-  Result<PCStr> m_originalHome;
+  fs::path       m_testDir;
+  Result<String> m_originalHome;
   // NOLINTEND(*-non-private-member-variables-in-classes)
 
   fn SetUp() -> Unit override {
@@ -64,7 +64,7 @@ class CacheManagerTest : public Test {
   fn TearDown() -> Unit override {
     // Restore original environment
     if (m_originalHome)
-      env::SetEnv("HOME", *m_originalHome);
+      env::SetEnv("HOME", m_originalHome->c_str());
     else
       env::UnsetEnv("HOME");
 

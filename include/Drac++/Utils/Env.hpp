@@ -79,7 +79,7 @@ namespace draconis::utils::env {
    * @return A Result containing the value of the environment variable.
    */
   template <typename CharT>
-  [[nodiscard]] inline fn GetEnv(const CharT* name) -> Result<std::basic_string<CharT>> {
+  [[nodiscard]] inline fn GetEnv(const CharT* name) -> types::Result<std::basic_string<CharT>> {
     static_assert(std::is_same_v<CharT, char>, "Only char is supported on POSIX systems");
 
     const CharT* value = std::getenv(name);
@@ -97,7 +97,7 @@ namespace draconis::utils::env {
    * @param value The value to set the environment variable to.
    */
   template <typename CharT>
-  inline fn SetEnv(const CharT* name, const CharT* value) -> Unit {
+  inline fn SetEnv(const CharT* name, const CharT* value) -> types::Unit {
     static_assert(std::is_same_v<CharT, char>, "Only char is supported on POSIX systems");
     setenv(name, value, 1);
   }
@@ -108,7 +108,7 @@ namespace draconis::utils::env {
    * @param name The name of the environment variable to unset.
    */
   template <typename CharT>
-  inline fn UnsetEnv(const CharT* name) -> Unit {
+  inline fn UnsetEnv(const CharT* name) -> types::Unit {
     static_assert(std::is_same_v<CharT, char>, "Only char is supported on POSIX systems");
     unsetenv(name);
   }

@@ -216,7 +216,7 @@ namespace {
 
   #if DRAC_USE_XCB
   fn GetX11WindowManager() -> Result<String> {
-    using namespace XCB;
+    using namespace xcb;
     using namespace matchit;
     using enum ConnError;
 
@@ -300,7 +300,7 @@ namespace {
   }
 
   fn GetX11Displays() -> Result<Vec<DisplayInfo>> {
-    using namespace XCB;
+    using namespace xcb;
 
     DisplayGuard conn;
     if (!conn)
@@ -398,7 +398,7 @@ namespace {
   }
 
   fn GetX11PrimaryDisplay() -> Result<DisplayInfo> {
-    using namespace XCB;
+    using namespace xcb;
 
     DisplayGuard conn;
     if (!conn)
@@ -476,7 +476,7 @@ namespace {
 
   #if DRAC_USE_WAYLAND
   fn GetWaylandCompositor() -> Result<String> {
-    const Wayland::DisplayGuard display;
+    const wl::DisplayGuard display;
 
     if (!display)
       ERR(ApiUnavailable, "Failed to connect to display (is Wayland running?)");
@@ -547,21 +547,21 @@ namespace {
   }
 
   fn GetWaylandDisplays() -> Result<Vec<DisplayInfo>> {
-    const Wayland::DisplayGuard display;
+    const wl::DisplayGuard display;
     if (!display)
       ERR(ApiUnavailable, "Failed to connect to Wayland display");
 
-    Wayland::DisplayManager manager(display.get());
+    wl::DisplayManager manager(display.get());
     return manager.getOutputs();
   }
 
   fn GetWaylandPrimaryDisplay() -> Result<DisplayInfo> {
-    const Wayland::DisplayGuard display;
+    const wl::DisplayGuard display;
 
     if (!display)
       ERR(ApiUnavailable, "Failed to connect to Wayland display");
 
-    Wayland::DisplayManager manager(display.get());
+    wl::DisplayManager manager(display.get());
     DisplayInfo             primaryDisplay = manager.getPrimary();
 
     if (primaryDisplay.resolution.width == 0 && primaryDisplay.resolution.height == 0)
@@ -742,7 +742,7 @@ namespace draconis::core::system {
     if constexpr (!DRAC_ENABLE_NOWPLAYING)
       ERR(NotSupported, "Now Playing API disabled");
 
-    using namespace DBus;
+    using namespace dbus;
 
     Result<Connection> connectionResult = Connection::busGet(DBUS_BUS_SESSION);
     if (!connectionResult)
@@ -883,7 +883,7 @@ namespace draconis::core::system {
 
   fn GetDesktopEnvironment(CacheManager& cache) -> Result<String> {
     return cache.getOrSet<String>("linux_desktop_environment", []() -> Result<String> {
-      Result<PCStr> xdgEnvResult = GetEnv("XDG_CURRENT_DESKTOP");
+      Result<String> xdgEnvResult = GetEnv("XDG_CURRENT_DESKTOP");
 
       if (xdgEnvResult) {
         String xdgDesktopSz = String(*xdgEnvResult);
@@ -894,7 +894,7 @@ namespace draconis::core::system {
         return xdgDesktopSz;
       }
 
-      Result<PCStr> desktopSessionResult = GetEnv("DESKTOP_SESSION");
+      Result<String> desktopSessionResult = GetEnv("DESKTOP_SESSION");
 
       if (desktopSessionResult)
         return *desktopSessionResult;
