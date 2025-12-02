@@ -65,9 +65,10 @@ namespace {
 
   namespace constants {
     // Registry keys for Windows version information
-    constexpr PWCStr PRODUCT_NAME    = L"ProductName";
-    constexpr PWCStr DISPLAY_VERSION = L"DisplayVersion";
-    constexpr PWCStr SYSTEM_FAMILY   = L"SystemFamily";
+    constexpr PWCStr PRODUCT_NAME        = L"ProductName";
+    constexpr PWCStr DISPLAY_VERSION     = L"DisplayVersion";
+    constexpr PWCStr SYSTEM_FAMILY       = L"SystemFamily";
+    constexpr PWCStr SYSTEM_PRODUCT_NAME = L"SystemProductName";
 
     // clang-format off
     constexpr Array<Pair<StringView, StringView>, 5> windowsShellMap = {{
@@ -760,17 +761,22 @@ namespace draconis::core::system {
 
   fn GetHost(CacheManager& cache) -> Result<String> {
     return cache.getOrSet<String>("windows_host", draconis::utils::cache::CachePolicy::neverExpire(), []() -> Result<String> {
-      // See the RegistryCache class for how the registry keys are retrieved.
-      const RegistryCache& registry = RegistryCache::getInstance();
+      // Read from BIOS registry key which contains system product information
+      HKEY biosKey = nullptr;
 
-      HKEY hardwareConfigKey = registry.getHardwareConfigKey();
+      if (RegOpenKeyExW(HKEY_LOCAL_MACHINE, L"HARDWARE\\DESCRIPTION\\System\\BIOS", 0, KEY_READ, &biosKey) != ERROR_SUCCESS)
+        ERR(NotFound, "Failed to open BIOS registry key");
 
-      if (!hardwareConfigKey)
-        ERR(NotFound, "Failed to open registry key");
+      RegistryKey biosKeyGuard(biosKey);
 
-      WString systemFamily = TRY(GetRegistryValue(hardwareConfigKey, SYSTEM_FAMILY));
+      // Try SystemFamily first (e.g., "ASUS TUF Gaming F15"), then fall back to SystemProductName
+      if (Result<WString> systemFamily = GetRegistryValue(biosKey, SYSTEM_FAMILY); systemFamily)
+        return ConvertWStringToUTF8(*systemFamily);
 
-      return ConvertWStringToUTF8(systemFamily);
+      if (Result<WString> productName = GetRegistryValue(biosKey, SYSTEM_PRODUCT_NAME); productName)
+        return ConvertWStringToUTF8(*productName);
+
+      ERR(NotFound, "Failed to get system family or product name from BIOS registry");
     });
   }
 

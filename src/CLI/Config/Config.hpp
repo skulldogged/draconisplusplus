@@ -32,7 +32,7 @@
 #include <Drac++/Utils/Types.hpp>
 
 namespace draconis::config {
-  enum class LogoProtocol {
+  enum class LogoProtocol : draconis::utils::types::u8 {
     Kitty,
     KittyDirect,
   };
@@ -217,7 +217,7 @@ namespace draconis::config {
       match(unitsStr)(
         is | "metric"   = [&]() { weather.units = UnitSystem::Metric; },
         is | "imperial" = [&]() { weather.units = UnitSystem::Imperial; },
-        is | _          = [&]() { SET_ERROR("Invalid units: '{}'. Accepted values are 'metric' and 'imperial'.", unitsStr); }
+        is | _          = [&]() { SET_ERROR("Invalid units '{}' in [weather] section. Set 'units = \"metric\"' or 'units = \"imperial\"' in your config file.", unitsStr); }
       );
 
       String provider = tbl["provider"].value_or("openweathermap");
@@ -234,11 +234,11 @@ namespace draconis::config {
               .lon = *locationNode.as_table()->get("lon")->value<double>(),
             };
           },
-          is | _ = [&]() { SET_ERROR("Invalid location format in config. Accepted values are a string (only if using OpenWeatherMap) or a table with 'lat' and 'lon' keys."); }
+          is | _ = [&]() { SET_ERROR("Invalid location format in [weather] section. Use 'location = \"City\"' for OpenWeatherMap, or 'location = {{ lat = 40.7128, lon = -74.0060 }}' for coordinates."); }
         );
         // clang-format on
       } else
-        SET_ERROR("No location provided in config. Accepted values are a string (only if using OpenWeatherMap) or a table with 'lat' and 'lon' keys.");
+        SET_ERROR("Missing 'location' in [weather] section. Add 'location = \"City\"' for OpenWeatherMap, or 'location = {{ lat = 40.7128, lon = -74.0060 }}' for coordinates.");
 
       if (weather.enabled) {
         // clang-format off
@@ -248,22 +248,22 @@ namespace draconis::config {
               const auto& coords = std::get<Coords>(weather.location);
               weather.service = CreateWeatherService(Provider::OpenMeteo, coords, weather.units);
             } else
-              SET_ERROR("OpenMeteo requires coordinates (lat, lon) for location.");
+              SET_ERROR("OpenMeteo requires coordinates in [weather] section. Change to 'location = {{ lat = YOUR_LAT, lon = YOUR_LON }}' instead of a city name.");
           },
           is | "metno" = [&]() {
             if (std::holds_alternative<Coords>(weather.location)) {
               const auto& coords = std::get<Coords>(weather.location);
               weather.service = CreateWeatherService(Provider::MetNo, coords, weather.units);
             } else
-              SET_ERROR("MetNo requires coordinates (lat, lon) for location.");
+              SET_ERROR("MetNo requires coordinates in [weather] section. Change to 'location = {{ lat = YOUR_LAT, lon = YOUR_LON }}' instead of a city name.");
           },
           is | "openweathermap" = [&]() {
             if (weather.apiKey)
               weather.service = CreateWeatherService(Provider::OpenWeatherMap, weather.location,  weather.units, weather.apiKey);
             else
-              SET_ERROR("OpenWeatherMap requires an API key.");
+              SET_ERROR("Missing 'api_key' in [weather] section. Add 'api_key = \"YOUR_API_KEY\"' to use OpenWeatherMap. Get a free key at https://openweathermap.org/api");
           },
-          is | _ = [&]() { SET_ERROR("Unknown weather provider: '{}'. Accepted values are 'openmeteo', 'metno', and 'openweathermap'.", provider); }
+          is | _ = [&]() { SET_ERROR("Unknown weather provider '{}' in [weather] section. Set 'provider = \"openweathermap\"', 'provider = \"openmeteo\"', or 'provider = \"metno\"'.", provider); }
         );
         // clang-format on
       }

@@ -191,7 +191,7 @@ namespace draconis::config {
 
       if constexpr (DRAC_WEATHER_PROVIDER == OpenWeatherMap) {
         if (!cfg.weather.apiKey) {
-          error_log("OpenWeatherMap requires an API key.");
+          error_log("Missing API key for OpenWeatherMap. Set 'DRAC_API_KEY' in your config.hpp or use a different provider (OpenMeteo, MetNo).");
           cfg.weather.enabled = false;
         }
 
@@ -211,7 +211,7 @@ namespace draconis::config {
             cfg.weather.units
           );
         } else {
-          error_log("Precompiled OpenMeteo requires coordinates, but DRAC_LOCATION is not Coords.");
+          error_log("OpenMeteo requires coordinates in config.hpp. Set 'DRAC_LOCATION' to Coords{{ .lat = YOUR_LAT, .lon = YOUR_LON }} instead of a city name.");
           cfg.weather.enabled = false;
         }
       } else if constexpr (DRAC_WEATHER_PROVIDER == MetNo) {
@@ -224,16 +224,16 @@ namespace draconis::config {
             cfg.weather.units
           );
         } else {
-          error_log("Precompiled MetNo requires coordinates, but DRAC_LOCATION is not Coords.");
+          error_log("MetNo requires coordinates in config.hpp. Set 'DRAC_LOCATION' to Coords{{ .lat = YOUR_LAT, .lon = YOUR_LON }} instead of a city name.");
           cfg.weather.enabled = false;
         }
       } else {
-        error_log("Unknown precompiled weather provider specified in DRAC_WEATHER_PROVIDER.");
+        error_log("Unknown weather provider in 'DRAC_WEATHER_PROVIDER'. Use OpenWeatherMap, OpenMeteo, or MetNo.");
         cfg.weather.enabled = false;
       }
 
       if (cfg.weather.enabled && !cfg.weather.service) {
-        error_log("Failed to initialize precompiled weather service for the configured provider.");
+        error_log("Failed to initialize weather service. Check your config.hpp settings for DRAC_WEATHER_PROVIDER, DRAC_LOCATION, and DRAC_API_KEY.");
         cfg.weather.enabled = false;
       }
     }

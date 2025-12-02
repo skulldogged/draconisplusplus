@@ -114,12 +114,12 @@ namespace {
         hasSystemInfo = true;
       }
 
-      if (auto operSys = data.find("operating_system"); operSys != data.end() && !operSys->second.empty()) {
+      if (auto operSys = data.find("os"); operSys != data.end() && !operSys->second.empty()) {
         systemSection += std::format("- **OS**: {}\n", operSys->second);
         hasSystemInfo = true;
       }
 
-      if (auto kernel = data.find("kernel_version"); kernel != data.end() && !kernel->second.empty()) {
+      if (auto kernel = data.find("kernel"); kernel != data.end() && !kernel->second.empty()) {
         systemSection += std::format("- **Kernel**: {}\n", kernel->second);
         hasSystemInfo = true;
       }
@@ -134,22 +134,22 @@ namespace {
       bool   hasHardwareInfo = false;
       String hardwareSection;
 
-      if (auto ram = data.find("memory_info"); ram != data.end() && !ram->second.empty()) {
+      if (auto ram = data.find("ram"); ram != data.end() && !ram->second.empty()) {
         hardwareSection += std::format("- **RAM**: {}\n", ram->second);
         hasHardwareInfo = true;
       }
 
-      if (auto disk = data.find("disk_usage"); disk != data.end() && !disk->second.empty()) {
+      if (auto disk = data.find("disk"); disk != data.end() && !disk->second.empty()) {
         hardwareSection += std::format("- **Disk**: {}\n", disk->second);
         hasHardwareInfo = true;
       }
 
-      if (auto cpu = data.find("cpu_model"); cpu != data.end() && !cpu->second.empty()) {
+      if (auto cpu = data.find("cpu"); cpu != data.end() && !cpu->second.empty()) {
         hardwareSection += std::format("- **CPU**: {}\n", cpu->second);
         hasHardwareInfo = true;
       }
 
-      if (auto gpu = data.find("gpu_model"); gpu != data.end() && !gpu->second.empty()) {
+      if (auto gpu = data.find("gpu"); gpu != data.end() && !gpu->second.empty()) {
         hardwareSection += std::format("- **GPU**: {}\n", gpu->second);
         hasHardwareInfo = true;
       }
@@ -174,7 +174,7 @@ namespace {
         hasSoftwareInfo = true;
       }
 
-      if (auto packages = data.find("package_count"); packages != data.end() && !packages->second.empty()) {
+      if (auto packages = data.find("packages"); packages != data.end() && !packages->second.empty()) {
         try {
           unsigned long long packageCount = std::stoull(packages->second);
           if (packageCount > 0) {
@@ -196,12 +196,12 @@ namespace {
       bool   hasEnvironmentInfo = false;
       String environmentSection;
 
-      if (auto desktop = data.find("desktop_environment"); desktop != data.end() && !desktop->second.empty()) {
+      if (auto desktop = data.find("de"); desktop != data.end() && !desktop->second.empty()) {
         environmentSection += std::format("- **Desktop Environment**: {}\n", desktop->second);
         hasEnvironmentInfo = true;
       }
 
-      if (auto winMgr = data.find("window_manager"); winMgr != data.end() && !winMgr->second.empty()) {
+      if (auto winMgr = data.find("wm"); winMgr != data.end() && !winMgr->second.empty()) {
         environmentSection += std::format("- **Window Manager**: {}\n", winMgr->second);
         hasEnvironmentInfo = true;
       }
@@ -213,8 +213,8 @@ namespace {
       }
 
       // Now Playing section (always show if data present)
-      if (auto artist = data.find("now_playing_artist"); artist != data.end())
-        if (auto title = data.find("now_playing_title"); title != data.end()) {
+      if (auto artist = data.find("playing_artist"); artist != data.end())
+        if (auto title = data.find("playing_title"); title != data.end()) {
           String artistStr = artist->second.empty() ? "Unknown Artist" : artist->second;
           String titleStr  = title->second.empty() ? "Unknown Title" : title->second;
           markdown += "## Media\n\n";

@@ -153,104 +153,64 @@ namespace {
       Print(jsonStr);
   }
 
-#if DRAC_ENABLE_PLUGINS
   /**
-   * @brief Convert SystemInfo data to generic Map format for plugins
+   * @brief Print system information in compact single-line format using a template string
+   * @param templateStr Template string with placeholders like {key}
    * @param data System information data
    * @param weather Weather data (if available)
-   * @return Generic data map for plugin consumption
+   *
+   * Placeholders use the format {key} where key matches any field from SystemInfo::toMap().
+   * Common keys: date, host, os, kernel, cpu, gpu, ram, disk, uptime, shell, de, wm, packages, playing
+   * Weather keys (when available): weather, weather_temp, weather_town, weather_desc
    */
-  fn ConvertSystemInfoToMap(
+  fn PrintCompactOutput(
+    const String& templateStr,
+#if DRAC_ENABLE_WEATHER
+    const Result<Report>& weather,
+#endif
     const SystemInfo& data
-  #if DRAC_ENABLE_WEATHER
-    ,
-    const Result<Report>& weather
-  #endif
-  ) -> Map<String, String> {
-    Map<String, String> outputData;
+  ) -> Unit {
+    // Get all system info as a map
+    Map<String, String> infoMap = data.toMap();
 
-    // Basic system info
-    if (data.date)
-      outputData["date"] = *data.date;
-    if (data.host)
-      outputData["host"] = *data.host;
-    if (data.kernelVersion)
-      outputData["kernel_version"] = *data.kernelVersion;
-    if (data.shell)
-      outputData["shell"] = *data.shell;
-    if (data.cpuModel)
-      outputData["cpu_model"] = *data.cpuModel;
-    if (data.cpuCores) {
-      outputData["cpu_cores_physical"] = std::to_string(data.cpuCores->physical);
-      outputData["cpu_cores_logical"]  = std::to_string(data.cpuCores->logical);
-    }
-    if (data.gpuModel)
-      outputData["gpu_model"] = *data.gpuModel;
-    if (data.desktopEnv)
-      outputData["desktop_environment"] = *data.desktopEnv;
-    if (data.windowMgr)
-      outputData["window_manager"] = *data.windowMgr;
-
-    // Operating system info
-    if (data.operatingSystem) {
-      outputData["operating_system"] = std::format("{} {}", data.operatingSystem->name, data.operatingSystem->version);
-      outputData["os_name"]          = data.operatingSystem->name;
-      outputData["os_version"]       = data.operatingSystem->version;
-      if (!data.operatingSystem->id.empty())
-        outputData["os_id"] = data.operatingSystem->id;
-    }
-
-    // Memory and disk info
-    if (data.memInfo) {
-      outputData["memory_info"]        = std::format("{}/{} GB", BytesToGiB(data.memInfo->usedBytes), BytesToGiB(data.memInfo->totalBytes));
-      outputData["memory_used_bytes"]  = std::to_string(data.memInfo->usedBytes);
-      outputData["memory_total_bytes"] = std::to_string(data.memInfo->totalBytes);
-    }
-
-    if (data.diskUsage) {
-      outputData["disk_usage"]       = std::format("{}/{} GB", BytesToGiB(data.diskUsage->usedBytes), BytesToGiB(data.diskUsage->totalBytes));
-      outputData["disk_used_bytes"]  = std::to_string(data.diskUsage->usedBytes);
-      outputData["disk_total_bytes"] = std::to_string(data.diskUsage->totalBytes);
-    }
-
-    // Uptime
-    if (data.uptime) {
-      outputData["uptime"]         = std::format("{}", SecondsToFormattedDuration { *data.uptime });
-      outputData["uptime_seconds"] = std::to_string(data.uptime->count());
-    }
-
-    // Package count
-  #if DRAC_ENABLE_PACKAGECOUNT
-    if (data.packageCount && *data.packageCount > 0)
-      outputData["package_count"] = std::to_string(*data.packageCount);
-  #endif
-
-    // Now playing
-  #if DRAC_ENABLE_NOWPLAYING
-    if (data.nowPlaying) {
-      outputData["now_playing_artist"] = data.nowPlaying->artist.value_or("Unknown Artist");
-      outputData["now_playing_title"]  = data.nowPlaying->title.value_or("Unknown Title");
-    }
-  #endif
-
-    // Weather
-  #if DRAC_ENABLE_WEATHER
+    // Add weather data if available
+#if DRAC_ENABLE_WEATHER
     if (weather) {
       const auto& [temperature, townName, description] = *weather;
-      outputData["weather_temperature"]                = std::to_string(temperature);
       if (townName)
-        outputData["weather_town"] = *townName;
-      outputData["weather_description"] = description;
+        infoMap["weather"] = std::format("{}° in {}", std::lround(temperature), *townName);
+      else
+        infoMap["weather"] = std::format("{}°, {}", std::lround(temperature), description);
+      infoMap["weather_temp"] = std::to_string(std::lround(temperature));
+      if (townName)
+        infoMap["weather_town"] = *townName;
+      infoMap["weather_desc"] = description;
     }
-  #endif
+#endif
 
-    // Plugin data
-    for (const auto& [key, value] : data.pluginData)
-      outputData[std::format("plugin_{}", key)] = value;
+    // Generic placeholder substitution: replace all {key} with values from the map
+    String output = templateStr;
+    for (const auto& [key, value] : infoMap) {
+      String placeholder = std::format("{{{}}}", key);
+      usize  pos         = 0;
+      while ((pos = output.find(placeholder, pos)) != String::npos)
+        output.replace(pos, placeholder.length(), value);
+    }
 
-    return outputData;
+    // Remove any remaining unmatched placeholders (keys that weren't in the map)
+    usize pos = 0;
+    while ((pos = output.find('{', pos)) != String::npos) {
+      usize endPos = output.find('}', pos);
+      if (endPos != String::npos)
+        output.replace(pos, endPos - pos + 1, "");
+      else
+        break;
+    }
+
+    Println("{}", output);
   }
 
+#if DRAC_ENABLE_PLUGINS
   fn FormatOutputViaPlugin(
     const String& formatName,
   #if DRAC_ENABLE_WEATHER
@@ -259,7 +219,6 @@ namespace {
     const SystemInfo& data
   ) -> Unit {
     using draconis::core::plugin::GetPluginManager;
-    using draconis::utils::types::Map, draconis::utils::types::String;
 
     auto& pluginManager = GetPluginManager();
     if (!pluginManager.isInitialized()) {
@@ -289,14 +248,19 @@ namespace {
       return;
     }
 
-    // Convert SystemInfo data to generic Map format using dedicated function
-    Map<String, String> outputData = ConvertSystemInfoToMap(
-      data
+    // Get system info as a map (single source of truth)
+    Map<String, String> outputData = data.toMap();
+
+    // Add weather data if available
   #if DRAC_ENABLE_WEATHER
-      ,
-      weather
+    if (weather) {
+      const auto& [temperature, townName, description] = *weather;
+      outputData["weather_temperature"]                = std::to_string(temperature);
+      if (townName)
+        outputData["weather_town"] = *townName;
+      outputData["weather_description"] = description;
+    }
   #endif
-    );
 
     // Format output using plugin - format name determines the output mode
     auto result = formatPlugin->formatOutput(formatName, outputData);
@@ -444,6 +408,7 @@ fn main(const i32 argc, CStr* argv[]) -> i32 try {
     jsonOutput,
     prettyJson,
     outputFormat,
+    compactFormat,
     language,
     logoPath,
     logoProtocol,
@@ -451,7 +416,7 @@ fn main(const i32 argc, CStr* argv[]) -> i32 try {
     logoHeight,
     listPlugins,
     pluginInfo
-  ] = Tuple(false, false, false, false, false, false, String(""), String(""), String(""), String(""), u32(0), u32(0), false, String(""));
+  ] = Tuple(false, false, false, false, false, false, String(""), String(""), String(""), String(""), String(""), u32(0), u32(0), false, String(""));
   // clang-format on
 
   {
@@ -506,7 +471,16 @@ fn main(const i32 argc, CStr* argv[]) -> i32 try {
 
     parser
       .addArguments("--format")
-      .help("Output system information in the specified format (e.g., 'markdown', 'json').")
+      .help("Output system information in the specified format (e.g., 'markdown', 'json', 'yaml').")
+      .defaultValue(String(""));
+
+    parser
+      .addArguments("--compact")
+      .help(
+        "Output a single line using a template string (e.g., '{host} | {cpu} | {ram}'). "
+        "Available placeholders: {date}, {host}, {os}, {kernel}, {cpu}, {gpu}, {ram}, {disk}, "
+        "{uptime}, {shell}, {de}, {wm}, {packages}, {weather}, {playing}."
+      )
       .defaultValue(String(""));
 
     parser
@@ -553,6 +527,7 @@ fn main(const i32 argc, CStr* argv[]) -> i32 try {
     jsonOutput     = parser.get<bool>("--json");
     prettyJson     = parser.get<bool>("--pretty");
     outputFormat   = parser.get<String>("--format");
+    compactFormat  = parser.get<String>("--compact");
     language       = parser.get<String>("--lang");
     logoPath       = parser.get<String>("--logo-path");
     logoProtocol   = parser.get<String>("--logo-protocol");
@@ -609,7 +584,13 @@ fn main(const i32 argc, CStr* argv[]) -> i32 try {
 
     if (!logoProtocol.empty()) {
       String protoLower = logoProtocol;
-      std::ranges::transform(protoLower, protoLower.begin(), [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
+      std::ranges::transform(
+        protoLower,
+        protoLower.begin(),
+        [](unsigned char chr) -> char {
+          return static_cast<char>(std::tolower(chr));
+        }
+      );
 
       config.logo.protocol = protoLower == "kitty-direct"
         ? config::LogoProtocol::KittyDirect
@@ -652,11 +633,11 @@ fn main(const i32 argc, CStr* argv[]) -> i32 try {
     Result<Report> weatherReport;
 
     if (config.weather.enabled && config.weather.service == nullptr)
-      weatherReport = Err({ Other, "Weather service is not configured" });
+      weatherReport = Err({ Other, "Weather service not configured. Check your [weather] section: ensure 'location', 'provider', and 'api_key' (for OpenWeatherMap) are set correctly." });
     else if (config.weather.enabled)
       weatherReport = config.weather.service->getWeatherInfo();
     else
-      weatherReport = Err({ ApiUnavailable, "Weather is disabled" });
+      weatherReport = Err({ ApiUnavailable, "Weather is disabled. Set 'enabled = true' in [weather] section to enable." });
 #endif
 
     if (doctorMode) {
@@ -682,7 +663,15 @@ fn main(const i32 argc, CStr* argv[]) -> i32 try {
 #else
       Print("Plugin output formats require plugin support to be enabled.\n");
 #endif
-    } else if (jsonOutput)
+    } else if (!compactFormat.empty())
+      PrintCompactOutput(
+        compactFormat,
+#if DRAC_ENABLE_WEATHER
+        weatherReport,
+#endif
+        data
+      );
+    else if (jsonOutput)
       PrintJsonOutput(
 #if DRAC_ENABLE_WEATHER
         weatherReport,

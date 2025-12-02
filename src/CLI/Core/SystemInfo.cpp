@@ -124,6 +124,90 @@ namespace draconis::core::system {
     debug_log("SystemInfo: Construction complete");
   }
 
+  fn SystemInfo::toMap() const -> Map<String, String> {
+    Map<String, String> data;
+
+    // Basic system info
+    if (date)
+      data["date"] = *date;
+    if (host)
+      data["host"] = *host;
+    if (kernelVersion)
+      data["kernel"] = *kernelVersion;
+    if (shell)
+      data["shell"] = *shell;
+
+    // CPU info
+    if (cpuModel)
+      data["cpu"] = *cpuModel;
+    if (cpuCores) {
+      data["cpu_cores_physical"] = std::to_string(cpuCores->physical);
+      data["cpu_cores_logical"]  = std::to_string(cpuCores->logical);
+    }
+
+    // GPU info
+    if (gpuModel)
+      data["gpu"] = *gpuModel;
+
+    // Desktop environment
+    if (desktopEnv)
+      data["de"] = *desktopEnv;
+    if (windowMgr)
+      data["wm"] = *windowMgr;
+
+    // Operating system info
+    if (operatingSystem) {
+      data["os"]         = std::format("{} {}", operatingSystem->name, operatingSystem->version);
+      data["os_name"]    = operatingSystem->name;
+      data["os_version"] = operatingSystem->version;
+      if (!operatingSystem->id.empty())
+        data["os_id"] = operatingSystem->id;
+    }
+
+    // Memory info
+    if (memInfo) {
+      data["ram"]                = std::format("{}/{}", BytesToGiB(memInfo->usedBytes), BytesToGiB(memInfo->totalBytes));
+      data["memory_used_bytes"]  = std::to_string(memInfo->usedBytes);
+      data["memory_total_bytes"] = std::to_string(memInfo->totalBytes);
+    }
+
+    // Disk info
+    if (diskUsage) {
+      data["disk"]             = std::format("{}/{}", BytesToGiB(diskUsage->usedBytes), BytesToGiB(diskUsage->totalBytes));
+      data["disk_used_bytes"]  = std::to_string(diskUsage->usedBytes);
+      data["disk_total_bytes"] = std::to_string(diskUsage->totalBytes);
+    }
+
+    // Uptime
+    if (uptime) {
+      data["uptime"]         = std::format("{}", SecondsToFormattedDuration { *uptime });
+      data["uptime_seconds"] = std::to_string(uptime->count());
+    }
+
+    // Package count
+#if DRAC_ENABLE_PACKAGECOUNT
+    if (packageCount && *packageCount > 0)
+      data["packages"] = std::to_string(*packageCount);
+#endif
+
+    // Now playing
+#if DRAC_ENABLE_NOWPLAYING
+    if (nowPlaying) {
+      data["playing"]        = std::format("{} - {}", nowPlaying->artist.value_or("Unknown Artist"), nowPlaying->title.value_or("Unknown Title"));
+      data["playing_artist"] = nowPlaying->artist.value_or("Unknown Artist");
+      data["playing_title"]  = nowPlaying->title.value_or("Unknown Title");
+    }
+#endif
+
+    // Plugin data
+#if DRAC_ENABLE_PLUGINS
+    for (const auto& [key, value] : pluginData)
+      data[std::format("plugin_{}", key)] = value;
+#endif
+
+    return data;
+  }
+
 #if DRAC_ENABLE_PLUGINS
   // Proper cache wrapper that uses the full CacheManager infrastructure with TTL support
   class CacheWrapper : public IPluginCache {

@@ -43,9 +43,18 @@ namespace draconis::utils::logging {
    */
   inline fn WriteToConsole(const types::StringView text, bool useStderr = false) -> void {
 #ifdef _WIN32
-    HANDLE hConsole = GetStdHandle(useStderr ? STD_ERROR_HANDLE : STD_OUTPUT_HANDLE);
-    if (hConsole != INVALID_HANDLE_VALUE) {
-      WriteConsoleA(hConsole, text.data(), static_cast<DWORD>(text.size()), nullptr, nullptr);
+    HANDLE hOutput = GetStdHandle(useStderr ? STD_ERROR_HANDLE : STD_OUTPUT_HANDLE);
+    if (hOutput != INVALID_HANDLE_VALUE) {
+      // Check if output is redirected (not a console)
+      // GetConsoleMode fails for redirected handles (files, pipes)
+      DWORD consoleMode = 0;
+      if (GetConsoleMode(hOutput, &consoleMode)) {
+        // Output is a console - use WriteConsoleA for proper Unicode/encoding support
+        WriteConsoleA(hOutput, text.data(), static_cast<DWORD>(text.size()), nullptr, nullptr);
+      } else {
+        // Output is redirected (file/pipe) - use WriteFile for proper redirection support
+        WriteFile(hOutput, text.data(), static_cast<DWORD>(text.size()), nullptr, nullptr);
+      }
       return;
     }
 #endif

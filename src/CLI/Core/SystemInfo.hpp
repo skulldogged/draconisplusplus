@@ -87,13 +87,22 @@ namespace draconis::core::system {
       types::Vec<types::String> names;
       names.reserve(pluginData.size());
 
-      for (const auto& [name, value] : pluginData) {
+      for (const auto& [name, value] : pluginData)
         names.push_back(name);
-      }
 
       return names;
     }
 #endif
+
+    /**
+     * @brief Convert all system info to a flat key-value map
+     * @details This is the single source of truth for all system info data.
+     * Used by compact output, plugins, and any other consumers that need
+     * a generic map representation. Adding new fields here automatically
+     * makes them available everywhere.
+     * @return Map of field names to their string values
+     */
+    [[nodiscard]] fn toMap() const -> types::Map<types::String, types::String>;
 
     explicit SystemInfo(utils::cache::CacheManager& cache, const Config& config);
 
@@ -160,33 +169,33 @@ namespace glz {
     using T = draconis::core::system::JsonInfo;
 
     // clang-format off
-  static constexpr detail::Object value = object(
+    static constexpr detail::Object value = object(
 #if DRAC_ENABLE_PACKAGECOUNT
-    "packageCount",    &T::packageCount,
+      "packageCount",    &T::packageCount,
 #endif
 #if DRAC_ENABLE_NOWPLAYING
-    "nowPlaying",      &T::nowPlaying,
+      "nowPlaying",      &T::nowPlaying,
 #endif
 #if DRAC_ENABLE_WEATHER
-    "weather",         &T::weather,
+      "weather",         &T::weather,
 #endif
 #if DRAC_ENABLE_PLUGINS
-    "pluginFields",    &T::pluginFields,
+      "pluginFields",    &T::pluginFields,
 #endif
-    "date",            &T::date,
-    "host",            &T::host,
-    "kernelVersion",   &T::kernelVersion,
-    "operatingSystem", &T::operatingSystem,
-    "memInfo",         &T::memInfo,
-    "desktopEnv",      &T::desktopEnv,
-    "windowMgr",       &T::windowMgr,
-    "diskUsage",       &T::diskUsage,
-    "shell",           &T::shell,
-    "cpuModel",        &T::cpuModel,
-    "cpuCores",        &T::cpuCores,
-    "gpuModel",        &T::gpuModel,
-    "uptimeSeconds",   &T::uptimeSeconds
-  );
+      "date",            &T::date,
+      "host",            &T::host,
+      "kernelVersion",   &T::kernelVersion,
+      "operatingSystem", &T::operatingSystem,
+      "memInfo",         &T::memInfo,
+      "desktopEnv",      &T::desktopEnv,
+      "windowMgr",       &T::windowMgr,
+      "diskUsage",       &T::diskUsage,
+      "shell",           &T::shell,
+      "cpuModel",        &T::cpuModel,
+      "cpuCores",        &T::cpuCores,
+      "gpuModel",        &T::gpuModel,
+      "uptimeSeconds",   &T::uptimeSeconds
+    );
     // clang-format on
   };
 } // namespace glz

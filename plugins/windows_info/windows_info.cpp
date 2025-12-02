@@ -20,7 +20,6 @@
 #include <Drac++/Utils/Error.hpp>
 
 #ifdef _WIN32
-  #include <cstring>
   #include <shlobj.h>
   #include <string>
   #include <windows.h>
@@ -153,16 +152,17 @@ namespace {
       if (RegOpenKeyExA(HKEY_LOCAL_MACHINE, R"(SOFTWARE\Microsoft\Windows NT\CurrentVersion)", 0, KEY_READ, &hKey) != ERROR_SUCCESS)
         ERR(IoError, "Failed to open registry key");
 
-      Array<unsigned char, 256> buffer     = {};
-      DWORD                     bufferSize = buffer.size();
-      DWORD                     type       = 0;
+      Array<char, 256> buffer     = {};
+      DWORD            bufferSize = buffer.size();
+      DWORD            type       = 0;
 
-      if (RegQueryValueExA(hKey, "CurrentBuild", nullptr, &type, buffer.data(), &bufferSize) == ERROR_SUCCESS) {
+      // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
+      if (RegQueryValueExA(hKey, "CurrentBuild", nullptr, &type, reinterpret_cast<LPBYTE>(buffer.data()), &bufferSize) == ERROR_SUCCESS) {
         RegCloseKey(hKey);
 
-        Array<char, 256> charBuffer = {};
-        std::memcpy(charBuffer.data(), buffer.data(), bufferSize);
-        return String(charBuffer.data(), bufferSize);
+        // Use strlen to get the actual string length (excluding null terminator)
+        // since bufferSize from registry API includes the null byte
+        return String(buffer.data());
       }
 
       RegCloseKey(hKey);
