@@ -30,8 +30,8 @@ namespace fs = std::filesystem;
 using namespace draconis::utils::types;
 using draconis::utils::env::GetEnv;
 
-namespace {
-  fn GetConfigPath() -> fs::path {
+namespace draconis::config {
+  fn Config::getConfigPath() -> fs::path {
     Vec<fs::path> possiblePaths;
 
   #ifdef _WIN32
@@ -74,6 +74,9 @@ namespace {
     warn_log("Could not determine a preferred config path. Falling back to './config.toml'");
     return fs::path(".") / "config.toml";
   }
+} // namespace draconis::config
+
+namespace {
 
   fn CreateDefaultConfig(const fs::path& configPath) -> bool {
     try {
@@ -255,7 +258,7 @@ namespace draconis::config {
     return cfg;
 #else
     try {
-      const fs::path configPath = GetConfigPath();
+      const fs::path configPath = Config::getConfigPath();
 
       std::error_code errc;
 

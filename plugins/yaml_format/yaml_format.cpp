@@ -14,21 +14,17 @@
  * it exports factory functions in a namespace instead of extern "C".
  */
 
-// ryml uses 'fn' as a parameter name, but this project defines 'fn' as a macro for 'auto'
-// We need to temporarily undefine it while including ryml headers
+// ryml uses 'fn' as a parameter name,
+// but we use 'fn' as a macro for 'auto'
 #ifdef fn
-  #define DRAC_FN_WAS_DEFINED
   #undef fn
 #endif
 
-// Use the single-header amalgamated version of rapidyaml
-// Define RYML_SINGLE_HDR_DEFINE_NOW to enable function definitions
 #define RYML_SINGLE_HDR_DEFINE_NOW
 #include "ryml_all.hpp"
 
-#ifdef DRAC_FN_WAS_DEFINED
+#ifndef fn
   #define fn auto
-  #undef DRAC_FN_WAS_DEFINED
 #endif
 
 #include <Drac++/Core/Plugin.hpp>

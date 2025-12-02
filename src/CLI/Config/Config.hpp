@@ -2,6 +2,7 @@
 
 #if !DRAC_PRECOMPILED_CONFIG
   #include <cctype>                    // std::tolower
+  #include <filesystem>                // std::filesystem::path
   #include <memory>                    // std::{make_unique, unique_ptr}
   #include <ranges>                    // std::ranges::transform
   #include <toml++/impl/node.hpp>      // toml::node
@@ -355,5 +356,13 @@ namespace draconis::config {
      * object representing the configuration file path.
      */
     static fn getInstance() -> Config;
+
+#if !DRAC_PRECOMPILED_CONFIG
+    /**
+     * @brief Gets the path to the configuration file without loading it.
+     * @return The path to the configuration file.
+     */
+    static fn getConfigPath() -> std::filesystem::path;
+#endif
   };
 } // namespace draconis::config

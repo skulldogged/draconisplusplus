@@ -11,8 +11,6 @@
 
 #include <algorithm>
 #include <cctype>
-#include <glaze/glaze.hpp>
-#include <magic_enum/magic_enum.hpp>
 #include <ranges>
 
 #include <Drac++/Utils/ArgumentParser.hpp>
@@ -22,6 +20,7 @@
 #include <Drac++/Utils/Logging.hpp>
 #include <Drac++/Utils/Types.hpp>
 
+#include "CLI.hpp"
 #include "Config/Config.hpp"
 #include "Core/SystemInfo.hpp"
 #include "UI/UI.hpp"
@@ -32,367 +31,7 @@ using namespace draconis::utils::localization;
 using namespace draconis::core::system;
 using namespace draconis::config;
 using namespace draconis::ui;
-
-namespace {
-  fn PrintDoctorReport(
-#if DRAC_ENABLE_WEATHER
-    const Result<Report>& weather,
-#endif
-    const SystemInfo& data
-  ) -> Unit {
-    using draconis::utils::error::DracError;
-
-    Array<Option<Pair<String, DracError>>, 10 + DRAC_ENABLE_PACKAGECOUNT + DRAC_ENABLE_NOWPLAYING + DRAC_ENABLE_WEATHER>
-      failures {};
-
-    usize failureCount = 0;
-
-#define DRAC_CHECK(expr, label) \
-  if (!(expr))                  \
-  failures.at(failureCount++) = { label, (expr).error() }
-
-    DRAC_CHECK(data.date, "Date");
-    DRAC_CHECK(data.host, "Host");
-    DRAC_CHECK(data.kernelVersion, "KernelVersion");
-    DRAC_CHECK(data.operatingSystem, "OperatingSystem");
-    DRAC_CHECK(data.memInfo, "MemoryInfo");
-    DRAC_CHECK(data.desktopEnv, "DesktopEnvironment");
-    DRAC_CHECK(data.windowMgr, "WindowManager");
-    DRAC_CHECK(data.diskUsage, "DiskUsage");
-    DRAC_CHECK(data.shell, "Shell");
-    DRAC_CHECK(data.uptime, "Uptime");
-
-    if constexpr (DRAC_ENABLE_PACKAGECOUNT)
-      DRAC_CHECK(data.packageCount, "PackageCount");
-
-    if constexpr (DRAC_ENABLE_NOWPLAYING)
-      DRAC_CHECK(data.nowPlaying, "NowPlaying");
-
-    if constexpr (DRAC_ENABLE_WEATHER)
-      DRAC_CHECK(weather, "Weather");
-
-#undef DRAC_CHECK
-
-    if (failureCount == 0)
-      Println("All readouts were successful!");
-    else {
-      Println(
-        "Out of {} readouts, {} failed.\n",
-        failures.size(),
-        failureCount
-      );
-
-      for (const Option<Pair<String, DracError>>& failure : failures)
-        if (failure)
-          Println(
-            R"(Readout "{}" failed: {} ({}))",
-            failure->first,
-            failure->second.message,
-            magic_enum::enum_name(failure->second.code)
-          );
-    }
-  }
-
-  fn PrintJsonOutput(
-#if DRAC_ENABLE_WEATHER
-    const Result<Report>& weather,
-#endif
-    const SystemInfo& data,
-    bool              prettyJson
-  ) -> Unit {
-    using draconis::core::system::JsonInfo;
-
-    JsonInfo output;
-
-#define DRAC_SET_OPTIONAL(field) \
-  if (data.field)                \
-  output.field = *data.field
-
-    DRAC_SET_OPTIONAL(date);
-    DRAC_SET_OPTIONAL(host);
-    DRAC_SET_OPTIONAL(kernelVersion);
-    DRAC_SET_OPTIONAL(operatingSystem);
-    DRAC_SET_OPTIONAL(memInfo);
-    DRAC_SET_OPTIONAL(desktopEnv);
-    DRAC_SET_OPTIONAL(windowMgr);
-    DRAC_SET_OPTIONAL(diskUsage);
-    DRAC_SET_OPTIONAL(shell);
-    DRAC_SET_OPTIONAL(cpuModel);
-    DRAC_SET_OPTIONAL(cpuCores);
-    DRAC_SET_OPTIONAL(gpuModel);
-
-    if (data.uptime)
-      output.uptimeSeconds = data.uptime->count();
-
-    if constexpr (DRAC_ENABLE_PACKAGECOUNT)
-      DRAC_SET_OPTIONAL(packageCount);
-
-    if constexpr (DRAC_ENABLE_NOWPLAYING)
-      DRAC_SET_OPTIONAL(nowPlaying);
-
-    if constexpr (DRAC_ENABLE_WEATHER)
-      if (weather)
-        output.weather = *weather;
-
-#if DRAC_ENABLE_PLUGINS
-    output.pluginFields = data.pluginData;
-#endif
-
-#undef DRAC_SET_OPTIONAL
-
-    String jsonStr;
-
-    glz::error_ctx errorContext =
-      prettyJson
-      ? glz::write<glz::opts { .prettify = true }>(output, jsonStr)
-      : glz::write_json(output, jsonStr);
-
-    if (errorContext)
-      Print("Failed to write JSON output: {}", glz::format_error(errorContext, jsonStr));
-    else
-      Print(jsonStr);
-  }
-
-  /**
-   * @brief Print system information in compact single-line format using a template string
-   * @param templateStr Template string with placeholders like {key}
-   * @param data System information data
-   * @param weather Weather data (if available)
-   *
-   * Placeholders use the format {key} where key matches any field from SystemInfo::toMap().
-   * Common keys: date, host, os, kernel, cpu, gpu, ram, disk, uptime, shell, de, wm, packages, playing
-   * Weather keys (when available): weather, weather_temp, weather_town, weather_desc
-   */
-  fn PrintCompactOutput(
-    const String& templateStr,
-#if DRAC_ENABLE_WEATHER
-    const Result<Report>& weather,
-#endif
-    const SystemInfo& data
-  ) -> Unit {
-    // Get all system info as a map
-    Map<String, String> infoMap = data.toMap();
-
-    // Add weather data if available
-#if DRAC_ENABLE_WEATHER
-    if (weather) {
-      const auto& [temperature, townName, description] = *weather;
-      if (townName)
-        infoMap["weather"] = std::format("{}° in {}", std::lround(temperature), *townName);
-      else
-        infoMap["weather"] = std::format("{}°, {}", std::lround(temperature), description);
-      infoMap["weather_temp"] = std::to_string(std::lround(temperature));
-      if (townName)
-        infoMap["weather_town"] = *townName;
-      infoMap["weather_desc"] = description;
-    }
-#endif
-
-    // Generic placeholder substitution: replace all {key} with values from the map
-    String output = templateStr;
-    for (const auto& [key, value] : infoMap) {
-      String placeholder = std::format("{{{}}}", key);
-      usize  pos         = 0;
-      while ((pos = output.find(placeholder, pos)) != String::npos)
-        output.replace(pos, placeholder.length(), value);
-    }
-
-    // Remove any remaining unmatched placeholders (keys that weren't in the map)
-    usize pos = 0;
-    while ((pos = output.find('{', pos)) != String::npos) {
-      usize endPos = output.find('}', pos);
-      if (endPos != String::npos)
-        output.replace(pos, endPos - pos + 1, "");
-      else
-        break;
-    }
-
-    Println("{}", output);
-  }
-
-#if DRAC_ENABLE_PLUGINS
-  fn FormatOutputViaPlugin(
-    const String& formatName,
-  #if DRAC_ENABLE_WEATHER
-    const Result<Report>& weather,
-  #endif
-    const SystemInfo& data
-  ) -> Unit {
-    using draconis::core::plugin::GetPluginManager;
-
-    auto& pluginManager = GetPluginManager();
-    if (!pluginManager.isInitialized()) {
-      Print("Plugin system not initialized.\n");
-      return;
-    }
-
-    // Get all loaded output format plugins directly
-    auto outputPlugins = pluginManager.getOutputFormatPlugins();
-
-    // Look for a plugin that provides the requested format
-    draconis::core::plugin::IOutputFormatPlugin* formatPlugin = nullptr;
-
-    for (auto* plugin : outputPlugins) {
-      for (const auto& name : plugin->getFormatNames()) {
-        if (name == formatName) {
-          formatPlugin = plugin;
-          break;
-        }
-      }
-      if (formatPlugin)
-        break;
-    }
-
-    if (!formatPlugin) {
-      Print("No plugin found that provides '{}' output format.\n", formatName);
-      return;
-    }
-
-    // Get system info as a map (single source of truth)
-    Map<String, String> outputData = data.toMap();
-
-    // Add weather data if available
-  #if DRAC_ENABLE_WEATHER
-    if (weather) {
-      const auto& [temperature, townName, description] = *weather;
-      outputData["weather_temperature"]                = std::to_string(temperature);
-      if (townName)
-        outputData["weather_town"] = *townName;
-      outputData["weather_description"] = description;
-    }
-  #endif
-
-    // Format output using plugin - format name determines the output mode
-    auto result = formatPlugin->formatOutput(formatName, outputData);
-    if (!result) {
-      Print("Failed to format '{}' output: {}\n", formatName, result.error().message);
-      return;
-    }
-
-    Print(*result);
-  }
-
-#endif
-
-#if DRAC_ENABLE_PLUGINS
-  /**
-   * @brief Handle --list-plugins command with high performance
-   * @param pluginManager Reference to plugin manager
-   * @return Exit code
-   */
-  fn handleListPluginsCommand(const draconis::core::plugin::PluginManager& pluginManager) -> i32 {
-    using draconis::core::plugin::PluginType;
-
-    if (!pluginManager.isInitialized()) {
-      Print("Plugin system not initialized.\n");
-      return EXIT_FAILURE;
-    }
-
-    auto loadedPlugins     = pluginManager.listLoadedPlugins();
-    auto discoveredPlugins = pluginManager.listDiscoveredPlugins();
-
-    Print("Plugin System Status: {} loaded, {} discovered\n\n", loadedPlugins.size(), discoveredPlugins.size());
-
-    if (!loadedPlugins.empty()) {
-      Print("Loaded Plugins:\n");
-      Print("==============\n");
-
-      for (const auto& metadata : loadedPlugins) {
-        Print("  • {} v{} ({})\n", metadata.name, metadata.version, metadata.author);
-        Print("    Description: {}\n", metadata.description);
-        Print("    Type: {}\n", magic_enum::enum_name(metadata.type));
-        Print("\n");
-      }
-    }
-
-    if (!discoveredPlugins.empty()) {
-      Print("Discovered Plugins:\n");
-      Print("==================\n");
-
-      for (const auto& pluginName : discoveredPlugins) {
-        bool isLoaded = std::ranges::any_of(
-          loadedPlugins,
-          [&pluginName](const draconis::core::plugin::PluginMetadata& meta) -> bool {
-            return meta.name == pluginName;
-          }
-        );
-
-        Print("  • {} {}\n", pluginName, isLoaded ? "(loaded)" : "(available)");
-      }
-
-      Print("\n");
-    }
-
-    if (loadedPlugins.empty() && discoveredPlugins.empty()) {
-      Print("No plugins found. Checked directories:\n");
-      for (const auto& path : pluginManager.getSearchPaths())
-        Print("  - {}\n", path.string());
-    }
-
-    return EXIT_SUCCESS;
-  }
-
-  /**
-   * @brief Handle --plugin-info command
-   * @param pluginManager Reference to plugin manager
-   * @param pluginName Name of plugin to show info for
-   * @return Exit code
-   */
-  fn handlePluginInfoCommand(const draconis::core::plugin::PluginManager& pluginManager, const String& pluginName) -> i32 {
-    if (!pluginManager.isInitialized()) {
-      Print("Plugin system not initialized.\n");
-      return EXIT_FAILURE;
-    }
-
-    auto plugin = pluginManager.getPlugin(pluginName);
-    if (!plugin) {
-      Print("Plugin '{}' not found.\n", pluginName);
-      Print("Use --list-plugins to see available plugins.\n");
-      return EXIT_FAILURE;
-    }
-
-    const auto& metadata = (*plugin)->getMetadata();
-
-    Print("Plugin Information: {}\n", metadata.name);
-    Print("========================\n");
-    Print("Name: {}\n", metadata.name);
-    Print("Version: {}\n", metadata.version);
-    Print("Author: {}\n", metadata.author);
-    Print("Description: {}\n", metadata.description);
-    Print("Type: {}\n", magic_enum::enum_name(metadata.type));
-    Print("Status: {}\n", (*plugin)->isReady() ? "Ready" : "Not Ready");
-
-    // Show dependencies
-    const auto& deps = metadata.dependencies;
-    if (deps.requiresNetwork || deps.requiresFilesystem || deps.requiresAdmin || deps.requiresCaching) {
-      Print("\nDependencies:\n");
-      if (deps.requiresNetwork)
-        Print("  • Network access\n");
-      if (deps.requiresFilesystem)
-        Print("  • Filesystem access\n");
-      if (deps.requiresAdmin)
-        Print("  • Administrator privileges\n");
-      if (deps.requiresCaching)
-        Print("  • Caching system\n");
-    }
-
-    // Show fields for SystemInfo plugins
-    if (metadata.type == draconis::core::plugin::PluginType::SystemInfo) {
-      if (const auto* sysInfoPlugin = dynamic_cast<const draconis::core::plugin::ISystemInfoPlugin*>(*plugin)) {
-        const auto& fieldNames = sysInfoPlugin->getFieldNames();
-        if (!fieldNames.empty()) {
-          Print("\nProvided Fields:\n");
-          for (const auto& fieldName : fieldNames)
-            Print("  • {}\n", fieldName);
-        }
-      }
-    }
-
-    return EXIT_SUCCESS;
-  }
-
-#endif
-} // namespace
+using namespace draconis::cli;
 
 fn main(const i32 argc, CStr* argv[]) -> i32 try {
 #ifdef _WIN32
@@ -415,14 +54,26 @@ fn main(const i32 argc, CStr* argv[]) -> i32 try {
     logoWidth,
     logoHeight,
     listPlugins,
-    pluginInfo
-  ] = Tuple(false, false, false, false, false, false, String(""), String(""), String(""), String(""), String(""), u32(0), u32(0), false, String(""));
+    pluginInfo,
+    benchmarkMode,
+    showConfigPath,
+    generateCompletions
+  ] = Tuple(false, false, false, false, false, false, String(""), String(""), String(""), String(""), String(""), u32(0), u32(0), false, String(""), false, false, String(""));
   // clang-format on
 
   {
     using draconis::utils::argparse::ArgumentParser;
 
-    ArgumentParser parser(DRAC_VERSION);
+    // Build enhanced version string with build date and git hash
+#if defined(DRAC_BUILD_DATE) && defined(DRAC_GIT_HASH)
+    String versionString = std::format("draconis++ {} ({}) [{}]", DRAC_VERSION, DRAC_BUILD_DATE, DRAC_GIT_HASH);
+#elif defined(DRAC_BUILD_DATE)
+    String versionString = std::format("draconis++ {} ({})", DRAC_VERSION, DRAC_BUILD_DATE);
+#else
+    String versionString = std::format("draconis++ {}", DRAC_VERSION);
+#endif
+
+    ArgumentParser parser(versionString);
 
     parser
       .addArguments("-V", "--verbose")
@@ -515,6 +166,21 @@ fn main(const i32 argc, CStr* argv[]) -> i32 try {
       .defaultValue(String(""));
 #endif
 
+    parser
+      .addArguments("--benchmark")
+      .help("Print timing information for each data source.")
+      .flag();
+
+    parser
+      .addArguments("--config-path")
+      .help("Display the active configuration file location.")
+      .flag();
+
+    parser
+      .addArguments("--generate-completions")
+      .help("Generate shell completion script. Supported shells: bash, zsh, fish, powershell.")
+      .defaultValue(String(""));
+
     if (Result<> result = parser.parseArgs({ argv, static_cast<usize>(argc) }); !result) {
       error_at(result.error());
       return EXIT_FAILURE;
@@ -538,6 +204,10 @@ fn main(const i32 argc, CStr* argv[]) -> i32 try {
     listPlugins = parser.get<bool>("--list-plugins");
     pluginInfo  = parser.get<String>("--plugin-info");
 #endif
+
+    benchmarkMode       = parser.get<bool>("--benchmark");
+    showConfigPath      = parser.get<bool>("--config-path");
+    generateCompletions = parser.get<String>("--generate-completions");
 
     SetRuntimeLogLevel(
       parser.get<bool>("-V") || parser.get<bool>("--verbose")
@@ -563,6 +233,22 @@ fn main(const i32 argc, CStr* argv[]) -> i32 try {
     else
       Println("No cache files were found to clear.");
 
+    return EXIT_SUCCESS;
+  }
+
+  // Handle --generate-completions (early exit, no config needed)
+  if (!generateCompletions.empty()) {
+    GenerateCompletions(generateCompletions);
+    return EXIT_SUCCESS;
+  }
+
+  // Handle --config-path (early exit)
+  if (showConfigPath) {
+#if DRAC_PRECOMPILED_CONFIG
+    Println("Using precompiled configuration (no external config file).");
+#else
+    Println("{}", Config::getConfigPath().string());
+#endif
     return EXIT_SUCCESS;
   }
 
@@ -617,11 +303,18 @@ fn main(const i32 argc, CStr* argv[]) -> i32 try {
 
     // Handle plugin-specific commands with early exit for performance
     if (listPlugins)
-      return handleListPluginsCommand(pluginManager);
+      return HandleListPluginsCommand(pluginManager);
 
     if (!pluginInfo.empty())
-      return handlePluginInfoCommand(pluginManager, pluginInfo);
+      return HandlePluginInfoCommand(pluginManager, pluginInfo);
 #endif
+
+    // Handle benchmark mode (runs timing for each data source)
+    if (benchmarkMode) {
+      Vec<BenchmarkResult> results = RunBenchmark(cache, config);
+      PrintBenchmarkReport(results);
+      return EXIT_SUCCESS;
+    }
 
     debug_log("About to construct SystemInfo...");
     SystemInfo data(cache, config);

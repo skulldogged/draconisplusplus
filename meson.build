@@ -21,9 +21,25 @@ project(
 cpp = meson.get_compiler('cpp')
 host_system = host_machine.system()
 
+# Get build date (cross-platform)
+if host_system == 'windows'
+  # Windows: use PowerShell to get date
+  build_date = run_command('powershell', '-Command', 'Get-Date -Format "yyyy-MM-dd"', check: false)
+else
+  # Unix: use date command
+  build_date = run_command('date', '+%Y-%m-%d', check: false)
+endif
+drac_build_date = build_date.returncode() == 0 ? build_date.stdout().strip() : 'unknown'
+
+# Get git hash (short form)
+git_hash = run_command('git', 'rev-parse', '--short', 'HEAD', check: false)
+drac_git_hash = git_hash.returncode() == 0 ? git_hash.stdout().strip() : 'unknown'
+
 # Preprocessor definitions
 project_string_defines = {
   'DRAC_VERSION': '"' + meson.project_version() + '"',
+  'DRAC_BUILD_DATE': '"' + drac_build_date + '"',
+  'DRAC_GIT_HASH': '"' + drac_git_hash + '"',
   'DRAC_DEFAULT_LANGUAGE': '"' + get_option('default_language') + '"',
   'fn': 'auto',
   '_WIN32_WINNT': '0x0602',
