@@ -1059,6 +1059,9 @@ units = "metric"
     }
 
     fn initialize(const PluginContext& ctx, PluginCache& /*cache*/) -> Result<Unit> override {
+      debug_log("Weather plugin initializing...");
+      debug_log("Weather plugin config dir: {}", ctx.configDir.string());
+
       // Load configuration
       auto configResult = loadConfig(ctx.configDir);
       if (!configResult) {
@@ -1067,18 +1070,23 @@ units = "metric"
         m_config.enabled = false;
       } else {
         m_config = *configResult;
+        debug_log("Weather plugin config loaded: enabled={}", m_config.enabled);
       }
 
       // Create provider if enabled
       if (m_config.enabled) {
+        debug_log("Weather plugin creating provider...");
         if (auto providerResult = createProvider(); !providerResult) {
           m_lastError = providerResult.error().message;
           warn_log("Weather plugin provider error: {}", *m_lastError);
           m_config.enabled = false;
+        } else {
+          debug_log("Weather plugin provider created successfully");
         }
       }
 
       m_ready = true;
+      debug_log("Weather plugin initialization complete");
       return {};
     }
 

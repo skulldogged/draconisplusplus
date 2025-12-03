@@ -22,7 +22,6 @@
   #include "Plugin.hpp"
 
 namespace draconis::core::plugin {
-
   /**
    * @struct StaticPluginEntry
    * @brief Entry for a statically compiled plugin

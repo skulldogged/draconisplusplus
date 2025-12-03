@@ -136,32 +136,63 @@ namespace draconis::utils::logging {
     Error,
   };
 
-  // For DLL/shared library scenarios, we need a way to share the log level
-  // between the main executable and plugins. The main app sets this pointer
-  // to its own storage, and plugins use it if available.
-  inline fn GetSharedLogLevelPtr() -> LogLevel*& {
-    static LogLevel* SharedPtr = nullptr;
-    return SharedPtr;
+  /**
+   * @brief Gets a reference to the shared log level pointer storage.
+   * @details Using a function with static local avoids global variable warnings
+   *          while maintaining the same semantics for cross-DLL log level sharing.
+   */
+  inline fn GetLogLevelPtrStorage() -> LogLevel*& {
+    static LogLevel* Ptr = nullptr;
+    return Ptr;
   }
 
+  /**
+   * @brief Gets a reference to the local log level storage.
+   * @details Used as fallback when no shared pointer is set.
+   */
+  inline fn GetLocalLogLevel() -> LogLevel& {
+    static LogLevel Level = LogLevel::Info;
+    return Level;
+  }
+
+  /**
+   * @brief Sets the log level pointer for plugin support.
+   * @details Called by the plugin manager to share the main executable's log level with plugins.
+   * @param ptr Pointer to the main executable's log level storage.
+   */
+  inline fn SetLogLevelPtr(LogLevel* ptr) -> void {
+    GetLogLevelPtrStorage() = ptr;
+  }
+
+  /**
+   * @brief Gets a pointer to the log level storage owned by this module.
+   * @details Used by the main executable to get its log level address to share with plugins.
+   * @return Pointer to the local log level storage.
+   */
+  inline fn GetLogLevelPtr() -> LogLevel* {
+    return &GetLocalLogLevel();
+  }
+
+  /**
+   * @brief Gets the current runtime log level.
+   * @return Reference to the current log level.
+   */
   inline fn GetRuntimeLogLevel() -> LogLevel& {
-    // If a shared pointer is set (by the main app), use that
-    if (LogLevel* shared = GetSharedLogLevelPtr(); shared != nullptr)
-      return *shared;
-    // Otherwise fall back to local storage (for standalone use)
-    static LogLevel RuntimeLogLevel = LogLevel::Info;
-    return RuntimeLogLevel;
+    if (LogLevel* ptr = GetLogLevelPtrStorage())
+      return *ptr;
+
+    return GetLocalLogLevel();
   }
 
+  /**
+   * @brief Sets the runtime log level.
+   * @param level The new log level to set.
+   */
   inline fn SetRuntimeLogLevel(const LogLevel level) {
-    GetRuntimeLogLevel() = level;
-  }
-
-  // Called by the main application to share its log level storage with plugins
-  inline fn InitializeSharedLogLevel() -> LogLevel* {
-    static LogLevel MainLogLevel = LogLevel::Info;
-    GetSharedLogLevelPtr()       = &MainLogLevel;
-    return &MainLogLevel;
+    if (LogLevel* ptr = GetLogLevelPtrStorage())
+      *ptr = level;
+    else
+      GetLocalLogLevel() = level;
   }
 
   /**

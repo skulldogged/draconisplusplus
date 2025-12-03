@@ -18,13 +18,6 @@ option(
 
 option('build_tests', type: 'boolean', value: true, description: 'Build test suite')
 
-option(
-  'build_switch_example',
-  type: 'boolean',
-  value: false,
-  description: 'Build Nintendo Switch example (requires devkitPro)',
-)
-
 # ===================== #
 #     Core Features     #
 # ===================== #

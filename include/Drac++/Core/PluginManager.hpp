@@ -111,6 +111,7 @@ namespace draconis::core::plugin {
 
     static fn getCreatePluginFunc(DynamicLibraryHandle handle) -> Result<IPlugin* (*)()>;
     static fn getDestroyPluginFunc(DynamicLibraryHandle handle) -> Result<void (*)(IPlugin*)>;
+    static fn syncPluginLogLevel(DynamicLibraryHandle handle) -> void;
 
     static fn initializePluginInstance(LoadedPlugin& loadedPlugin, CacheManager& cache) -> Result<Unit>;
 

@@ -193,7 +193,6 @@ Platform-specific code lives in `src/Lib/OS/`. Each platform has its own impleme
 | `BSD.cpp`     | FreeBSD, OpenBSD, NetBSD        |
 | `Haiku.cpp`   | Haiku OS                        |
 | `Serenity.cpp`| SerenityOS                      |
-| `Switch.cpp`  | Nintendo Switch (devkitPro)     |
 
 ### Adding Platform-Specific Code
 

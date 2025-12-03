@@ -261,6 +261,28 @@ namespace draconis::core::plugin {
     }
 
   #if DRAC_PRECOMPILED_CONFIG
+    // Check if there's already a static plugin loaded with the same provider ID
+    // This prevents loading a dynamic plugin when a static version is already active
+    for (const auto& [loadedName, loadedPlugin] : m_plugins) {
+      if (!loadedPlugin.isLoaded || loadedPlugin.handle != nullptr)
+        continue; // Skip unloaded plugins or dynamic plugins
+
+      // Check if this is an info provider plugin with matching provider ID
+      if (loadedPlugin.metadata.type == PluginType::InfoProvider) {
+        if (auto* infoProvider = dynamic_cast<IInfoProviderPlugin*>(loadedPlugin.instance.get())) {
+          // Compare provider IDs - if they match, skip loading the dynamic version
+          if (infoProvider->getProviderId() == pluginName) {
+            debug_log(
+              "Skipping dynamic plugin '{}' - static plugin '{}' with same provider ID is already loaded.",
+              pluginName,
+              loadedName
+            );
+            return {};
+          }
+        }
+      }
+    }
+
     // Try to load as a static plugin first (for precompiled config mode)
     if (IsStaticPlugin(pluginName)) {
       debug_log("Loading static plugin '{}'", pluginName);
@@ -318,6 +340,9 @@ namespace draconis::core::plugin {
       return std::unexpected(handleResult.error());
     else
       loadedPlugin.handle = *handleResult;
+
+    // Sync log level with the plugin before creating the instance
+    syncPluginLogLevel(loadedPlugin.handle);
 
     if (Result<IPlugin* (*)()> createFuncResult = getCreatePluginFunc(loadedPlugin.handle); !createFuncResult) {
       unloadDynamicLibrary(loadedPlugin.handle);
@@ -519,6 +544,27 @@ namespace draconis::core::plugin {
 
     // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
     return reinterpret_cast<void (*)(IPlugin*)>(func);
+  }
+
+  fn PluginManager::syncPluginLogLevel(DynamicLibraryHandle handle) -> void {
+    using utils::logging::GetLogLevelPtr;
+    using utils::logging::LogLevel;
+
+    using SetLogLevelFunc = void (*)(LogLevel*);
+
+  #ifdef _WIN32
+    FARPROC func = GetProcAddress(handle, "SetPluginLogLevel");
+  #else
+    void* func = dlsym(handle, "SetPluginLogLevel");
+  #endif
+    if (func) {
+      // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
+      auto setLogLevel = reinterpret_cast<SetLogLevelFunc>(func);
+      setLogLevel(GetLogLevelPtr());
+      debug_log("Synchronized log level with plugin");
+    } else {
+      debug_log("SetPluginLogLevel function not found in plugin (may be an older plugin)");
+    }
   }
 
   fn PluginManager::initializePluginInstance(LoadedPlugin& loadedPlugin, CacheManager& /*cache*/) -> Result<Unit> {

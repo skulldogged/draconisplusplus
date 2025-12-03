@@ -23,6 +23,8 @@
 #include <fstream>
 #include <glaze/glaze.hpp>
 
+// Required for DRAC_PLUGIN macro which uses draconis::utils::logging::LogLevel and SetLogLevelPtr
+#include "../Utils/Logging.hpp" // IWYU pragma: keep
 #include "../Utils/Types.hpp"
 
 // Forward declaration to avoid including CacheManager.hpp
@@ -392,12 +394,15 @@ namespace draconis::core::plugin {
       draconis::core::plugin::RegisterStaticPlugin({ #PluginClass, Create_##PluginClass, Destroy_##PluginClass });
 #else
 // NOLINTBEGIN(bugprone-macro-parentheses) - false positive
-  #define DRAC_PLUGIN(PluginClass)                                                                 \
-    extern "C" DRAC_PLUGIN_API fn CreatePlugin() -> draconis::core::plugin::IPlugin* {             \
-      return new PluginClass();                                                                    \
-    }                                                                                              \
-    extern "C" DRAC_PLUGIN_API fn DestroyPlugin(draconis::core::plugin::IPlugin* plugin) -> void { \
-      delete plugin;                                                                               \
+  #define DRAC_PLUGIN(PluginClass)                                                                          \
+    extern "C" DRAC_PLUGIN_API fn CreatePlugin() -> draconis::core::plugin::IPlugin* {                      \
+      return new PluginClass();                                                                             \
+    }                                                                                                       \
+    extern "C" DRAC_PLUGIN_API fn DestroyPlugin(draconis::core::plugin::IPlugin* plugin) -> void {          \
+      delete plugin;                                                                                        \
+    }                                                                                                       \
+    extern "C" DRAC_PLUGIN_API fn SetPluginLogLevel(draconis::utils::logging::LogLevel* levelPtr) -> void { \
+      draconis::utils::logging::SetLogLevelPtr(levelPtr);                                                   \
     }
 // NOLINTEND(bugprone-macro-parentheses)
 #endif

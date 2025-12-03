@@ -108,7 +108,6 @@
       mesonFlags = [
         "-Dbuild_for_musl=true"
         "-Dbuild_examples=false"
-        "-Dbuild_switch_example=false"
         "-Duse_linked_pci_ids=true"
       ];
 
