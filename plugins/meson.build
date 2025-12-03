@@ -16,7 +16,7 @@ endif
 
 # Plugin build configuration
 plugin_cpp_args = []
-plugin_base_deps = [draconis_dep]
+plugin_base_deps = [draconis_dep, glaze_dep]
 
 # Add plugin-specific compiler arguments
 plugin_cpp_args += [
@@ -48,7 +48,7 @@ plugins_built = []
 
 # Get list of plugin directories (exclude meson.build itself)
 plugin_dirs = run_command(
-  'python3',
+  'python',
   '-c', 'import os; print("\\n".join([d for d in os.listdir(".") if os.path.isdir(d) and os.path.exists(os.path.join(d, "meson.build"))]))',
   check: false,
 ).stdout().strip().split('\n')

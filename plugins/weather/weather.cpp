@@ -25,7 +25,7 @@
 #include <utility>
 
 #if !DRAC_PRECOMPILED_CONFIG
-  #include <toml++/toml.hpp>
+  #include <glaze/toml.hpp>
 #endif
 
 #include <Drac++/Core/Plugin.hpp>
@@ -90,6 +90,90 @@ namespace weather {
     Option<String> apiKey;
   };
 } // namespace weather
+
+// TOML parsing structures for glaze
+// Note: glaze's TOML parser doesn't support std::optional or std::variant directly,
+// so we use empty strings/zero values as sentinels for "not provided"
+#if !DRAC_PRECOMPILED_CONFIG
+namespace {
+  // Location coordinates table
+  struct TomlLocationCoords {
+    f64 lat = 0.0;
+    f64 lon = 0.0;
+  };
+
+  // Weather config with separate fields for city name and coordinates
+  // In TOML, user can specify either:
+  //   location = "New York"           (city name string)
+  //   OR
+  //   coords = { lat = 40.7, lon = -74.0 }  (coordinates table)
+  struct TomlWeatherConfig {
+    bool               enabled = false;
+    String             provider; // Empty = not provided (defaults to "openmeteo")
+    String             units;    // Empty = not provided (defaults to "metric")
+    String             location; // City name string - empty = not provided
+    TomlLocationCoords coords;   // Coordinates table - 0,0 = not provided
+    String             apiKey;   // Empty = not provided
+  };
+
+  // Wrapper for parsing [plugins.weather] from main config file
+  struct TomlPluginsSection {
+    TomlWeatherConfig weather;
+  };
+
+  struct TomlMainConfig {
+    TomlPluginsSection plugins;
+  };
+} // namespace
+
+  // Explicit glz::meta specializations with field name mappings
+  // The 'value' members are used by glaze's compile-time reflection, not directly referenced
+  #ifdef __clang__
+    #pragma clang diagnostic push
+    #pragma clang diagnostic ignored "-Wunused-const-variable"
+  #endif
+
+template <>
+struct glz::meta<TomlLocationCoords> {
+  using T                     = TomlLocationCoords;
+  static constexpr auto value = object("lat", &T::lat, "lon", &T::lon);
+};
+
+template <>
+struct glz::meta<TomlWeatherConfig> {
+  using T                     = TomlWeatherConfig;
+  static constexpr auto value = object(
+    "enabled",
+    &T::enabled,
+    "provider",
+    &T::provider,
+    "units",
+    &T::units,
+    "location",
+    &T::location,
+    "coords",
+    &T::coords,
+    "api_key",
+    &T::apiKey
+  );
+};
+
+template <>
+struct glz::meta<TomlPluginsSection> {
+  using T                     = TomlPluginsSection;
+  static constexpr auto value = object("weather", &T::weather);
+};
+
+template <>
+struct glz::meta<TomlMainConfig> {
+  using T                     = TomlMainConfig;
+  static constexpr auto value = object("plugins", &T::plugins);
+};
+
+  #ifdef __clang__
+    #pragma clang diagnostic pop
+  #endif
+#endif // !DRAC_PRECOMPILED_CONFIG
 
 // Include precompiled config after weather types are defined
 #if DRAC_PRECOMPILED_CONFIG
@@ -784,65 +868,98 @@ namespace {
       return cfg;
     }
 #else
-    // Load configuration from TOML file at runtime
-    static fn loadConfig(const fs::path& configDir) -> Result<weather::WeatherConfig> {
-      fs::path configPath = configDir / "weather.toml";
+    // Helper to convert TomlWeatherConfig to weather::WeatherConfig
+    static fn parseTomlConfig(const TomlWeatherConfig& tomlCfg) -> weather::WeatherConfig {
+      weather::WeatherConfig cfg;
+      cfg.enabled = tomlCfg.enabled;
 
-      if (!fs::exists(configPath)) {
-        // Create default config
-        createDefaultConfig(configPath);
-        return weather::WeatherConfig {};
+      if (!cfg.enabled)
+        return cfg;
+
+      // Parse provider - empty string means use default
+      String providerStr = tomlCfg.provider.empty() ? "openmeteo" : tomlCfg.provider;
+      if (providerStr == "openmeteo")
+        cfg.provider = weather::Provider::OpenMeteo;
+      else if (providerStr == "metno")
+        cfg.provider = weather::Provider::MetNo;
+      else if (providerStr == "openweathermap")
+        cfg.provider = weather::Provider::OpenWeatherMap;
+      else {
+        warn_log("Unknown weather provider '{}', defaulting to openmeteo", providerStr);
+        cfg.provider = weather::Provider::OpenMeteo;
       }
 
-      try {
-        toml::table tbl = toml::parse_file(configPath.string());
+      // Parse units - empty string means use default
+      String unitsStr = tomlCfg.units.empty() ? "metric" : tomlCfg.units;
+      cfg.units       = (unitsStr == "imperial") ? weather::UnitSystem::Imperial : weather::UnitSystem::Metric;
 
-        weather::WeatherConfig cfg;
-        cfg.enabled = tbl["enabled"].value_or(false);
+      // Parse location - can be either:
+      //   location = "City Name" (string) -> maps to tomlCfg.location
+      //   coords = { lat = 40.7, lon = -74.0 } (table) -> maps to tomlCfg.coords
+      // City name takes priority if both are provided
+      if (!tomlCfg.location.empty()) {
+        // Location is a city name string
+        cfg.city = tomlCfg.location;
+      } else if (tomlCfg.coords.lat != 0.0 || tomlCfg.coords.lon != 0.0) {
+        // Coordinates were provided
+        cfg.coords = weather::Coords {
+          .lat = tomlCfg.coords.lat,
+          .lon = tomlCfg.coords.lon,
+        };
+      }
 
-        if (!cfg.enabled)
-          return cfg;
+      // Parse API key - only set if not empty
+      if (!tomlCfg.apiKey.empty())
+        cfg.apiKey = tomlCfg.apiKey;
 
-        // Parse provider
-        String providerStr = tbl["provider"].value_or("openmeteo");
-        if (providerStr == "openmeteo")
-          cfg.provider = weather::Provider::OpenMeteo;
-        else if (providerStr == "metno")
-          cfg.provider = weather::Provider::MetNo;
-        else if (providerStr == "openweathermap")
-          cfg.provider = weather::Provider::OpenWeatherMap;
-        else {
-          warn_log("Unknown weather provider '{}', defaulting to openmeteo", providerStr);
-          cfg.provider = weather::Provider::OpenMeteo;
+      return cfg;
+    }
+
+    // Load configuration from TOML file at runtime
+    // Checks two locations:
+    // 1. Separate file: <configDir>/weather.toml (plugin-specific config dir)
+    // 2. Main config: <configDir>/../config.toml under [plugins.weather] (main app config)
+    static fn loadConfig(const fs::path& configDir) -> Result<weather::WeatherConfig> {
+      // First, try separate weather.toml file in plugin config directory
+      fs::path weatherConfigPath = configDir / "weather.toml";
+      if (fs::exists(weatherConfigPath)) {
+        TomlWeatherConfig tomlCfg;
+        String            buffer;
+
+        glz::context ctx {};
+        ctx.current_file = weatherConfigPath.string();
+        if (const auto fileError = glz::file_to_buffer(buffer, ctx.current_file); !bool(fileError)) {
+          const auto readError = glz::read<glz::opts { .format = glz::TOML, .error_on_unknown_keys = false }>(tomlCfg, buffer, ctx);
+          if (!readError) {
+            debug_log("Weather config loaded from {}", weatherConfigPath.string());
+            return parseTomlConfig(tomlCfg);
+          }
+          warn_log("Failed to parse {}: {}", weatherConfigPath.string(), glz::format_error(readError, buffer));
         }
+      }
 
-        // Parse units
-        String unitsStr = tbl["units"].value_or("metric");
-        cfg.units       = (unitsStr == "imperial") ? weather::UnitSystem::Imperial : weather::UnitSystem::Metric;
+      // Second, try [plugins.weather] in main config.toml (parent directory of plugin config dir)
+      fs::path mainConfigPath = configDir.parent_path() / "config.toml";
+      if (fs::exists(mainConfigPath)) {
+        TomlMainConfig mainCfg;
+        String         buffer;
 
-        // Parse location
-        if (auto locationNode = tbl["location"]) {
-          if (locationNode.is_string()) {
-            cfg.city = *locationNode.value<String>();
-          } else if (locationNode.is_table()) {
-            auto* locTable = locationNode.as_table();
-            if (locTable->contains("lat") && locTable->contains("lon")) {
-              cfg.coords = weather::Coords {
-                .lat = *(*locTable)["lat"].value<double>(),
-                .lon = *(*locTable)["lon"].value<double>(),
-              };
-            }
+        glz::context ctx {};
+        ctx.current_file = mainConfigPath.string();
+        if (const auto fileError = glz::file_to_buffer(buffer, ctx.current_file); !bool(fileError)) {
+          const auto readError = glz::read<glz::opts { .format = glz::TOML, .error_on_unknown_keys = false }>(mainCfg, buffer, ctx);
+          if (readError) {
+            warn_log("Failed to parse main config {}: {}", mainConfigPath.string(), glz::format_error(readError, buffer));
+          } else if (mainCfg.plugins.weather.enabled) {
+            debug_log("Weather config loaded from {} [plugins.weather]", mainConfigPath.string());
+            return parseTomlConfig(mainCfg.plugins.weather);
           }
         }
-
-        // Parse API key
-        if (auto apiKey = tbl["api_key"].value<String>())
-          cfg.apiKey = *apiKey;
-
-        return cfg;
-      } catch (const toml::parse_error& err) {
-        ERR_FMT(ParseError, "Failed to parse weather config: {}", err.what());
       }
+
+      // No config found, create default weather.toml
+      createDefaultConfig(weatherConfigPath);
+      return weather::WeatherConfig {};
     }
 #endif // DRAC_PRECOMPILED_CONFIG
 
@@ -870,7 +987,7 @@ units = "metric"
 
 # Location - either coordinates or city name
 # For coordinates (required for openmeteo and metno):
-# [location]
+# [coords]
 # lat = 40.7128
 # lon = -74.0060
 

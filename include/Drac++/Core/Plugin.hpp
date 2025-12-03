@@ -391,6 +391,7 @@ namespace draconis::core::plugin {
     static const bool g_##PluginClass##_registered =                              \
       draconis::core::plugin::RegisterStaticPlugin({ #PluginClass, Create_##PluginClass, Destroy_##PluginClass });
 #else
+// NOLINTBEGIN(bugprone-macro-parentheses) - false positive
   #define DRAC_PLUGIN(PluginClass)                                                                 \
     extern "C" DRAC_PLUGIN_API fn CreatePlugin() -> draconis::core::plugin::IPlugin* {             \
       return new PluginClass();                                                                    \
@@ -398,4 +399,5 @@ namespace draconis::core::plugin {
     extern "C" DRAC_PLUGIN_API fn DestroyPlugin(draconis::core::plugin::IPlugin* plugin) -> void { \
       delete plugin;                                                                               \
     }
+// NOLINTEND(bugprone-macro-parentheses)
 #endif

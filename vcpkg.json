@@ -7,7 +7,6 @@
     "asio",
     "curl",
     "glfw3",
-    "magic-enum",
-    "tomlplusplus"
+    "magic-enum"
   ]
 }

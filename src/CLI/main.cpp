@@ -285,9 +285,7 @@ fn main(const i32 argc, CStr* argv[]) -> i32 try {
         }
       );
 
-      config.logo.protocol = protoLower == "kitty-direct"
-        ? config::LogoProtocol::KittyDirect
-        : config::LogoProtocol::Kitty;
+      config.logo.protocol = protoLower;
     }
 
     if (opts.logoWidth > 0)

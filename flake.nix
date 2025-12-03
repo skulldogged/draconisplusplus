@@ -53,9 +53,6 @@
             libunistring
             magic-enum
             sqlitecpp
-            (tomlplusplus.overrideAttrs {
-              doCheck = false;
-            })
           ])
           ++ darwinPkgs
           ++ linuxPkgs;

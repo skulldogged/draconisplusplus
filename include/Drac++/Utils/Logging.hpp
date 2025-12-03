@@ -136,13 +136,32 @@ namespace draconis::utils::logging {
     Error,
   };
 
+  // For DLL/shared library scenarios, we need a way to share the log level
+  // between the main executable and plugins. The main app sets this pointer
+  // to its own storage, and plugins use it if available.
+  inline fn GetSharedLogLevelPtr() -> LogLevel*& {
+    static LogLevel* SharedPtr = nullptr;
+    return SharedPtr;
+  }
+
   inline fn GetRuntimeLogLevel() -> LogLevel& {
+    // If a shared pointer is set (by the main app), use that
+    if (LogLevel* shared = GetSharedLogLevelPtr(); shared != nullptr)
+      return *shared;
+    // Otherwise fall back to local storage (for standalone use)
     static LogLevel RuntimeLogLevel = LogLevel::Info;
     return RuntimeLogLevel;
   }
 
   inline fn SetRuntimeLogLevel(const LogLevel level) {
     GetRuntimeLogLevel() = level;
+  }
+
+  // Called by the main application to share its log level storage with plugins
+  inline fn InitializeSharedLogLevel() -> LogLevel* {
+    static LogLevel MainLogLevel = LogLevel::Info;
+    GetSharedLogLevelPtr()       = &MainLogLevel;
+    return &MainLogLevel;
   }
 
   /**

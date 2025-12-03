@@ -82,7 +82,6 @@
 
     (mkOverridden "cmake" pugixml)
     (mkOverridden "cmake" sqlitecpp)
-    (mkOverridden "meson" tomlplusplus)
   ];
 
   mkDraconisPackage = {native}:

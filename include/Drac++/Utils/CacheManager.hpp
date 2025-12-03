@@ -57,14 +57,17 @@ namespace draconis::utils::cache {
     /**
      * @brief Get the persistent cache directory path for the current platform.
      * @return The path to the cache directory (e.g., ~/.cache/draconis++ on Linux,
-     *         ~/Library/Caches/draconis++ on macOS, %USERPROFILE%/.cache/draconis++ on Windows)
+     *         ~/Library/Caches/draconis++ on macOS, %LOCALAPPDATA%/draconis++/cache on Windows)
      */
     static fn getPersistentCacheDir() -> fs::path {
 #ifdef __APPLE__
       return fs::path(std::format("{}/Library/Caches/draconis++", draconis::utils::env::GetEnv("HOME").value_or(".")));
 #elif defined(_WIN32)
-      // On Windows, use USERPROFILE as HOME is not typically set
-      return fs::path(std::format("{}/.cache/draconis++", draconis::utils::env::GetEnv("USERPROFILE").value_or(draconis::utils::env::GetEnv("HOME").value_or("."))));
+      // On Windows, use LOCALAPPDATA for cache (standard Windows location)
+      if (auto localAppData = draconis::utils::env::GetEnv("LOCALAPPDATA"))
+        return fs::path(*localAppData) / "draconis++" / "cache";
+      // Fallback to USERPROFILE if LOCALAPPDATA is not set
+      return fs::path(draconis::utils::env::GetEnv("USERPROFILE").value_or(".")) / ".cache" / "draconis++";
 #else
       return fs::path(std::format("{}/.cache/draconis++", draconis::utils::env::GetEnv("HOME").value_or(".")));
 #endif

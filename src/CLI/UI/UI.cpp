@@ -282,7 +282,7 @@ namespace draconis::ui {
 
       String sequence;
 
-      if (logoCfg.protocol == LogoProtocol::KittyDirect) {
+      if (logoCfg.getProtocol() == LogoProtocol::KittyDirect) {
         const String payload = Base64Encode(*logoCfg.imagePath);
 
         sequence = "\033_Ga=T,f=100,t=f";

@@ -3,12 +3,9 @@
 #include <Drac++/Utils/Logging.hpp>
 
 #if !DRAC_PRECOMPILED_CONFIG
-  #include <filesystem>                // std::filesystem::{path, operator/, exists, create_directories}
-  #include <fstream>                   // std::{ifstream, ofstream, operator<<}
-  #include <system_error>              // std::error_code
-  #include <toml++/impl/node_view.hpp> // toml::node_view
-  #include <toml++/impl/parser.hpp>    // toml::{parse_file, parse_result}
-  #include <toml++/impl/table.hpp>     // toml::table
+  #include <filesystem> // std::filesystem::{path, operator/, exists, create_directories}
+  #include <glaze/toml.hpp>
+  #include <system_error> // std::error_code
 
   #include <Drac++/Services/Packages.hpp>
 
@@ -27,6 +24,91 @@ namespace fs = std::filesystem;
 #if !DRAC_PRECOMPILED_CONFIG
 using namespace draconis::utils::types;
 using draconis::utils::env::GetEnv;
+
+// Intermediate structs for TOML parsing with glaze
+// Note: glaze's TOML parser doesn't support std::optional directly,
+// so we use empty strings/zero values as sentinels for "not provided"
+namespace {
+  struct TomlGeneral {
+    String name;     // Empty = not provided
+    String language; // Empty = not provided
+  };
+
+  struct TomlLogo {
+    String path;       // Empty = not provided
+    String protocol;   // Empty = not provided
+    u32    width  = 0; // 0 = not provided
+    u32    height = 0; // 0 = not provided
+  };
+
+  struct TomlNowPlaying {
+    bool enabled = true;
+  };
+
+  struct TomlPackages {
+    Vec<String> enabled;
+  };
+
+  struct TomlPlugins {
+    bool        enabled = true;
+    Vec<String> autoLoad;
+  };
+
+  struct TomlConfig {
+    TomlGeneral    general;
+    TomlLogo       logo;
+    TomlNowPlaying nowPlaying;
+    TomlPackages   packages;
+    TomlPlugins    plugins;
+  };
+} // namespace
+
+  // Explicit glz::meta specializations with field name mappings
+  // The 'value' members are used by glaze's compile-time reflection, not directly referenced
+  #ifdef __clang__
+    #pragma clang diagnostic push
+    #pragma clang diagnostic ignored "-Wunused-const-variable"
+  #endif
+
+template <>
+struct glz::meta<TomlGeneral> {
+  using T                     = TomlGeneral;
+  static constexpr auto value = object("name", &T::name, "language", &T::language);
+};
+
+template <>
+struct glz::meta<TomlLogo> {
+  using T                     = TomlLogo;
+  static constexpr auto value = object("path", &T::path, "protocol", &T::protocol, "width", &T::width, "height", &T::height);
+};
+
+template <>
+struct glz::meta<TomlNowPlaying> {
+  using T                     = TomlNowPlaying;
+  static constexpr auto value = object("enabled", &T::enabled);
+};
+
+template <>
+struct glz::meta<TomlPackages> {
+  using T                     = TomlPackages;
+  static constexpr auto value = object("enabled", &T::enabled);
+};
+
+template <>
+struct glz::meta<TomlPlugins> {
+  using T                     = TomlPlugins;
+  static constexpr auto value = object("enabled", &T::enabled, "auto_load", &T::autoLoad);
+};
+
+template <>
+struct glz::meta<TomlConfig> {
+  using T                     = TomlConfig;
+  static constexpr auto value = object("general", &T::general, "logo", &T::logo, "now_playing", &T::nowPlaying, "packages", &T::packages, "plugins", &T::plugins);
+};
+
+  #ifdef __clang__
+    #pragma clang diagnostic pop
+  #endif
 
 namespace draconis::config {
   fn Config::getConfigPath() -> fs::path {
@@ -75,7 +157,6 @@ namespace draconis::config {
 } // namespace draconis::config
 
 namespace {
-
   fn CreateDefaultConfig(const fs::path& configPath) -> bool {
     try {
       std::error_code errc;
@@ -86,65 +167,34 @@ namespace {
         return false;
       }
 
-      const String defaultName   = draconis::config::General::getDefaultName();
-      String       configContent = std::format(R"toml(# Draconis++ Configuration File
-
-# General settings
-[general]
-name = "{}" # Your display name
-)toml",
-                                         defaultName);
+      // Build default config using glaze
+      TomlConfig defaultCfg;
+      defaultCfg.general.name = draconis::config::General::getDefaultName();
 
   #if DRAC_ENABLE_NOWPLAYING
-      configContent += R"toml(
-# Now Playing integration
-[now_playing]
-enabled = true # Set to true to enable media integration
-)toml";
-  #endif
-
-  #if !DRAC_PRECOMPILED_CONFIG
-      configContent += R"toml(
-# Image logo (kitty / kitty-direct)
-[logo]
-# path = ""           # Path to an image file; when empty, ascii art is used
-# protocol = "kitty"  # Options: "kitty" or "kitty-direct"
-# width = 24          # Width in terminal cells
-# height = 12         # Height in terminal cells
-)toml";
-  #endif
-
-  #if DRAC_ENABLE_PACKAGECOUNT
-      configContent += R"toml(
-# Package counting settings
-[packages]
-enabled = [] # List of package managers to count, e.g. ["cargo", "nix", "pacman"]
-
-# Possible values depend on your OS: cargo, nix, apk, dpkg, moss, pacman, rpm, xbps, homebrew, macports, winget, chocolatey, scoop, pkgng, pkgsrc, haikupkg
-# If you don't want to count any package managers, leave the list empty.
-)toml";
+      defaultCfg.nowPlaying.enabled = true;
   #endif
 
   #if DRAC_ENABLE_PLUGINS
-      configContent += R"toml(
-# Plugin settings
-[plugins]
-enabled = true        # Set to false to disable the plugin system entirely
-auto_load = []        # List of plugin names to automatically load on startup
-# Example: auto_load = ["weather"]
-)toml";
+      defaultCfg.plugins.enabled = true;
   #endif
 
-      std::ofstream file(configPath);
-      file << configContent;
+      // Write config using glaze
+      String     buffer;
+      const auto writeError = glz::write_file_toml(defaultCfg, configPath.string(), buffer);
+
+      if (writeError) {
+        error_log("Failed to write default config: {}", glz::format_error(writeError, buffer));
+        return false;
+      }
 
       info_log("Created default config file at {}", configPath.string());
       return true;
     } catch (const fs::filesystem_error& fsErr) {
       error_log("Filesystem error during default config creation: {}", fsErr.what());
       return false;
-    } catch (const Exception& e) {
-      error_log("Failed to create default config file: {}", e.what());
+    } catch (const Exception& exc) {
+      error_log("Failed to create default config file: {}", exc.what());
       return false;
     } catch (...) {
       error_log("An unexpected error occurred during default config creation.");
@@ -193,13 +243,117 @@ namespace draconis::config {
           return {};
       }
 
-      const toml::table parsedConfig = toml::parse_file(configPath.string());
+      // Parse TOML using glaze with lenient parsing (ignore unknown keys like [weather])
+      TomlConfig tomlCfg;
+      String     buffer;
+
+      // Read file into buffer
+      glz::context ctx {};
+      ctx.current_file = configPath.string();
+      if (const auto fileError = glz::file_to_buffer(buffer, ctx.current_file); bool(fileError)) {
+        error_log("Failed to read config file: {}", configPath.string());
+        return {};
+      }
+
+      // Parse with error_on_unknown_keys = false to allow plugin sections like [weather]
+      const auto readError = glz::read<glz::opts { .format = glz::TOML, .error_on_unknown_keys = false }>(tomlCfg, buffer, ctx);
+
+      if (readError) {
+        error_log("Failed to parse config file: {}", glz::format_error(readError, buffer));
+        return {};
+      }
 
       debug_log("Config loaded from {}", configPath.string());
 
-      return Config(parsedConfig);
-    } catch (const Exception& e) {
-      debug_log("Config loading failed: {}, using defaults", e.what());
+      // Convert TomlConfig to Config
+      // Note: Empty strings and zero values indicate "not provided" in TOML
+      Config cfg;
+
+      // General settings - convert empty string to std::nullopt, non-empty to value
+      cfg.general.name     = tomlCfg.general.name.empty() ? std::nullopt : Option<String>(tomlCfg.general.name);
+      cfg.general.language = tomlCfg.general.language.empty() ? std::nullopt : Option<String>(tomlCfg.general.language);
+
+      if (!cfg.general.name)
+        cfg.general.name = General::getDefaultName();
+
+      // Logo settings - convert empty/zero to std::nullopt
+      cfg.logo.imagePath = tomlCfg.logo.path.empty() ? std::nullopt : Option<String>(tomlCfg.logo.path);
+      cfg.logo.protocol  = tomlCfg.logo.protocol.empty() ? std::nullopt : Option<String>(tomlCfg.logo.protocol);
+      cfg.logo.width     = tomlCfg.logo.width == 0 ? std::nullopt : Option<u32>(tomlCfg.logo.width);
+      cfg.logo.height    = tomlCfg.logo.height == 0 ? std::nullopt : Option<u32>(tomlCfg.logo.height);
+
+      // Now Playing settings
+      if constexpr (DRAC_ENABLE_NOWPLAYING) {
+        cfg.nowPlaying.enabled = tomlCfg.nowPlaying.enabled;
+      }
+
+      // Package manager settings
+      if constexpr (DRAC_ENABLE_PACKAGECOUNT) {
+        using enum draconis::services::packages::Manager;
+
+        cfg.enabledPackageManagers = None;
+
+        for (const String& val : tomlCfg.packages.enabled) {
+          if (val == "cargo")
+            cfg.enabledPackageManagers |= Cargo;
+  #if defined(__linux__) || defined(__APPLE__)
+          else if (val == "nix")
+            cfg.enabledPackageManagers |= Nix;
+  #endif
+  #ifdef __linux__
+          else if (val == "apk")
+            cfg.enabledPackageManagers |= Apk;
+          else if (val == "dpkg")
+            cfg.enabledPackageManagers |= Dpkg;
+          else if (val == "moss")
+            cfg.enabledPackageManagers |= Moss;
+          else if (val == "pacman")
+            cfg.enabledPackageManagers |= Pacman;
+          else if (val == "rpm")
+            cfg.enabledPackageManagers |= Rpm;
+          else if (val == "xbps")
+            cfg.enabledPackageManagers |= Xbps;
+  #endif
+  #ifdef __APPLE__
+          else if (val == "homebrew")
+            cfg.enabledPackageManagers |= Homebrew;
+          else if (val == "macports")
+            cfg.enabledPackageManagers |= Macports;
+  #endif
+  #ifdef _WIN32
+          else if (val == "winget")
+            cfg.enabledPackageManagers |= Winget;
+          else if (val == "chocolatey")
+            cfg.enabledPackageManagers |= Chocolatey;
+          else if (val == "scoop")
+            cfg.enabledPackageManagers |= Scoop;
+  #endif
+  #if defined(__FreeBSD__) || defined(__DragonFly__)
+          else if (val == "pkgng")
+            cfg.enabledPackageManagers |= PkgNg;
+  #endif
+  #ifdef __NetBSD__
+          else if (val == "pkgsrc")
+            cfg.enabledPackageManagers |= PkgSrc;
+  #endif
+  #ifdef __HAIKU__
+          else if (val == "haikupkg")
+            cfg.enabledPackageManagers |= HaikuPkg;
+  #endif
+          else
+            warn_log("Unknown package manager in config: {}", val);
+        }
+      }
+
+      // Plugin settings
+      if constexpr (DRAC_ENABLE_PLUGINS) {
+        cfg.plugins.enabled  = tomlCfg.plugins.enabled;
+        cfg.plugins.autoLoad = tomlCfg.plugins.autoLoad;
+      }
+
+      return cfg;
+    } catch (const Exception& exc) {
+      debug_log("Config loading failed: {}, using defaults", exc.what());
       return {};
     } catch (...) {
       error_log("An unexpected error occurred during config loading. Using in-memory defaults.");
@@ -207,96 +361,4 @@ namespace draconis::config {
     }
 #endif // DRAC_PRECOMPILED_CONFIG
   }
-
-#if !DRAC_PRECOMPILED_CONFIG
-  Config::Config(const toml::table& tbl) {
-    const toml::node_view genTbl = tbl["general"];
-    this->general                = genTbl.is_table() ? General::fromToml(*genTbl.as_table()) : General {};
-
-    if (!this->general.name)
-      this->general.name = General::getDefaultName();
-
-    if (const toml::node_view logoTbl = tbl["logo"]; logoTbl.is_table())
-      this->logo = Logo::fromToml(*logoTbl.as_table());
-
-    if constexpr (DRAC_ENABLE_NOWPLAYING) {
-      const toml::node_view npTbl = tbl["now_playing"];
-      this->nowPlaying            = npTbl.is_table() ? NowPlaying::fromToml(*npTbl.as_table()) : NowPlaying {};
-    }
-
-    if constexpr (DRAC_ENABLE_PACKAGECOUNT) {
-      const toml::node_view pkgTbl = tbl["packages"];
-
-      if (pkgTbl.is_table()) {
-        const auto enabledNode = pkgTbl["enabled"];
-
-        if (enabledNode.is_array()) {
-          using enum draconis::services::packages::Manager;
-
-          this->enabledPackageManagers = None;
-
-          for (const auto& elem : *enabledNode.as_array()) {
-            if (auto valOpt = elem.value<String>()) {
-              String val = *valOpt;
-
-              if (val == "cargo")
-                this->enabledPackageManagers |= Cargo;
-  #if defined(__linux__) || defined(__APPLE__)
-              else if (val == "nix")
-                this->enabledPackageManagers |= Nix;
-  #endif
-  #ifdef __linux__
-              else if (val == "apk")
-                this->enabledPackageManagers |= Apk;
-              else if (val == "dpkg")
-                this->enabledPackageManagers |= Dpkg;
-              else if (val == "moss")
-                this->enabledPackageManagers |= Moss;
-              else if (val == "pacman")
-                this->enabledPackageManagers |= Pacman;
-              else if (val == "rpm")
-                this->enabledPackageManagers |= Rpm;
-              else if (val == "xbps")
-                this->enabledPackageManagers |= Xbps;
-  #endif
-  #ifdef __APPLE__
-              else if (val == "homebrew")
-                this->enabledPackageManagers |= Homebrew;
-              else if (val == "macports")
-                this->enabledPackageManagers |= Macports;
-  #endif
-  #ifdef _WIN32
-              else if (val == "winget")
-                this->enabledPackageManagers |= Winget;
-              else if (val == "chocolatey")
-                this->enabledPackageManagers |= Chocolatey;
-              else if (val == "scoop")
-                this->enabledPackageManagers |= Scoop;
-  #endif
-  #if defined(__FreeBSD__) || defined(__DragonFly__)
-              else if (val == "pkgng")
-                this->enabledPackageManagers |= PkgNg;
-  #endif
-  #ifdef __NetBSD__
-              else if (val == "pkgsrc")
-                this->enabledPackageManagers |= PkgSrc;
-  #endif
-  #ifdef __HAIKU__
-              else if (val == "haikupkg")
-                this->enabledPackageManagers |= HaikuPkg;
-  #endif
-              else
-                warn_log("Unknown package manager in config: {}", val);
-            }
-          }
-        }
-      }
-    }
-
-    if constexpr (DRAC_ENABLE_PLUGINS) {
-      const toml::node_view pluginTbl = tbl["plugins"];
-      this->plugins                   = pluginTbl.is_table() ? Plugins::fromToml(*pluginTbl.as_table()) : Plugins {};
-    }
-  }
-#endif // !DRAC_PRECOMPILED_CONFIG
 } // namespace draconis::config

@@ -1,13 +1,8 @@
 #pragma once
 
 #if !DRAC_PRECOMPILED_CONFIG
-  #include <cctype>                    // std::tolower
-  #include <filesystem>                // std::filesystem::path
-  #include <memory>                    // std::{make_unique, unique_ptr}
-  #include <ranges>                    // std::ranges::transform
-  #include <toml++/impl/node.hpp>      // toml::node
-  #include <toml++/impl/node_view.hpp> // toml::node_view
-  #include <toml++/impl/table.hpp>     // toml::table
+  #include <cctype>     // std::tolower
+  #include <filesystem> // std::filesystem::path
 
   #include <Drac++/Utils/Logging.hpp>
 #endif
@@ -25,7 +20,6 @@
   #include <Drac++/Utils/Env.hpp>
 #endif
 
-#include <Drac++/Utils/Logging.hpp>
 #include <Drac++/Utils/Types.hpp>
 
 namespace draconis::config {
@@ -36,41 +30,17 @@ namespace draconis::config {
 
   struct Logo {
     draconis::utils::types::Option<draconis::utils::types::String> imagePath;
-    LogoProtocol                                                   protocol = LogoProtocol::Kitty;
+    draconis::utils::types::Option<draconis::utils::types::String> protocol; // "kitty" or "kitty-direct"
     draconis::utils::types::Option<draconis::utils::types::u32>    width;
     draconis::utils::types::Option<draconis::utils::types::u32>    height;
 
-#if !DRAC_PRECOMPILED_CONFIG
-    static fn fromToml(const toml::table& tbl) -> Logo {
-      using draconis::utils::types::String;
-      using draconis::utils::types::u32;
-
-      Logo logo;
-
-      if (const toml::node_view<const toml::node> pathNode = tbl["path"])
-        if (auto pathVal = pathNode.value<String>())
-          logo.imagePath = *pathVal;
-
-      if (const toml::node_view<const toml::node> protocolNode = tbl["protocol"])
-        if (auto protoVal = protocolNode.value<String>()) {
-          String protoLower = *protoVal;
-
-          std::ranges::transform(protoLower, protoLower.begin(), [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
-
-          logo.protocol = protoLower == "kitty-direct" ? LogoProtocol::KittyDirect : LogoProtocol::Kitty;
-        }
-
-      if (const auto widthNode = tbl["width"])
-        if (auto widthVal = widthNode.value<u32>())
-          logo.width = *widthVal;
-
-      if (const auto heightNode = tbl["height"])
-        if (auto heightVal = heightNode.value<u32>())
-          logo.height = *heightVal;
-
-      return logo;
+    [[nodiscard]] fn getProtocol() const -> LogoProtocol {
+      if (!protocol)
+        return LogoProtocol::Kitty;
+      draconis::utils::types::String protoLower = *protocol;
+      std::ranges::transform(protoLower, protoLower.begin(), [](unsigned char chr) -> char { return static_cast<char>(std::tolower(chr)); });
+      return protoLower == "kitty-direct" ? LogoProtocol::KittyDirect : LogoProtocol::Kitty;
     }
-#endif
   };
 
   /**
@@ -122,29 +92,6 @@ namespace draconis::config {
         name = getDefaultName();
       return *name;
     }
-
-#if !DRAC_PRECOMPILED_CONFIG
-    /**
-     * @brief Parses a TOML table to create a General instance.
-     * @param tbl The TOML table to parse, containing [general].
-     * @return A General instance with the parsed values, or defaults otherwise.
-     */
-    static fn fromToml(const toml::table& tbl) -> General {
-      using draconis::utils::types::String;
-
-      General gen;
-
-      if (const toml::node_view<const toml::node> nameNode = tbl["name"])
-        if (auto nameVal = nameNode.value<String>())
-          gen.name = *nameVal;
-
-      if (const toml::node_view<const toml::node> langNode = tbl["language"])
-        if (auto langVal = langNode.value<String>())
-          gen.language = *langVal;
-
-      return gen;
-    }
-#endif // DRAC_PRECOMPILED_CONFIG
   };
 
 #if DRAC_ENABLE_NOWPLAYING
@@ -154,17 +101,6 @@ namespace draconis::config {
    */
   struct NowPlaying {
     bool enabled = true; ///< Flag to enable or disable the Now Playing feature.
-
-  #if !DRAC_PRECOMPILED_CONFIG
-    /**
-     * @brief Parses a TOML table to create a NowPlaying instance.
-     * @param tbl The TOML table to parse, containing [now_playing].
-     * @return A NowPlaying instance with the parsed values, or defaults otherwise.
-     */
-    static fn fromToml(const toml::table& tbl) -> NowPlaying {
-      return { .enabled = tbl["enabled"].value_or(true) };
-    }
-  #endif
   };
 #endif // DRAC_ENABLE_NOWPLAYING
 
@@ -177,33 +113,6 @@ namespace draconis::config {
     draconis::utils::types::Vec<draconis::utils::types::String> autoLoad; ///< List of plugin names to auto-load during initialization.
 
     bool enabled = true; ///< Flag to enable or disable the plugin system.
-
-  #if !DRAC_PRECOMPILED_CONFIG
-    /**
-     * @brief Parses a TOML table to create a Plugins instance.
-     * @param tbl The TOML table to parse, containing [plugins].
-     * @return A Plugins instance with the parsed values, or defaults otherwise.
-     */
-    static fn fromToml(const toml::table& tbl) -> Plugins {
-      using draconis::utils::types::String, draconis::utils::types::Vec;
-
-      Plugins plugins;
-
-      plugins.enabled = tbl["enabled"].value_or(true);
-
-      if (const toml::node_view<const toml::node> autoLoadNode = tbl["auto_load"]) {
-        if (auto arr = autoLoadNode.as_array()) {
-          for (const auto& elem : *arr) {
-            if (auto valOpt = elem.value<String>()) {
-              plugins.autoLoad.emplace_back(*valOpt);
-            }
-          }
-        }
-      }
-
-      return plugins;
-    }
-  #endif // DRAC_PRECOMPILED_CONFIG
   };
 #endif // DRAC_ENABLE_PLUGINS
 
@@ -228,14 +137,6 @@ namespace draconis::config {
      * @brief Default constructor for Config.
      */
     Config() = default;
-
-#if !DRAC_PRECOMPILED_CONFIG
-    /**
-     * @brief Constructs a Config instance from a TOML table.
-     * @param tbl The TOML table to parse, containing [general], [weather], and [now_playing].
-     */
-    explicit Config(const toml::table& tbl);
-#endif
 
     /**
      * @brief Retrieves the path to the configuration file.

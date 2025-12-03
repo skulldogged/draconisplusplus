@@ -194,14 +194,11 @@ if get_option('precompiled_config') == true
       'Option "precompiled_config" is enabled, but "@0@" was not found.'.format(config_hpp_path),
     )
   endif
-else
-  lib_deps += dependency('tomlplusplus', include_type: 'system', static: true)
 endif
 
 # Add curl dependency if weather plugin is in static plugins
 if get_option('precompiled_config') and 'weather' in get_option('static_plugins')
   lib_deps += dependency('libcurl', include_type: 'system', static: true)
-  lib_deps += dependency('tomlplusplus', include_type: 'system', static: true)
 endif
 
 if feature_states['packagecount'] and host_system in ['darwin', 'linux']
@@ -240,6 +237,8 @@ elif host_system == 'windows'
     cpp.find_library('dxguid'),
     cpp.find_library('ole32'),
     cpp.find_library('propsys'),
+    cpp.find_library('iphlpapi'),
+    cpp.find_library('ws2_32'),
   ]
 elif host_system not in ['serenity', 'haiku']
   lib_deps += dependency('dbus-1', required: feature_states['nowplaying'])
