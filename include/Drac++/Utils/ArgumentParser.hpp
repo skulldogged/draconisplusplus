@@ -5,6 +5,8 @@
  * This header provides a lightweight argument parser that follows the Drac++
  * coding conventions and type system. It supports basic argument parsing
  * including flags, optional arguments, and help text generation.
+ *
+ * Supports automatic struct binding via bindTo() for cleaner argument handling.
  */
 
 #pragma once
@@ -13,6 +15,7 @@
 #include <concepts>                  // std::convertible_to
 #include <cstdlib>                   // std::exit
 #include <format>                    // std::format
+#include <functional>                // std::function
 #include <magic_enum/magic_enum.hpp> // magic_enum::enum_name, magic_enum::enum_cast
 #include <sstream>                   // std::ostringstream
 #include <unordered_set>             // std::unordered_set for fast choice look-ups
@@ -27,10 +30,18 @@ namespace draconis::utils::argparse {
   namespace logging = ::draconis::utils::logging;
   namespace types   = ::draconis::utils::types;
 
+  // Forward declaration for binding function
+  class Argument;
+
   /**
    * @brief Type alias for argument values.
    */
   using ArgValue = std::variant<bool, types::i32, types::f64, types::String>;
+
+  /**
+   * @brief Type-erased binding function for struct member assignment.
+   */
+  using ArgBinding = std::function<void(const Argument&)>;
 
   /**
    * @brief Type alias for allowed choices for enum-style arguments.
@@ -391,6 +402,81 @@ namespace draconis::utils::argparse {
         m_value = true;
     }
 
+    /**
+     * @brief Bind this argument to a struct member (bool, i32, f64, or String).
+     * @tparam T The member type (must be bool, i32, f64, or String)
+     * @param member Pointer to the struct member
+     * @return Reference to this argument for method chaining
+     *
+     * @example
+     *   struct Options { bool verbose; String output; };
+     *   Options opts;
+     *   parser.addArguments("-v", "--verbose").flag().bindTo(opts.verbose);
+     *   parser.addArguments("-o", "--output").bindTo(opts.output);
+     */
+    template <typename T>
+      requires std::same_as<T, bool> || std::same_as<T, types::i32> || std::same_as<T, types::f64> || std::same_as<T, types::String>
+                                                                                                    fn bindTo(T& member) -> Argument& {
+      m_binding = [&member](const Argument& arg) {
+        member = arg.get<T>();
+      };
+      return *this;
+    }
+
+    /**
+     * @brief Bind this argument to a struct member with custom transformation.
+     * @tparam T The member type
+     * @tparam Func Transformation function type
+     * @param member Pointer to the struct member
+     * @param transform Function to transform the argument value
+     * @return Reference to this argument for method chaining
+     *
+     * @example
+     *   struct Options { u32 width; };
+     *   Options opts;
+     *   parser.addArguments("--width").defaultValue(i32(0)).bindTo(opts.width,
+     *     [](const Argument& arg) { return static_cast<u32>(std::max(0, arg.get<i32>())); });
+     */
+    template <typename T, typename Func>
+      requires std::invocable<Func, const Argument&> && std::convertible_to<std::invoke_result_t<Func, const Argument&>, T>
+                                                      fn bindTo(T& member, Func&& transform) -> Argument& {
+      m_binding = [&member, transform = std::forward<Func>(transform)](const Argument& arg) {
+        member = transform(arg);
+      };
+      return *this;
+    }
+
+    /**
+     * @brief Bind this argument to an enum struct member.
+     * @tparam EnumType The enum type
+     * @param member Reference to the struct member
+     * @return Reference to this argument for method chaining
+     */
+    template <typename EnumType>
+      requires std::is_enum_v<EnumType> && EnumTraits<EnumType>::has_string_conversion
+                                         fn bindToEnum(EnumType& member) -> Argument& {
+      m_binding = [&member](const Argument& arg) {
+        member = arg.getEnum<EnumType>();
+      };
+      return *this;
+    }
+
+    /**
+     * @brief Check if this argument has a binding.
+     * @return true if a binding is set, false otherwise
+     */
+    [[nodiscard]] fn hasBinding() const -> bool {
+      return m_binding != nullptr;
+    }
+
+    /**
+     * @brief Apply the binding if one exists.
+     */
+    fn applyBinding() const -> types::Unit {
+      if (m_binding)
+        m_binding(*this);
+    }
+
    private:
     types::Vec<types::String>                        m_names;        ///< Argument names (e.g., {"-v", "--verbose"})
     types::String                                    m_helpText;     ///< Help text for this argument
@@ -398,6 +484,7 @@ namespace draconis::utils::argparse {
     types::Option<ArgValue>                          m_defaultValue; ///< Default value if none provided
     types::Option<ArgChoices>                        m_choices;      ///< Allowed choices for enum-style arguments
     types::Option<std::unordered_set<types::String>> m_lowerChoices; ///< Lower-cased set for fast validation
+    ArgBinding                                       m_binding;      ///< Optional binding to a struct member
     bool                                             m_isFlag {};    ///< Whether this is a flag argument
     bool                                             m_isUsed {};    ///< Whether this argument was used
   };
@@ -672,6 +759,53 @@ namespace draconis::utils::argparse {
           logging::Println();
         }
       }
+    }
+
+    /**
+     * @brief Apply all registered bindings to populate bound struct members.
+     *
+     * Call this after parseArgs() to transfer parsed values to bound struct members.
+     * Each argument with a binding will have its value (or default) assigned to the
+     * bound member.
+     *
+     * @example
+     *   struct Options { bool verbose; String output; };
+     *   Options opts;
+     *   ArgumentParser parser("myapp");
+     *   parser.addArguments("-v").flag().bindTo(opts.verbose);
+     *   parser.addArguments("-o").defaultValue(String("")).bindTo(opts.output);
+     *   parser.parseArgs(args);
+     *   parser.applyBindings(); // opts.verbose and opts.output are now populated
+     */
+    fn applyBindings() const -> types::Unit {
+      for (const auto& arg : m_arguments)
+        arg->applyBinding();
+    }
+
+    /**
+     * @brief Parse arguments and apply bindings in one call.
+     * @param args Span of argument strings
+     * @return Result indicating success or failure
+     *
+     * Convenience method that combines parseArgs() and applyBindings().
+     */
+    fn parseInto(types::Span<const char* const> args) -> types::Result<> {
+      if (auto result = parseArgs(args); !result)
+        return result;
+      applyBindings();
+      return {};
+    }
+
+    /**
+     * @brief Parse arguments from vector and apply bindings in one call.
+     * @param args Vector of argument strings
+     * @return Result indicating success or failure
+     */
+    fn parseInto(const types::Vec<types::String>& args) -> types::Result<> {
+      if (auto result = parseArgs(args); !result)
+        return result;
+      applyBindings();
+      return {};
     }
 
    private:

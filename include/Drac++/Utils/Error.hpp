@@ -5,9 +5,8 @@
 
 #ifdef _WIN32
   // ReSharper disable once CppUnusedIncludeDirective
-  #include <guiddef.h>    // GUID
-  #include <winerror.h>   // error values
-  #include <winrt/base.h> // winrt::hresult_error
+  #include <guiddef.h>  // GUID
+  #include <winerror.h> // error values
 #endif
 
 #include "Types.hpp"

@@ -12,10 +12,6 @@
   #include <Drac++/Utils/Logging.hpp>
 #endif
 
-#if DRAC_ENABLE_WEATHER
-  #include <Drac++/Services/Weather.hpp>
-#endif
-
 #if DRAC_ENABLE_PACKAGECOUNT
   #include <Drac++/Services/Packages.hpp>
 #endif
@@ -172,109 +168,6 @@ namespace draconis::config {
   };
 #endif // DRAC_ENABLE_NOWPLAYING
 
-#if DRAC_ENABLE_WEATHER
-  /**
-   * @struct Weather
-   * @brief Holds configuration settings for the Weather feature.
-   */
-  struct Weather {
-    draconis::services::weather::Location                          location; ///< Location for weather data, can be a city name or coordinates.
-    draconis::utils::types::Option<draconis::utils::types::String> apiKey;   ///< API key for the weather service.
-    draconis::services::weather::UnitSystem                        units;    ///< Units for temperature, either "metric" or "imperial".
-
-    bool                                                          enabled      = false;   ///< Flag to enable or disable the Weather feature.
-    bool                                                          showTownName = false;   ///< Flag to show the town name in the output.
-    std::unique_ptr<draconis::services::weather::IWeatherService> service      = nullptr; ///< Pointer to the weather service.
-
-  #if !DRAC_PRECOMPILED_CONFIG
-    /**
-     * @brief Parses a TOML table to create a Weather instance.
-     * @param tbl The TOML table to parse, containing [weather].
-     * @return A Weather instance with the parsed values, or defaults otherwise.
-     */
-    static fn fromToml(const toml::table& tbl) -> Weather {
-      using draconis::utils::types::String;
-      using namespace draconis::services::weather;
-
-      using matchit::match, matchit::is, matchit::_;
-
-    #define SET_ERROR(...)       \
-      do {                       \
-        error_log(__VA_ARGS__);  \
-        weather.enabled = false; \
-      } while (false)
-
-      Weather weather;
-
-      weather.apiKey  = tbl["api_key"].value<String>();
-      weather.enabled = tbl["enabled"].value_or<bool>(false);
-
-      if (!weather.enabled)
-        return weather;
-
-      weather.showTownName = tbl["show_town_name"].value_or(false);
-      String unitsStr      = tbl["units"].value_or("metric");
-
-      match(unitsStr)(
-        is | "metric"   = [&]() { weather.units = UnitSystem::Metric; },
-        is | "imperial" = [&]() { weather.units = UnitSystem::Imperial; },
-        is | _          = [&]() { SET_ERROR("Invalid units '{}' in [weather] section. Set 'units = \"metric\"' or 'units = \"imperial\"' in your config file.", unitsStr); }
-      );
-
-      String provider = tbl["provider"].value_or("openweathermap");
-
-      if (const toml::node_view<const toml::node> locationNode = tbl["location"]) {
-        using matchit::app;
-
-        // clang-format off
-        match(locationNode)(
-          is | app([](const toml::node_view<const toml::node>& node) { return node.is_string(); }, true) = [&]() { weather.location = *locationNode.value<String>(); },
-          is | app([](const toml::node_view<const toml::node>& node) { return node.is_table(); }, true)  = [&]() {
-            weather.location = Coords {
-              .lat = *locationNode.as_table()->get("lat")->value<double>(),
-              .lon = *locationNode.as_table()->get("lon")->value<double>(),
-            };
-          },
-          is | _ = [&]() { SET_ERROR("Invalid location format in [weather] section. Use 'location = \"City\"' for OpenWeatherMap, or 'location = {{ lat = 40.7128, lon = -74.0060 }}' for coordinates."); }
-        );
-        // clang-format on
-      } else
-        SET_ERROR("Missing 'location' in [weather] section. Add 'location = \"City\"' for OpenWeatherMap, or 'location = {{ lat = 40.7128, lon = -74.0060 }}' for coordinates.");
-
-      if (weather.enabled) {
-        // clang-format off
-        match(provider)(
-          is | "openmeteo" = [&]() {
-            if (std::holds_alternative<Coords>(weather.location)) {
-              const auto& coords = std::get<Coords>(weather.location);
-              weather.service = CreateWeatherService(Provider::OpenMeteo, coords, weather.units);
-            } else
-              SET_ERROR("OpenMeteo requires coordinates in [weather] section. Change to 'location = {{ lat = YOUR_LAT, lon = YOUR_LON }}' instead of a city name.");
-          },
-          is | "metno" = [&]() {
-            if (std::holds_alternative<Coords>(weather.location)) {
-              const auto& coords = std::get<Coords>(weather.location);
-              weather.service = CreateWeatherService(Provider::MetNo, coords, weather.units);
-            } else
-              SET_ERROR("MetNo requires coordinates in [weather] section. Change to 'location = {{ lat = YOUR_LAT, lon = YOUR_LON }}' instead of a city name.");
-          },
-          is | "openweathermap" = [&]() {
-            if (weather.apiKey)
-              weather.service = CreateWeatherService(Provider::OpenWeatherMap, weather.location,  weather.units, weather.apiKey);
-            else
-              SET_ERROR("Missing 'api_key' in [weather] section. Add 'api_key = \"YOUR_API_KEY\"' to use OpenWeatherMap. Get a free key at https://openweathermap.org/api");
-          },
-          is | _ = [&]() { SET_ERROR("Unknown weather provider '{}' in [weather] section. Set 'provider = \"openweathermap\"', 'provider = \"openmeteo\"', or 'provider = \"metno\"'.", provider); }
-        );
-        // clang-format on
-      }
-
-      return weather;
-    }
-  #endif // DRAC_PRECOMPILED_CONFIG
-  };
-#endif // DRAC_ENABLE_WEATHER
-
 #if DRAC_ENABLE_PLUGINS
   /**
    * @struct Plugins
@@ -320,10 +213,7 @@ namespace draconis::config {
    */
   struct Config {
     General general; ///< General configuration settings.
-#if DRAC_ENABLE_WEATHER
-    Weather weather; ///< Weather configuration settings.
-#endif
-    Logo logo;
+    Logo    logo;
 #if DRAC_ENABLE_NOWPLAYING
     NowPlaying nowPlaying; ///< Now Playing configuration settings.
 #endif

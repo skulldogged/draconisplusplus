@@ -58,7 +58,6 @@ if host_system == 'windows'
   project_flag_defines += {
     'NOMINMAX': true,
     'WIN32_LEAN_AND_MEAN': true,
-    'WINRT_LEAN_AND_MEAN': true,
     'CURL_STATICLIB': true,
   }
 endif
@@ -87,7 +86,6 @@ foreach option, define : {
   'pugixml': 'DRAC_USE_PUGIXML',
   'use_linked_pci_ids': 'DRAC_USE_LINKED_PCI_IDS',
   'wayland': 'DRAC_USE_WAYLAND',
-  'weather': 'DRAC_ENABLE_WEATHER',
   'xcb': 'DRAC_USE_XCB',
 }
   opt_val = get_option(option)
@@ -200,8 +198,10 @@ else
   lib_deps += dependency('tomlplusplus', include_type: 'system', static: true)
 endif
 
-if feature_states['weather']
+# Add curl dependency if weather plugin is in static plugins
+if get_option('precompiled_config') and 'weather' in get_option('static_plugins')
   lib_deps += dependency('libcurl', include_type: 'system', static: true)
+  lib_deps += dependency('tomlplusplus', include_type: 'system', static: true)
 endif
 
 if feature_states['packagecount'] and host_system in ['darwin', 'linux']
@@ -235,10 +235,11 @@ if host_system == 'darwin'
 elif host_system == 'windows'
   lib_deps += [
     cpp.find_library('dwmapi'),
-    cpp.find_library('windowsapp'),
     cpp.find_library('setupapi'),
     cpp.find_library('dxgi'),
     cpp.find_library('dxguid'),
+    cpp.find_library('ole32'),
+    cpp.find_library('propsys'),
   ]
 elif host_system not in ['serenity', 'haiku']
   lib_deps += dependency('dbus-1', required: feature_states['nowplaying'])
@@ -324,7 +325,6 @@ summary(
 
 summary(
   {
-    'Weather support': feature_states['weather'],
     'Package counting': feature_states['packagecount'],
     'Now Playing': feature_states['nowplaying'],
     'Caching': feature_states['caching'],

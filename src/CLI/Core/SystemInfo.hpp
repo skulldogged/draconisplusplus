@@ -55,41 +55,59 @@ namespace draconis::core::system {
 #endif
 
 #if DRAC_ENABLE_PLUGINS
-    // Plugin-contributed data (high-performance flat map)
-    types::Map<types::String, types::String> pluginData;
+    // Plugin-contributed data organized by plugin ID
+    types::Map<types::String, types::Map<types::String, types::String>> pluginData;
 
     /**
      * @brief Get plugin-contributed field value
+     * @param pluginId ID of the plugin (e.g., "weather")
      * @param fieldName Name of the field to retrieve
      * @return Field value or empty string if not found
      */
-    [[nodiscard]] fn getPluginField(const types::String& fieldName) const noexcept -> types::String {
-      if (auto iter = pluginData.find(fieldName); iter != pluginData.end())
-        return iter->second;
-
+    [[nodiscard]] fn getPluginField(const types::String& pluginId, const types::String& fieldName) const noexcept -> types::String {
+      if (auto pluginIter = pluginData.find(pluginId); pluginIter != pluginData.end()) {
+        if (auto fieldIter = pluginIter->second.find(fieldName); fieldIter != pluginIter->second.end())
+          return fieldIter->second;
+      }
       return {};
     }
 
     /**
      * @brief Check if plugin field exists
+     * @param pluginId ID of the plugin
      * @param fieldName Name of the field to check
      * @return True if field exists
      */
-    [[nodiscard]] fn hasPluginField(const types::String& fieldName) const noexcept -> bool {
-      return pluginData.contains(fieldName);
+    [[nodiscard]] fn hasPluginField(const types::String& pluginId, const types::String& fieldName) const noexcept -> bool {
+      if (auto pluginIter = pluginData.find(pluginId); pluginIter != pluginData.end())
+        return pluginIter->second.contains(fieldName);
+      return false;
     }
 
     /**
-     * @brief Get all plugin field names (for iteration)
+     * @brief Get all plugin IDs that have contributed data
+     * @return Vector of plugin IDs
+     */
+    [[nodiscard]] fn getPluginIds() const -> types::Vec<types::String> {
+      types::Vec<types::String> ids;
+      ids.reserve(pluginData.size());
+      for (const auto& [pluginId, fields] : pluginData)
+        ids.push_back(pluginId);
+      return ids;
+    }
+
+    /**
+     * @brief Get all field names for a specific plugin
+     * @param pluginId ID of the plugin
      * @return Vector of field names
      */
-    [[nodiscard]] fn getPluginFieldNames() const -> types::Vec<types::String> {
+    [[nodiscard]] fn getPluginFieldNames(const types::String& pluginId) const -> types::Vec<types::String> {
       types::Vec<types::String> names;
-      names.reserve(pluginData.size());
-
-      for (const auto& [name, value] : pluginData)
-        names.push_back(name);
-
+      if (auto pluginIter = pluginData.find(pluginId); pluginIter != pluginData.end()) {
+        names.reserve(pluginIter->second.size());
+        for (const auto& [name, value] : pluginIter->second)
+          names.push_back(name);
+      }
       return names;
     }
 #endif
@@ -136,12 +154,9 @@ namespace draconis::core::system {
 #if DRAC_ENABLE_NOWPLAYING
     types::Option<types::MediaInfo> nowPlaying;
 #endif
-#if DRAC_ENABLE_WEATHER
-    types::Option<services::weather::Report> weather;
-#endif
 #if DRAC_ENABLE_PLUGINS
-    // Plugin-contributed fields (dynamic JSON object)
-    types::Map<types::String, types::String> pluginFields;
+    // Plugin-contributed fields organized by plugin ID
+    types::Map<types::String, types::Map<types::String, types::String>> pluginFields;
 #endif
   };
 
@@ -175,9 +190,6 @@ namespace glz {
 #endif
 #if DRAC_ENABLE_NOWPLAYING
       "nowPlaying",      &T::nowPlaying,
-#endif
-#if DRAC_ENABLE_WEATHER
-      "weather",         &T::weather,
 #endif
 #if DRAC_ENABLE_PLUGINS
       "pluginFields",    &T::pluginFields,

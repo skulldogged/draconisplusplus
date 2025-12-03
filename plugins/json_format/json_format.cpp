@@ -60,8 +60,8 @@ namespace {
     Option<String> weatherDescription;
     Option<String> weatherTown;
 
-    // Plugin-contributed fields
-    Map<String, String> pluginFields;
+    // Plugin-contributed fields organized by plugin ID
+    Map<String, Map<String, String>> pluginFields;
   };
 
 } // anonymous namespace
@@ -133,7 +133,7 @@ namespace {
       return m_metadata;
     }
 
-    fn initialize(::IPluginCache& /*cache*/) -> Result<Unit> override {
+    fn initialize(const draconis::core::plugin::PluginContext& /*ctx*/, ::PluginCache& /*cache*/) -> Result<Unit> override {
       m_ready = true;
       return {};
     }
@@ -146,7 +146,11 @@ namespace {
       return m_ready;
     }
 
-    fn formatOutput(const String& formatName, const Map<String, String>& data) const -> Result<String> override {
+    fn formatOutput(
+      const String&                           formatName,
+      const Map<String, String>&              data,
+      const Map<String, Map<String, String>>& pluginData
+    ) const -> Result<String> override {
       if (!m_ready)
         return Err(draconis::utils::error::DracError { draconis::utils::error::DracErrorCode::Other, "JsonFormatPlugin is not ready." });
 
@@ -227,12 +231,8 @@ namespace {
       output.weatherDescription = getOptional("weather_description");
       output.weatherTown        = getOptional("weather_town");
 
-      // Collect plugin fields
-      for (const auto& [key, value] : data) {
-        if (key.starts_with("plugin_") && !value.empty()) {
-          output.pluginFields[key.substr(7)] = value;
-        }
-      }
+      // Use plugin data directly (already organized by plugin ID)
+      output.pluginFields = pluginData;
 
       // Serialize to JSON
       String jsonStr;

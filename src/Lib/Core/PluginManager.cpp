@@ -32,50 +32,6 @@
   #endif
 
 namespace draconis::core::plugin {
-  // Proper cache wrapper that uses the full CacheManager infrastructure with TTL support
-  class CacheWrapper : public IPluginCache {
-   public:
-    explicit CacheWrapper(utils::cache::CacheManager& manager) : m_manager(manager) {}
-
-    fn get(const String& key) -> Option<String> override {
-      // Use a fetcher that always fails - we only want cached data, not to fetch fresh data
-      fn fetcher = []() -> utils::types::Result<String> {
-        return utils::types::Err(utils::error::DracError(utils::error::DracErrorCode::Other, "Cache miss - no fetcher provided"));
-      };
-
-      // Try to get from cache. If it's a cache miss, the fetcher will fail and we'll return nullopt
-      Result<String> result = m_manager.getOrSet<String>(key, fetcher);
-
-      if (result)
-        return *result;
-
-      return std::nullopt;
-    }
-
-    fn set(const String& key, const String& value, utils::types::u32 ttlSeconds) -> void override {
-      // First invalidate any existing cache entry to ensure we store fresh data
-      m_manager.invalidate(key);
-
-      // Create a fetcher that returns the provided value
-      fn fetcher = [&value]() -> utils::types::Result<String> {
-        return value;
-      };
-
-      // Set cache policy with the specified TTL
-      using namespace std::chrono;
-      utils::cache::CachePolicy policy {
-        .location = utils::cache::CacheLocation::Persistent, // Use persistent cache for plugins
-        .ttl      = seconds(ttlSeconds)
-      };
-
-      // Store the value with TTL - we don't use the return value since we just want to cache it
-      [[maybe_unused]] auto cacheResult = m_manager.getOrSet<String>(key, policy, fetcher);
-    }
-
-   private:
-    utils::cache::CacheManager& m_manager; // NOLINT(cppcoreguidelines-avoid-const-or-ref-data-members)
-  };
-
   namespace {
     using utils::error::DracErrorCode;
     using utils::types::StringView;
@@ -118,7 +74,65 @@ namespace draconis::core::plugin {
 
       return DEFAULT_PLUGIN_PATHS;
     }
+
+    // Get the base config directory for draconis++
+    fn GetConfigDir() -> fs::path {
+  #ifdef _WIN32
+      using draconis::utils::env::GetEnv;
+      if (auto result = GetEnv("LOCALAPPDATA"))
+        return fs::path(*result) / "draconis++";
+      if (auto result = GetEnv("USERPROFILE"))
+        return fs::path(*result) / ".config" / "draconis++";
+      return fs::current_path();
+  #else
+      if (const char* xdgConfig = getenv("XDG_CONFIG_HOME"))
+        return fs::path(xdgConfig) / "draconis++";
+      if (const char* home = getenv("HOME"))
+        return fs::path(home) / ".config" / "draconis++";
+      return fs::current_path();
+  #endif
+    }
+
+    // Get the cache directory for draconis++
+    fn GetCacheDir() -> fs::path {
+  #ifdef _WIN32
+      using draconis::utils::env::GetEnv;
+      if (auto result = GetEnv("LOCALAPPDATA"))
+        return fs::path(*result) / "draconis++" / "cache";
+      return GetConfigDir() / "cache";
+  #else
+      if (const char* xdgCache = getenv("XDG_CACHE_HOME"))
+        return fs::path(xdgCache) / "draconis++";
+      if (const char* home = getenv("HOME"))
+        return fs::path(home) / ".cache" / "draconis++";
+      return GetConfigDir() / "cache";
+  #endif
+    }
+
+    // Get the data directory for draconis++
+    fn GetDataDir() -> fs::path {
+  #ifdef _WIN32
+      using draconis::utils::env::GetEnv;
+      if (auto result = GetEnv("LOCALAPPDATA"))
+        return fs::path(*result) / "draconis++" / "data";
+      return GetConfigDir() / "data";
+  #else
+      if (const char* xdgData = getenv("XDG_DATA_HOME"))
+        return fs::path(xdgData) / "draconis++";
+      if (const char* home = getenv("HOME"))
+        return fs::path(home) / ".local" / "share" / "draconis++";
+      return GetConfigDir() / "data";
+  #endif
+    }
   } // namespace
+
+  fn GetPluginContext() -> PluginContext {
+    return PluginContext {
+      .configDir = GetConfigDir() / "plugins",
+      .cacheDir  = GetCacheDir() / "plugins",
+      .dataDir   = GetDataDir() / "plugins",
+    };
+  }
 
   PluginManager::~PluginManager() {
     shutdown();
@@ -272,15 +286,13 @@ namespace draconis::core::plugin {
       // Add to type-safe caches if ready
       if (loadedPlugin.isReady) {
         switch (loadedPlugin.metadata.type) {
-          case PluginType::SystemInfo:
-            if (auto* plugin = dynamic_cast<ISystemInfoPlugin*>(loadedPlugin.instance.get()))
-              m_systemInfoPlugins.push_back(plugin);
+          case PluginType::InfoProvider:
+            if (auto* plugin = dynamic_cast<IInfoProviderPlugin*>(loadedPlugin.instance.get()))
+              m_infoProviderPlugins.push_back(plugin);
             break;
           case PluginType::OutputFormat:
             if (auto* plugin = dynamic_cast<IOutputFormatPlugin*>(loadedPlugin.instance.get()))
               m_outputFormatPlugins.push_back(plugin);
-            break;
-          default:
             break;
         }
       }
@@ -330,16 +342,13 @@ namespace draconis::core::plugin {
     // Add to type-safe caches if ready
     if (loadedPlugin.isReady) {
       switch (loadedPlugin.metadata.type) {
-        case PluginType::SystemInfo:
-          if (auto* plugin = dynamic_cast<ISystemInfoPlugin*>(loadedPlugin.instance.get()))
-            m_systemInfoPlugins.push_back(plugin);
+        case PluginType::InfoProvider:
+          if (auto* plugin = dynamic_cast<IInfoProviderPlugin*>(loadedPlugin.instance.get()))
+            m_infoProviderPlugins.push_back(plugin);
           break;
         case PluginType::OutputFormat:
           if (auto* plugin = dynamic_cast<IOutputFormatPlugin*>(loadedPlugin.instance.get()))
             m_outputFormatPlugins.push_back(plugin);
-          break;
-        default:
-          // Other plugin types are not cached in type-safe lists
           break;
       }
     }
@@ -365,19 +374,15 @@ namespace draconis::core::plugin {
 
     // Remove from type-safe caches
     switch (loadedPlugin.metadata.type) {
-      case PluginType::SystemInfo:
-        std::erase_if(m_systemInfoPlugins, [&](const ISystemInfoPlugin* plugin) {
+      case PluginType::InfoProvider:
+        std::erase_if(m_infoProviderPlugins, [&](const IInfoProviderPlugin* plugin) {
           return plugin == loadedPlugin.instance.get();
         });
-
         break;
       case PluginType::OutputFormat:
         std::erase_if(m_outputFormatPlugins, [&](const IOutputFormatPlugin* plugin) {
           return plugin == loadedPlugin.instance.get();
         });
-
-        break;
-      default:
         break;
     }
 
@@ -417,9 +422,18 @@ namespace draconis::core::plugin {
     return std::nullopt;
   }
 
-  fn PluginManager::getSystemInfoPlugins() const -> Vec<ISystemInfoPlugin*> {
+  fn PluginManager::getInfoProviderPlugins() const -> Vec<IInfoProviderPlugin*> {
     std::shared_lock<std::shared_mutex> lock(m_mutex);
-    return m_systemInfoPlugins;
+    return m_infoProviderPlugins;
+  }
+
+  fn PluginManager::getInfoProviderByName(const String& providerId) const -> Option<IInfoProviderPlugin*> {
+    std::shared_lock<std::shared_mutex> lock(m_mutex);
+    for (auto* plugin : m_infoProviderPlugins) {
+      if (plugin->getProviderId() == providerId)
+        return plugin;
+    }
+    return std::nullopt;
   }
 
   fn PluginManager::getOutputFormatPlugins() const -> Vec<IOutputFormatPlugin*> {
@@ -507,16 +521,27 @@ namespace draconis::core::plugin {
     return reinterpret_cast<void (*)(IPlugin*)>(func);
   }
 
-  fn PluginManager::initializePluginInstance(LoadedPlugin& loadedPlugin, CacheManager& cache) -> Result<Unit> {
+  fn PluginManager::initializePluginInstance(LoadedPlugin& loadedPlugin, CacheManager& /*cache*/) -> Result<Unit> {
     if (loadedPlugin.isInitialized) {
       debug_log("Plugin '{}' is already initialized", loadedPlugin.metadata.name);
       return {};
     }
 
     debug_log("Initializing plugin instance '{}'", loadedPlugin.metadata.name);
-    CacheWrapper cacheWrapper(cache);
 
-    if (auto initResult = loadedPlugin.instance->initialize(cacheWrapper); !initResult) {
+    // Create plugin context with paths
+    PluginContext ctx = GetPluginContext();
+
+    // Ensure directories exist
+    std::error_code errc;
+    fs::create_directories(ctx.configDir, errc);
+    fs::create_directories(ctx.cacheDir, errc);
+    fs::create_directories(ctx.dataDir, errc);
+
+    // Create a PluginCache using the plugin's cache directory
+    PluginCache pluginCache(ctx.cacheDir);
+
+    if (auto initResult = loadedPlugin.instance->initialize(ctx, pluginCache); !initResult) {
       debug_log("Plugin '{}' initialization failed: {}", loadedPlugin.metadata.name, initResult.error().message);
       loadedPlugin.isReady = false;
       return initResult;

@@ -16,10 +16,6 @@
 #include "Config/Config.hpp"
 #include "Core/SystemInfo.hpp"
 
-#if DRAC_ENABLE_WEATHER
-  #include <Drac++/Services/Weather.hpp>
-#endif
-
 namespace draconis::cli {
   /**
    * @brief Structure to hold benchmark timing results for each data source
@@ -49,26 +45,16 @@ namespace draconis::cli {
 
   /**
    * @brief Print doctor report showing failed readouts
-   * @param weather Weather report (if available)
    * @param data System information data
    */
-  fn PrintDoctorReport(
-#if DRAC_ENABLE_WEATHER
-    const utils::types::Result<services::weather::Report>& weather,
-#endif
-    const core::system::SystemInfo& data
-  ) -> utils::types::Unit;
+  fn PrintDoctorReport(const core::system::SystemInfo& data) -> utils::types::Unit;
 
   /**
    * @brief Print system information in JSON format
-   * @param weather Weather report (if available)
    * @param data System information data
    * @param prettyJson Whether to pretty-print the JSON
    */
   fn PrintJsonOutput(
-#if DRAC_ENABLE_WEATHER
-    const utils::types::Result<services::weather::Report>& weather,
-#endif
     const core::system::SystemInfo& data,
     bool                            prettyJson
   ) -> utils::types::Unit;
@@ -76,18 +62,13 @@ namespace draconis::cli {
   /**
    * @brief Print system information in compact single-line format using a template string
    * @param templateStr Template string with placeholders like {key}
-   * @param weather Weather data (if available)
    * @param data System information data
    *
    * Placeholders use the format {key} where key matches any field from SystemInfo::toMap().
    * Common keys: date, host, os, kernel, cpu, gpu, ram, disk, uptime, shell, de, wm, packages, playing
-   * Weather keys (when available): weather, weather_temp, weather_town, weather_desc
    */
   fn PrintCompactOutput(
-    const utils::types::String& templateStr,
-#if DRAC_ENABLE_WEATHER
-    const utils::types::Result<services::weather::Report>& weather,
-#endif
+    const utils::types::String&     templateStr,
     const core::system::SystemInfo& data
   ) -> utils::types::Unit;
 
@@ -95,14 +76,10 @@ namespace draconis::cli {
   /**
    * @brief Format output using a plugin
    * @param formatName Name of the format to use
-   * @param weather Weather report (if available)
    * @param data System information data
    */
   fn FormatOutputViaPlugin(
-    const utils::types::String& formatName,
-  #if DRAC_ENABLE_WEATHER
-    const utils::types::Result<services::weather::Report>& weather,
-  #endif
+    const utils::types::String&     formatName,
     const core::system::SystemInfo& data
   ) -> utils::types::Unit;
 

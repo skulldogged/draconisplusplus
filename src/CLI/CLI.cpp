@@ -7,7 +7,6 @@
 
 #include <algorithm>
 #include <chrono>
-#include <cmath>
 #include <glaze/glaze.hpp>
 #include <magic_enum/magic_enum.hpp>
 
@@ -19,6 +18,9 @@
 
 #if DRAC_ENABLE_PLUGINS
   #include <Drac++/Core/PluginManager.hpp>
+
+  #include <Drac++/Utils/CacheManager.hpp>
+
 #endif
 
 namespace draconis::cli {
@@ -26,10 +28,6 @@ namespace draconis::cli {
   using namespace utils::logging;
   using namespace core::system;
   using namespace config;
-
-#if DRAC_ENABLE_WEATHER
-  using services::weather::Report;
-#endif
 
   fn RunBenchmark(
     utils::cache::CacheManager& cache,
@@ -75,9 +73,34 @@ namespace draconis::cli {
       timeOperation("Now Playing", [&]() { return GetNowPlaying(); });
 #endif
 
-#if DRAC_ENABLE_WEATHER
-    if (config.weather.enabled && config.weather.service)
-      timeOperation("Weather", [&]() { return config.weather.service->getWeatherInfo(); });
+#if DRAC_ENABLE_PLUGINS
+    // Benchmark info provider plugins
+    auto& pluginManager = draconis::core::plugin::GetPluginManager();
+    if (pluginManager.isInitialized()) {
+      // First, load all discovered plugins
+      for (const auto& pluginName : pluginManager.listDiscoveredPlugins())
+        if (!pluginManager.isPluginLoaded(pluginName)) {
+          Result<Unit> loadResult = pluginManager.loadPlugin(pluginName, cache);
+
+          if (!loadResult)
+            Print("Warning: failed to load plugin '{}'\n", pluginName);
+        }
+
+      // Create a PluginCache for benchmarking using the persistent cache directory
+      PluginCache pluginCache(utils::cache::CacheManager::getPersistentCacheDir() / "plugins");
+
+      // Then benchmark each info provider plugin
+      for (auto* plugin : pluginManager.getInfoProviderPlugins()) {
+        if (plugin && plugin->isReady() && plugin->isEnabled()) {
+          const String pluginName = std::format("Plugin: {}", plugin->getMetadata().name);
+          timeOperation(pluginName, [&]() -> Result<String> {
+            if (auto result = plugin->collectData(pluginCache); !result)
+              return std::unexpected(result.error());
+            return plugin->getDisplayValue();
+          });
+        }
+      }
+    }
 #endif
 
     return results;
@@ -116,14 +139,11 @@ namespace draconis::cli {
   }
 
   fn PrintDoctorReport(
-#if DRAC_ENABLE_WEATHER
-    const Result<Report>& weather,
-#endif
     const SystemInfo& data
   ) -> Unit {
     using draconis::utils::error::DracError;
 
-    Array<Option<Pair<String, DracError>>, 10 + DRAC_ENABLE_PACKAGECOUNT + DRAC_ENABLE_NOWPLAYING + DRAC_ENABLE_WEATHER>
+    Array<Option<Pair<String, DracError>>, 10 + DRAC_ENABLE_PACKAGECOUNT + DRAC_ENABLE_NOWPLAYING>
       failures {};
 
     usize failureCount = 0;
@@ -149,9 +169,6 @@ namespace draconis::cli {
     if constexpr (DRAC_ENABLE_NOWPLAYING)
       DRAC_CHECK(data.nowPlaying, "NowPlaying");
 
-    if constexpr (DRAC_ENABLE_WEATHER)
-      DRAC_CHECK(weather, "Weather");
-
 #undef DRAC_CHECK
 
     if (failureCount == 0)
@@ -175,9 +192,6 @@ namespace draconis::cli {
   }
 
   fn PrintJsonOutput(
-#if DRAC_ENABLE_WEATHER
-    const Result<Report>& weather,
-#endif
     const SystemInfo& data,
     bool              prettyJson
   ) -> Unit {
@@ -209,10 +223,6 @@ namespace draconis::cli {
     if constexpr (DRAC_ENABLE_NOWPLAYING)
       DRAC_SET_OPTIONAL(nowPlaying);
 
-    if constexpr (DRAC_ENABLE_WEATHER)
-      if (weather)
-        output.weather = *weather;
-
 #if DRAC_ENABLE_PLUGINS
     output.pluginFields = data.pluginData;
 #endif
@@ -233,29 +243,11 @@ namespace draconis::cli {
   }
 
   fn PrintCompactOutput(
-    const String& templateStr,
-#if DRAC_ENABLE_WEATHER
-    const Result<Report>& weather,
-#endif
+    const String&     templateStr,
     const SystemInfo& data
   ) -> Unit {
     // Get all system info as a map
     Map<String, String> infoMap = data.toMap();
-
-    // Add weather data if available
-#if DRAC_ENABLE_WEATHER
-    if (weather) {
-      const auto& [temperature, townName, description] = *weather;
-      if (townName)
-        infoMap["weather"] = std::format("{}° in {}", std::lround(temperature), *townName);
-      else
-        infoMap["weather"] = std::format("{}°, {}", std::lround(temperature), description);
-      infoMap["weather_temp"] = std::to_string(std::lround(temperature));
-      if (townName)
-        infoMap["weather_town"] = *townName;
-      infoMap["weather_desc"] = description;
-    }
-#endif
 
     // Generic placeholder substitution: replace all {key} with values from the map
     String output = templateStr;
@@ -281,10 +273,7 @@ namespace draconis::cli {
 
 #if DRAC_ENABLE_PLUGINS
   fn FormatOutputViaPlugin(
-    const String& formatName,
-  #if DRAC_ENABLE_WEATHER
-    const Result<Report>& weather,
-  #endif
+    const String&     formatName,
     const SystemInfo& data
   ) -> Unit {
     using draconis::core::plugin::GetPluginManager;
@@ -317,22 +306,14 @@ namespace draconis::cli {
       return;
     }
 
-    // Get system info as a map (single source of truth)
+    // Get system info as a map (single source of truth for core data)
     Map<String, String> outputData = data.toMap();
 
-    // Add weather data if available
-  #if DRAC_ENABLE_WEATHER
-    if (weather) {
-      const auto& [temperature, townName, description] = *weather;
-      outputData["weather_temperature"]                = std::to_string(temperature);
-      if (townName)
-        outputData["weather_town"] = *townName;
-      outputData["weather_description"] = description;
-    }
-  #endif
+    // Get plugin data directly (already organized by plugin ID)
+    const auto& pluginData = data.pluginData;
 
     // Format output using plugin - format name determines the output mode
-    auto result = formatPlugin->formatOutput(formatName, outputData);
+    auto result = formatPlugin->formatOutput(formatName, outputData, pluginData);
     if (!result) {
       Print("Failed to format '{}' output: {}\n", formatName, result.error().message);
       return;
@@ -431,14 +412,14 @@ namespace draconis::cli {
         Print("  • Caching system\n");
     }
 
-    // Show fields for SystemInfo plugins
-    if (metadata.type == draconis::core::plugin::PluginType::SystemInfo) {
-      if (const auto* sysInfoPlugin = dynamic_cast<const draconis::core::plugin::ISystemInfoPlugin*>(*plugin)) {
-        const auto& fieldNames = sysInfoPlugin->getFieldNames();
-        if (!fieldNames.empty()) {
+    // Show fields for InfoProvider plugins
+    if (metadata.type == draconis::core::plugin::PluginType::InfoProvider) {
+      if (const auto* infoProviderPlugin = dynamic_cast<const draconis::core::plugin::IInfoProviderPlugin*>(*plugin)) {
+        const auto fields = infoProviderPlugin->getFields();
+        if (!fields.empty()) {
           Print("\nProvided Fields:\n");
-          for (const auto& fieldName : fieldNames)
-            Print("  • {}\n", fieldName);
+          for (const auto& [key, description] : fields)
+            Print("  • {} - {}\n", key, description);
         }
       }
     }

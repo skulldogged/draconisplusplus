@@ -7,9 +7,9 @@
  * Microsoft Windows platform. It retrieves a wide range of system information by
  * leveraging various Windows APIs, including:
  * - Standard Win32 API for memory, disk, and process information.
- * - Windows Registry for OS version, host model, and CPU details.
+ * - Windows Registry for OS version, host model, CPU details, and package enumeration.
  * - DirectX Graphics Infrastructure (DXGI) for enumerating graphics adapters.
- * - Windows Runtime (WinRT) for modern OS details, media controls, and WinGet packages.
+ * - NPSM COM API for media session information (now playing).
  *
  * To optimize performance, the implementation caches process snapshots and registry
  * handles. Wide strings are used for all string operations to avoid the overhead of
@@ -24,16 +24,12 @@
     #include <intrin.h> // __cpuid (MSVC/Clang-cl intrinsic)
   #endif
 
-  #include <dxgi.h>                                 // IDXGIFactory, IDXGIAdapter, DXGI_ADAPTER_DESC
-  #include <ranges>                                 // std::ranges::find_if, std::ranges::views::transform
-  #include <sysinfoapi.h>                           // GetLogicalProcessorInformationEx, RelationProcessorCore, PSYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX, KAFFINITY
-  #include <tlhelp32.h>                             // CreateToolhelp32Snapshot, PROCESSENTRY32W, Process32FirstW, Process32NextW, TH32CS_SNAPPROCESS
-  #include <winerror.h>                             // DXGI_ERROR_NOT_FOUND, ERROR_FILE_NOT_FOUND, FAILED
-  #include <winrt/Windows.Foundation.Collections.h> // winrt::Windows::Foundation::Collections::Map
-  #include <winrt/Windows.Management.Deployment.h>  // winrt::Windows::Management::Deployment::PackageManager
-  #include <winrt/Windows.Media.Control.h>          // winrt::Windows::Media::Control::MediaProperties
-  #include <winrt/Windows.System.Profile.h>         // winrt::Windows::System::Profile::AnalyticsInfo
-  #include <winuser.h>                              // EnumDisplayMonitors, GetMonitorInfoW, MonitorFromWindow, EnumDisplaySettingsW
+  #include <dxgi.h>       // IDXGIFactory, IDXGIAdapter, DXGI_ADAPTER_DESC
+  #include <ranges>       // std::ranges::find_if, std::ranges::views::transform
+  #include <sysinfoapi.h> // GetLogicalProcessorInformationEx, RelationProcessorCore, PSYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX, KAFFINITY
+  #include <tlhelp32.h>   // CreateToolhelp32Snapshot, PROCESSENTRY32W, Process32FirstW, Process32NextW, TH32CS_SNAPPROCESS
+  #include <winerror.h>   // DXGI_ERROR_NOT_FOUND, ERROR_FILE_NOT_FOUND, FAILED
+  #include <winuser.h>    // EnumDisplayMonitors, GetMonitorInfoW, MonitorFromWindow, EnumDisplaySettingsW
 
   // Core Winsock headers
   #include <winsock2.h> // AF_INET, AF_UNSPEC, sockaddr_in
@@ -45,6 +41,9 @@
 
   // COM smart pointer support
   #include <wrl/client.h> // Microsoft::WRL::ComPtr
+
+  // Property store for NPSM media info
+  #include <propsys.h> // IPropertyStore, PROPERTYKEY, PROPVARIANT
 
   #include "Drac++/Core/System.hpp"
 
@@ -678,37 +677,136 @@ namespace draconis::core::system {
   }
 
   #if DRAC_ENABLE_NOWPLAYING
+  namespace npsm {
+    // {BCBB9860-C012-4AD7-A938-6E337AE6ABA5}
+    static const GUID CLSID_NowPlayingSessionManager = {
+      0xBCBB9860,
+      0xC012,
+      0x4AD7,
+      { 0xA9, 0x38, 0x6E, 0x33, 0x7A, 0xE6, 0xAB, 0xA5 }
+    };
+
+    // INowPlayingSessionManager - {3b6a7908-ce07-4ba9-878c-6e4a15db5e5b} (19041+)
+    // NOLINTBEGIN(cppcoreguidelines-virtual-class-destructor, readability-identifier-naming)
+    MIDL_INTERFACE("3b6a7908-ce07-4ba9-878c-6e4a15db5e5b")
+    INowPlayingSessionManager : public IUnknown {
+     public:
+      virtual fn STDMETHODCALLTYPE get_Count(ULONG64 * pCount)->HRESULT               = 0;
+      virtual fn STDMETHODCALLTYPE get_CurrentSession(IUnknown * *ppSession)->HRESULT = 0;
+    };
+
+    // INowPlayingSession - {431268cf-7477-4285-950b-6f892a944712} (14393+)
+    MIDL_INTERFACE("431268cf-7477-4285-950b-6f892a944712")
+    INowPlayingSession : public IUnknown {
+     public:
+      virtual fn STDMETHODCALLTYPE get_SessionType(int* pType) -> HRESULT                            = 0;
+      virtual fn STDMETHODCALLTYPE get_SourceAppId(LPWSTR * pszSrcAppId)->HRESULT                    = 0;
+      virtual fn STDMETHODCALLTYPE get_SourceDeviceId(LPWSTR * pszSourceDeviceId)->HRESULT           = 0;
+      virtual fn STDMETHODCALLTYPE get_RenderDeviceId(LPWSTR * pszRenderId)->HRESULT                 = 0;
+      virtual fn STDMETHODCALLTYPE get_HWND(HWND * pHwnd)->HRESULT                                   = 0;
+      virtual fn STDMETHODCALLTYPE get_PID(DWORD * pdwPID)->HRESULT                                  = 0;
+      virtual fn STDMETHODCALLTYPE get_Info(IUnknown * *ppInfo)->HRESULT                             = 0;
+      virtual fn STDMETHODCALLTYPE get_Connection(IUnknown * *ppUnknown)->HRESULT                    = 0;
+      virtual fn STDMETHODCALLTYPE ActivateMediaPlaybackDataSource(IUnknown * *ppMediaCtrl)->HRESULT = 0;
+    };
+
+    // IMediaPlaybackDataSource - {0F4521BE-A0B8-4116-B3B1-BFECEBAEEBE6} (10586+)
+    MIDL_INTERFACE("0F4521BE-A0B8-4116-B3B1-BFECEBAEEBE6")
+    IMediaPlaybackDataSource : public IUnknown {
+     public:
+      virtual fn STDMETHODCALLTYPE GetMediaPlaybackInfo(void* pPlaybackInfo) -> HRESULT       = 0;
+      virtual fn STDMETHODCALLTYPE SendMediaPlaybackCommand(int command) -> HRESULT           = 0;
+      virtual fn STDMETHODCALLTYPE GetMediaObjectInfo(IPropertyStore * *ppPropStore)->HRESULT = 0;
+    };
+    // NOLINTEND(cppcoreguidelines-virtual-class-destructor, readability-identifier-naming)
+
+    // Property keys for media metadata
+    // PKEY_Title = {F29F85E0-4FF9-1068-AB91-08002B27B3D9}, 2
+    static const PROPERTYKEY PKEY_Title = {
+      { 0xF29F85E0, 0x4FF9, 0x1068, { 0xAB, 0x91, 0x08, 0x00, 0x2B, 0x27, 0xB3, 0xD9 } },
+      2
+    };
+
+    // PKEY_Music_Artist = {56A3372E-CE9C-11D2-9F0E-006097C686F6}, 2
+    static const PROPERTYKEY PKEY_Music_Artist = {
+      { 0x56A3372E, 0xCE9C, 0x11D2, { 0x9F, 0x0E, 0x00, 0x60, 0x97, 0xC6, 0x86, 0xF6 } },
+      2
+    };
+  } // namespace npsm
+
   fn GetNowPlaying() -> Result<MediaInfo> {
-    // WinRT makes HEAVY use of namespaces and has very long names for
-    // structs and classes, so its easier to alias most things.
-    using namespace winrt::Windows::Media::Control;
-    using namespace winrt::Windows::Foundation;
+    using namespace npsm;
 
-    using Session         = GlobalSystemMediaTransportControlsSession;
-    using SessionManager  = GlobalSystemMediaTransportControlsSessionManager;
-    using MediaProperties = GlobalSystemMediaTransportControlsSessionMediaProperties;
+    Microsoft::WRL::ComPtr<INowPlayingSessionManager> sessionManager;
 
-    try {
-      // WinRT provides a nice easy way to get the current media session.
-      // AFAIK, there's no other way to easily get the current media session on Windows.
+    #pragma clang diagnostic push
+    #pragma clang diagnostic ignored "-Wlanguage-extension-token"
+    // Create the NowPlayingSessionManager COM object directly
+    // Use CLSCTX_ALL to let COM choose the fastest available context
+    HRESULT result = CoCreateInstance(
+      CLSID_NowPlayingSessionManager,
+      nullptr,
+      CLSCTX_ALL,
+      IID_PPV_ARGS(&sessionManager)
+    );
+    #pragma clang diagnostic pop
 
-      // getNowPlaying() isn't async, so we just RequestAsync() and immediately get() the result.
-      const SessionManager sessionManager = SessionManager::RequestAsync().get();
+    if (FAILED(result))
+      ERR(ApiUnavailable, "Failed to create NowPlayingSessionManager");
 
-      if (const Session currentSession = sessionManager.GetCurrentSession()) {
-        const MediaProperties mediaProperties = currentSession.TryGetMediaPropertiesAsync().get();
-
-        const String title  = winrt::to_string(mediaProperties.Title());
-        const String artist = winrt::to_string(mediaProperties.Artist());
-
-        return MediaInfo(title.empty() ? None : Some(title), artist.empty() ? None : Some(artist));
-      }
-
+    // Get the current session
+    Microsoft::WRL::ComPtr<IUnknown> sessionUnknown;
+    result = sessionManager->get_CurrentSession(&sessionUnknown);
+    if (FAILED(result) || !sessionUnknown)
       ERR(NotFound, "No media session found");
-    } catch (const winrt::hresult_error& e) {
-      // Make sure to catch any errors that WinRT might throw.
-      ERR_FMT(ApiUnavailable, "Failed to get media session: {}", winrt::to_string(e.message()));
-    }
+
+    // Query for INowPlayingSession interface
+    Microsoft::WRL::ComPtr<INowPlayingSession> session;
+    result = sessionUnknown.As(&session);
+    if (FAILED(result))
+      ERR(ApiUnavailable, "Failed to get INowPlayingSession interface");
+
+    // Activate the media playback data source
+    Microsoft::WRL::ComPtr<IUnknown> dataSourceUnknown;
+    result = session->ActivateMediaPlaybackDataSource(&dataSourceUnknown);
+    if (FAILED(result) || !dataSourceUnknown)
+      ERR(ApiUnavailable, "Failed to activate MediaPlaybackDataSource");
+
+    // Query for IMediaPlaybackDataSource interface
+    Microsoft::WRL::ComPtr<IMediaPlaybackDataSource> dataSource;
+    result = dataSourceUnknown.As(&dataSource);
+    if (FAILED(result))
+      ERR(ApiUnavailable, "Failed to get IMediaPlaybackDataSource interface");
+
+    // Get the property store containing media info
+    Microsoft::WRL::ComPtr<IPropertyStore> propStore;
+    result = dataSource->GetMediaObjectInfo(&propStore);
+    if (FAILED(result) || !propStore)
+      ERR(ApiUnavailable, "Failed to get media object info");
+
+    Option<String> title  = None;
+    Option<String> artist = None;
+
+    PROPVARIANT pVar;
+    PropVariantInit(&pVar);
+
+    // Get title
+    // NOLINTBEGIN(cppcoreguidelines-pro-type-union-access) - PROPVARIANT is a Windows API union type
+    if (SUCCEEDED(propStore->GetValue(PKEY_Title, &pVar)) && pVar.vt == VT_LPWSTR && pVar.pwszVal)
+      if (Result<String> titleStr = helpers::ConvertWStringToUTF8(pVar.pwszVal); titleStr && !titleStr->empty())
+        title = std::move(*titleStr);
+
+    PropVariantClear(&pVar);
+
+    // Get artist
+    if (SUCCEEDED(propStore->GetValue(PKEY_Music_Artist, &pVar)) && pVar.vt == VT_LPWSTR && pVar.pwszVal)
+      if (Result<String> artistStr = helpers::ConvertWStringToUTF8(pVar.pwszVal); artistStr && !artistStr->empty())
+        artist = std::move(*artistStr);
+    // NOLINTEND(cppcoreguidelines-pro-type-union-access)
+
+    PropVariantClear(&pVar);
+
+    return MediaInfo(std::move(title), std::move(artist));
   }
   #endif // DRAC_ENABLE_NOWPLAYING
 
@@ -1447,18 +1545,42 @@ namespace draconis::services::packages {
 
   fn CountWinGet(CacheManager& cache) -> Result<u64> {
     return cache.getOrSet<u64>("windows_winget_count", []() -> Result<u64> {
-      try {
-        using winrt::Windows::Management::Deployment::PackageManager;
+      HKEY packagesKey = nullptr;
 
-        // The only good way to get the number of packages installed via winget is using WinRT.
-        // It's a bit slow, but it's still faster than shelling out to the command line.
-        // FindPackagesForUser returns an iterator to the first package, so we can use std::ranges::distance to get the
-        // number of packages.
-        return std::ranges::distance(PackageManager().FindPackagesForUser(L""));
-      } catch (const winrt::hresult_error& e) {
-        // Make sure to catch any errors that WinRT might throw.
-        ERR_FMT(ApiUnavailable, "Failed to get package count: {}", winrt::to_string(e.message()));
-      }
+      LSTATUS status = RegOpenKeyExW(
+        HKEY_CURRENT_USER,
+        L"Software\\Classes\\Local Settings\\Software\\Microsoft\\Windows\\CurrentVersion\\AppModel\\Repository\\Packages",
+        0,
+        KEY_READ,
+        &packagesKey
+      );
+
+      if (status != ERROR_SUCCESS)
+        ERR(NotFound, "Could not open AppModel packages registry key");
+
+      DWORD subKeyCount = 0;
+
+      status = RegQueryInfoKeyW(
+        packagesKey,
+        nullptr,
+        nullptr,
+        nullptr,
+        &subKeyCount,
+        nullptr,
+        nullptr,
+        nullptr,
+        nullptr,
+        nullptr,
+        nullptr,
+        nullptr
+      );
+
+      RegCloseKey(packagesKey);
+
+      if (status != ERROR_SUCCESS)
+        ERR(ApiUnavailable, "Could not query AppModel packages registry key");
+
+      return static_cast<u64>(subKeyCount);
     });
   }
 } // namespace draconis::services::packages

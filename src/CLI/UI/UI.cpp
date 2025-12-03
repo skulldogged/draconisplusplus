@@ -8,6 +8,10 @@
 #include <Drac++/Utils/Logging.hpp>
 #include <Drac++/Utils/Types.hpp>
 
+#if DRAC_ENABLE_PLUGINS
+  #include <Drac++/Core/PluginManager.hpp>
+#endif
+
 #include "AsciiArt.hpp"
 
 using namespace draconis::utils::types;
@@ -19,8 +23,6 @@ namespace draconis::ui {
   using config::LogoProtocol;
 
   using core::system::SystemInfo;
-
-  using services::weather::Report;
 
   constexpr Theme DEFAULT_THEME = {
     .icon  = LogColor::Cyan,
@@ -45,12 +47,9 @@ namespace draconis::ui {
 #if DRAC_ENABLE_PACKAGECOUNT
     .package = "",
 #endif
-    .palette = "",
-    .shell   = "",
-    .user    = "",
-#if DRAC_ENABLE_WEATHER
-    .weather = "",
-#endif
+    .palette       = "",
+    .shell         = "",
+    .user          = "",
     .windowManager = "",
   };
 
@@ -85,12 +84,9 @@ namespace draconis::ui {
 #if DRAC_ENABLE_PACKAGECOUNT
     .package = " 󰏖  ",
 #endif
-    .palette = "   ",
-    .shell   = "   ",
-    .user    = "   ",
-#if DRAC_ENABLE_WEATHER
-    .weather = "   ",
-#endif
+    .palette       = "   ",
+    .shell         = "   ",
+    .user          = "   ",
     .windowManager = "   ",
   };
 
@@ -111,21 +107,18 @@ namespace draconis::ui {
 #if DRAC_ENABLE_PACKAGECOUNT
     .package = " 📦 ",
 #endif
-    .palette = " 🎨 ",
-    .shell   = " 💲 ",
-    .user    = " 👤 ",
-#if DRAC_ENABLE_WEATHER
-    .weather = " 🌈 ",
-#endif
+    .palette       = " 🎨 ",
+    .shell         = " 💲 ",
+    .user          = " 👤 ",
     .windowManager = " 🪟 ",
   };
 
   constexpr inline Icons ICON_TYPE = NERD;
 
   struct RowInfo {
-    StringView icon;
-    String     label;
-    String     value;
+    String icon;
+    String label;
+    String value;
   };
 
   struct UIGroup {
@@ -148,41 +141,107 @@ namespace draconis::ui {
       bool        isKitty = false;
     };
 
-    constexpr char BASE64_TABLE[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    constexpr Array<char, 65> BASE64_TABLE = {
+      'A',
+      'B',
+      'C',
+      'D',
+      'E',
+      'F',
+      'G',
+      'H',
+      'I',
+      'J',
+      'K',
+      'L',
+      'M',
+      'N',
+      'O',
+      'P',
+      'Q',
+      'R',
+      'S',
+      'T',
+      'U',
+      'V',
+      'W',
+      'X',
+      'Y',
+      'Z',
+      'a',
+      'b',
+      'c',
+      'd',
+      'e',
+      'f',
+      'g',
+      'h',
+      'i',
+      'j',
+      'k',
+      'l',
+      'm',
+      'n',
+      'o',
+      'p',
+      'q',
+      'r',
+      's',
+      't',
+      'u',
+      'v',
+      'w',
+      'x',
+      'y',
+      'z',
+      '0',
+      '1',
+      '2',
+      '3',
+      '4',
+      '5',
+      '6',
+      '7',
+      '8',
+      '9',
+      '+',
+      '/',
+      '\0'
+    };
 
-    fn Base64Encode(const u8* data, usize len) -> String {
+    fn Base64Encode(Span<const u8> data) -> String {
       String out;
-      out.reserve(((len + 2) / 3) * 4);
+      out.reserve(((data.size() + 2) / 3) * 4);
 
-      usize i = 0;
+      usize idx = 0;
 
-      while (i + 2 < len) {
-        const u32 triple = (static_cast<u32>(data[i]) << 16) |
-          (static_cast<u32>(data[i + 1]) << 8) |
-          static_cast<u32>(data[i + 2]);
+      while (idx + 2 < data.size()) {
+        const u32 triple = (static_cast<u32>(data[idx]) << 16) |
+          (static_cast<u32>(data[idx + 1]) << 8) |
+          static_cast<u32>(data[idx + 2]);
 
-        out.push_back(BASE64_TABLE[(triple >> 18) & 0x3F]);
-        out.push_back(BASE64_TABLE[(triple >> 12) & 0x3F]);
-        out.push_back(BASE64_TABLE[(triple >> 6) & 0x3F]);
-        out.push_back(BASE64_TABLE[triple & 0x3F]);
+        out.push_back(BASE64_TABLE.at((triple >> 18) & 0x3F));
+        out.push_back(BASE64_TABLE.at((triple >> 12) & 0x3F));
+        out.push_back(BASE64_TABLE.at((triple >> 6) & 0x3F));
+        out.push_back(BASE64_TABLE.at(triple & 0x3F));
 
-        i += 3;
+        idx += 3;
       }
 
-      const usize remaining = len - i;
+      const usize remaining = data.size() - idx;
 
       if (remaining == 1) {
-        const u32 triple = static_cast<u32>(data[i]) << 16;
-        out.push_back(BASE64_TABLE[(triple >> 18) & 0x3F]);
-        out.push_back(BASE64_TABLE[(triple >> 12) & 0x3F]);
+        const u32 triple = static_cast<u32>(data[idx]) << 16;
+        out.push_back(BASE64_TABLE.at((triple >> 18) & 0x3F));
+        out.push_back(BASE64_TABLE.at((triple >> 12) & 0x3F));
         out.push_back('=');
         out.push_back('=');
       } else if (remaining == 2) {
-        const u32 triple = (static_cast<u32>(data[i]) << 16) |
-          (static_cast<u32>(data[i + 1]) << 8);
-        out.push_back(BASE64_TABLE[(triple >> 18) & 0x3F]);
-        out.push_back(BASE64_TABLE[(triple >> 12) & 0x3F]);
-        out.push_back(BASE64_TABLE[(triple >> 6) & 0x3F]);
+        const u32 triple = (static_cast<u32>(data[idx]) << 16) |
+          (static_cast<u32>(data[idx + 1]) << 8);
+        out.push_back(BASE64_TABLE.at((triple >> 18) & 0x3F));
+        out.push_back(BASE64_TABLE.at((triple >> 12) & 0x3F));
+        out.push_back(BASE64_TABLE.at((triple >> 6) & 0x3F));
         out.push_back('=');
       }
 
@@ -190,7 +249,8 @@ namespace draconis::ui {
     }
 
     fn Base64Encode(const String& str) -> String {
-      return Base64Encode(reinterpret_cast<const u8*>(str.data()), str.size());
+      const auto bytes = std::as_bytes(Span<const char>(str.data(), str.size()));
+      return Base64Encode(Span<const u8>(reinterpret_cast<const u8*>(bytes.data()), bytes.size())); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
     }
 
     fn ReadFileBytes(const String& path) -> Option<Vec<u8>> {
@@ -208,7 +268,7 @@ namespace draconis::ui {
       Vec<u8> buffer(static_cast<usize>(size));
 
       file.seekg(0, std::ios::beg);
-      file.read(reinterpret_cast<char*>(buffer.data()), size);
+      file.read(reinterpret_cast<char*>(buffer.data()), size); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
 
       if (!file)
         return None;
@@ -245,7 +305,7 @@ namespace draconis::ui {
       if (!bytes)
         return None;
 
-      const String payload = Base64Encode(bytes->data(), bytes->size());
+      const String payload = Base64Encode(Span<const u8>(*bytes));
 
       sequence = "\033_Ga=T,f=100";
 
@@ -587,11 +647,7 @@ namespace draconis::ui {
 
   } // namespace
 
-#if DRAC_ENABLE_WEATHER
-  fn CreateUI(const Config& config, const SystemInfo& data, Result<Report> weather, bool noAscii) -> String {
-#else
   fn CreateUI(const Config& config, const SystemInfo& data, bool noAscii) -> String {
-#endif
     const String& name     = config.general.getName();
     const Icons&  iconType = ICON_TYPE;
 
@@ -620,42 +676,40 @@ namespace draconis::ui {
 
     {
       if (data.date)
-        initialGroup.rows.emplace_back(iconType.calendar, _("date"), *data.date);
+        initialGroup.rows.emplace_back(String(iconType.calendar), _("date"), *data.date);
 
-      if constexpr (DRAC_ENABLE_WEATHER)
-        if (weather) {
-          const auto& [temperature, townName, description] = *weather;
-
-          String tempUnit =
-            config.weather.units == services::weather::UnitSystem::Metric
-            ? _("celsius")
-            : _("fahrenheit");
-
-          String weatherLabel = _("weather");
-          debug_log("Weather label translation: '{}'", weatherLabel);
-          initialGroup.rows.emplace_back(
-            iconType.weather,
-            weatherLabel,
-            config.weather.showTownName && townName
-              ? std::format("{}°{} in {}", std::lround(temperature), tempUnit, *townName)
-              : std::format("{}°{}, {}", std::lround(temperature), tempUnit, description)
-          );
+#if DRAC_ENABLE_PLUGINS
+      // Add rows from info provider plugins
+      auto& pluginManager = draconis::core::plugin::GetPluginManager();
+      if (pluginManager.isInitialized()) {
+        for (auto* plugin : pluginManager.getInfoProviderPlugins()) {
+          if (plugin && plugin->isReady() && plugin->isEnabled()) {
+            if (auto displayValue = plugin->getDisplayValue(); displayValue) {
+              initialGroup.rows.emplace_back(
+                plugin->getDisplayIcon(),
+                plugin->getDisplayLabel(),
+                *displayValue
+              );
+            }
+          }
         }
+      }
+#endif
     }
 
     {
       if (data.host && !data.host->empty()) {
         String hostLabel = _("host");
         debug_log("Host label translation: '{}'", hostLabel);
-        systemInfoGroup.rows.emplace_back(iconType.host, hostLabel, *data.host);
+        systemInfoGroup.rows.emplace_back(String(iconType.host), hostLabel, *data.host);
       }
 
       if (data.operatingSystem)
         systemInfoGroup.rows.emplace_back(
 #ifdef __linux__
-          GetDistroIcon(data.operatingSystem->id).value_or(iconType.os),
+          String(GetDistroIcon(data.operatingSystem->id).value_or(iconType.os)),
 #else
-          iconType.os,
+          String(iconType.os),
 #endif
           _("os"),
           std::format("{} {}", data.operatingSystem->name, data.operatingSystem->version)
@@ -664,39 +718,39 @@ namespace draconis::ui {
       if (data.kernelVersion) {
         String kernelLabel = _("kernel");
         debug_log("Kernel label translation: '{}'", kernelLabel);
-        systemInfoGroup.rows.emplace_back(iconType.kernel, kernelLabel, *data.kernelVersion);
+        systemInfoGroup.rows.emplace_back(String(iconType.kernel), kernelLabel, *data.kernelVersion);
       }
     }
 
     {
       if (data.memInfo)
-        hardwareGroup.rows.emplace_back(iconType.memory, _("ram"), std::format("{}/{}", BytesToGiB(data.memInfo->usedBytes), BytesToGiB(data.memInfo->totalBytes)));
+        hardwareGroup.rows.emplace_back(String(iconType.memory), _("ram"), std::format("{}/{}", BytesToGiB(data.memInfo->usedBytes), BytesToGiB(data.memInfo->totalBytes)));
 
       if (data.diskUsage)
-        hardwareGroup.rows.emplace_back(iconType.disk, _("disk"), std::format("{}/{}", BytesToGiB(data.diskUsage->usedBytes), BytesToGiB(data.diskUsage->totalBytes)));
+        hardwareGroup.rows.emplace_back(String(iconType.disk), _("disk"), std::format("{}/{}", BytesToGiB(data.diskUsage->usedBytes), BytesToGiB(data.diskUsage->totalBytes)));
 
       if (data.cpuModel)
-        hardwareGroup.rows.emplace_back(iconType.cpu, _("cpu"), *data.cpuModel);
+        hardwareGroup.rows.emplace_back(String(iconType.cpu), _("cpu"), *data.cpuModel);
 
       if (data.gpuModel)
-        hardwareGroup.rows.emplace_back(iconType.gpu, _("gpu"), *data.gpuModel);
+        hardwareGroup.rows.emplace_back(String(iconType.gpu), _("gpu"), *data.gpuModel);
 
       if (data.uptime) {
         String uptimeLabel = _("uptime");
         debug_log("Uptime label translation: '{}'", uptimeLabel);
-        hardwareGroup.rows.emplace_back(iconType.uptime, uptimeLabel, std::format("{}", SecondsToFormattedDuration { *data.uptime }));
+        hardwareGroup.rows.emplace_back(String(iconType.uptime), uptimeLabel, std::format("{}", SecondsToFormattedDuration { *data.uptime }));
       }
     }
 
     {
       if (data.shell)
-        softwareGroup.rows.emplace_back(iconType.shell, _("shell"), *data.shell);
+        softwareGroup.rows.emplace_back(String(iconType.shell), _("shell"), *data.shell);
 
       if constexpr (DRAC_ENABLE_PACKAGECOUNT)
         if (data.packageCount && *data.packageCount > 0) {
           String packagesLabel = _("packages");
           debug_log("Packages label translation: '{}'", packagesLabel);
-          softwareGroup.rows.emplace_back(iconType.package, packagesLabel, std::format("{}", *data.packageCount));
+          softwareGroup.rows.emplace_back(String(iconType.package), packagesLabel, std::format("{}", *data.packageCount));
         }
     }
 
@@ -706,15 +760,15 @@ namespace draconis::ui {
 
       if (deExists && wmExists) {
         if (*data.desktopEnv == *data.windowMgr)
-          envInfoGroup.rows.emplace_back(iconType.windowManager, _("wm"), *data.windowMgr);
+          envInfoGroup.rows.emplace_back(String(iconType.windowManager), _("wm"), *data.windowMgr);
         else {
-          envInfoGroup.rows.emplace_back(iconType.desktopEnvironment, _("de"), *data.desktopEnv);
-          envInfoGroup.rows.emplace_back(iconType.windowManager, _("wm"), *data.windowMgr);
+          envInfoGroup.rows.emplace_back(String(iconType.desktopEnvironment), _("de"), *data.desktopEnv);
+          envInfoGroup.rows.emplace_back(String(iconType.windowManager), _("wm"), *data.windowMgr);
         }
       } else if (deExists)
-        envInfoGroup.rows.emplace_back(iconType.desktopEnvironment, _("de"), *data.desktopEnv);
+        envInfoGroup.rows.emplace_back(String(iconType.desktopEnvironment), _("de"), *data.desktopEnv);
       else if (wmExists)
-        envInfoGroup.rows.emplace_back(iconType.windowManager, _("wm"), *data.windowMgr);
+        envInfoGroup.rows.emplace_back(String(iconType.windowManager), _("wm"), *data.windowMgr);
     }
 
     Vec<UIGroup*> groups = { &initialGroup, &systemInfoGroup, &hardwareGroup, &softwareGroup, &envInfoGroup };

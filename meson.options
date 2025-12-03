@@ -30,13 +30,6 @@ option(
 # ===================== #
 
 option(
-  'weather',
-  type: 'feature',
-  value: 'enabled',
-  description: 'Enable weather data fetching',
-)
-
-option(
   'packagecount',
   type: 'feature',
   value: 'enabled',

@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include <format> // std::vformat, std::make_format_args
+
 #include <Drac++/Utils/TranslationData.hpp>
 #include <Drac++/Utils/Types.hpp>
 

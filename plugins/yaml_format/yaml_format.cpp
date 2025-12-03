@@ -78,7 +78,7 @@ namespace {
       return m_metadata;
     }
 
-    fn initialize(::IPluginCache& /*cache*/) -> Result<Unit> override {
+    fn initialize(const draconis::core::plugin::PluginContext& /*ctx*/, ::PluginCache& /*cache*/) -> Result<Unit> override {
       m_ready = true;
       return {};
     }
@@ -91,7 +91,11 @@ namespace {
       return m_ready;
     }
 
-    fn formatOutput(const String& /*formatName*/, const Map<String, String>& data) const -> Result<String> override {
+    fn formatOutput(
+      const String& /*formatName*/,
+      const Map<String, String>&              data,
+      const Map<String, Map<String, String>>& pluginData
+    ) const -> Result<String> override {
       if (!m_ready)
         return Err(draconis::utils::error::DracError { draconis::utils::error::DracErrorCode::Other, "YamlFormatPlugin is not ready." });
 
@@ -202,19 +206,20 @@ namespace {
         nowPlaying["title"] = title ? ryml::to_csubstr(*title) : ryml::csubstr("Unknown Title");
       }
 
-      // Plugin data section
-      bool hasPluginData = false;
-      for (const auto& [key, value] : data) {
-        if (key.starts_with("plugin_") && !value.empty()) {
-          if (!hasPluginData) {
-            ryml::NodeRef plugins = root["plugins"];
-            plugins |= ryml::MAP;
-            hasPluginData = true;
+      // Plugin data section - use pluginData directly
+      if (!pluginData.empty()) {
+        ryml::NodeRef pluginsNode = root["plugins"];
+        pluginsNode |= ryml::MAP;
+
+        for (const auto& [pluginId, fields] : pluginData) {
+          // Copy plugin ID to arena so it outlives the loop
+          ryml::csubstr arenaPluginId = tree.copy_to_arena(ryml::to_csubstr(pluginId));
+          pluginsNode[arenaPluginId] |= ryml::MAP;
+
+          for (const auto& [fieldName, value] : fields) {
+            ryml::csubstr arenaFieldName               = tree.copy_to_arena(ryml::to_csubstr(fieldName));
+            pluginsNode[arenaPluginId][arenaFieldName] = ryml::to_csubstr(value);
           }
-          // Strip "plugin_" prefix and copy to arena so the string outlives the loop iteration
-          String        keyName     = key.substr(7);
-          ryml::csubstr arenaKey    = tree.copy_to_arena(ryml::to_csubstr(keyName));
-          root["plugins"][arenaKey] = ryml::to_csubstr(value);
         }
       }
 

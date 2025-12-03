@@ -1,7 +1,5 @@
 #pragma once
 
-#include <Drac++/Services/Weather.hpp>
-
 #include <Drac++/Utils/Logging.hpp>
 #include <Drac++/Utils/Types.hpp>
 
@@ -13,9 +11,6 @@ namespace draconis::ui {
   namespace logging = ::draconis::utils::logging;
   namespace config  = ::draconis::config;
   namespace system  = ::draconis::core::system;
-  namespace weather = ::draconis::services::weather;
-
-  using weather::Report;
 
   struct Theme {
     logging::LogColor icon;
@@ -45,29 +40,17 @@ namespace draconis::ui {
     types::StringView palette;
     types::StringView shell;
     types::StringView user;
-#if DRAC_ENABLE_WEATHER
-    types::StringView weather;
-#endif
     types::StringView windowManager;
   };
 
   extern const Icons ICON_TYPE;
 
-#if DRAC_ENABLE_WEATHER
   /**
    * @brief Creates the main UI element based on system data and configuration.
    * @param config The application configuration.
    * @param data The collected system data.
-   * @param weather The weather report, if enabled/available.
+   * @param noAscii Whether to disable ASCII art.
    * @return A string containing the formatted UI.
    */
-  fn CreateUI(const config::Config& config, const system::SystemInfo& data, types::Result<weather::Report> weather, bool noAscii) -> types::String;
-#else
-  /**
-   * @brief Creates the main UI element based on system data and configuration.
-   * @param config The application configuration.
-   * @param data The collected system data. @return A string containing the formatted UI.
-   */
   fn CreateUI(const config::Config& config, const system::SystemInfo& data, bool noAscii) -> types::String;
-#endif // DRAC_ENABLE_WEATHER
 } // namespace draconis::ui

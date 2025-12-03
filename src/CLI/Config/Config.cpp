@@ -17,8 +17,6 @@
 
 namespace fs = std::filesystem;
 #else
-  #include <Drac++/Services/Weather.hpp>
-
   #if DRAC_ENABLE_PLUGINS
     #include <Drac++/Core/StaticPlugins.hpp>
   #endif
@@ -116,23 +114,6 @@ enabled = true # Set to true to enable media integration
 )toml";
   #endif
 
-  #if DRAC_ENABLE_WEATHER
-      configContent += R"toml(
-# Weather settings
-[weather]
-enabled = false        # Set to true to enable weather display
-show_town_name = false # Show location name in weather display
-api_key = ""           # Your weather API key
-units = "metric"       # Use "metric" for °C or "imperial" for °F
-location = "London"    # Your city name
-
-# Alternatively, you can specify coordinates instead of a city name:
-# [weather.location]
-# lat = 51.5074
-# lon = -0.1278
-)toml";
-  #endif
-
   #if DRAC_ENABLE_PACKAGECOUNT
       configContent += R"toml(
 # Package counting settings
@@ -150,7 +131,7 @@ enabled = [] # List of package managers to count, e.g. ["cargo", "nix", "pacman"
 [plugins]
 enabled = true        # Set to false to disable the plugin system entirely
 auto_load = []        # List of plugin names to automatically load on startup
-# Example: auto_load = ["windows_info", "docker_info"]
+# Example: auto_load = ["weather"]
 )toml";
   #endif
 
@@ -181,65 +162,6 @@ namespace draconis::config {
 
     Config cfg;
     cfg.general.name = DRAC_USERNAME;
-
-    if constexpr (DRAC_ENABLE_WEATHER) {
-      using namespace draconis::services::weather;
-      using enum draconis::services::weather::Provider;
-
-      cfg.weather.enabled      = true;
-      cfg.weather.apiKey       = DRAC_API_KEY;
-      cfg.weather.showTownName = DRAC_SHOW_TOWN_NAME;
-      cfg.weather.units        = DRAC_WEATHER_UNIT;
-      cfg.weather.location     = DRAC_LOCATION;
-
-      if constexpr (DRAC_WEATHER_PROVIDER == OpenWeatherMap) {
-        if (!cfg.weather.apiKey) {
-          error_log("Missing API key for OpenWeatherMap. Set 'DRAC_API_KEY' in your config.hpp or use a different provider (OpenMeteo, MetNo).");
-          cfg.weather.enabled = false;
-        }
-
-        cfg.weather.service = CreateWeatherService(
-          OpenWeatherMap,
-          DRAC_LOCATION,
-          cfg.weather.units,
-          cfg.weather.apiKey
-        );
-      } else if constexpr (DRAC_WEATHER_PROVIDER == OpenMeteo) {
-        if (std::holds_alternative<Coords>(DRAC_LOCATION)) {
-          const auto& coords = std::get<Coords>(DRAC_LOCATION);
-
-          cfg.weather.service = CreateWeatherService(
-            OpenMeteo,
-            coords,
-            cfg.weather.units
-          );
-        } else {
-          error_log("OpenMeteo requires coordinates in config.hpp. Set 'DRAC_LOCATION' to Coords{{ .lat = YOUR_LAT, .lon = YOUR_LON }} instead of a city name.");
-          cfg.weather.enabled = false;
-        }
-      } else if constexpr (DRAC_WEATHER_PROVIDER == MetNo) {
-        if (std::holds_alternative<Coords>(DRAC_LOCATION)) {
-          const auto& coords = std::get<Coords>(DRAC_LOCATION);
-
-          cfg.weather.service = CreateWeatherService(
-            MetNo,
-            coords,
-            cfg.weather.units
-          );
-        } else {
-          error_log("MetNo requires coordinates in config.hpp. Set 'DRAC_LOCATION' to Coords{{ .lat = YOUR_LAT, .lon = YOUR_LON }} instead of a city name.");
-          cfg.weather.enabled = false;
-        }
-      } else {
-        error_log("Unknown weather provider in 'DRAC_WEATHER_PROVIDER'. Use OpenWeatherMap, OpenMeteo, or MetNo.");
-        cfg.weather.enabled = false;
-      }
-
-      if (cfg.weather.enabled && !cfg.weather.service) {
-        error_log("Failed to initialize weather service. Check your config.hpp settings for DRAC_WEATHER_PROVIDER, DRAC_LOCATION, and DRAC_API_KEY.");
-        cfg.weather.enabled = false;
-      }
-    }
 
     if constexpr (DRAC_ENABLE_PACKAGECOUNT)
       cfg.enabledPackageManagers = config::DRAC_ENABLED_PACKAGE_MANAGERS;
@@ -300,11 +222,6 @@ namespace draconis::config {
     if constexpr (DRAC_ENABLE_NOWPLAYING) {
       const toml::node_view npTbl = tbl["now_playing"];
       this->nowPlaying            = npTbl.is_table() ? NowPlaying::fromToml(*npTbl.as_table()) : NowPlaying {};
-    }
-
-    if constexpr (DRAC_ENABLE_WEATHER) {
-      const toml::node_view wthTbl = tbl["weather"];
-      this->weather                = wthTbl.is_table() ? Weather::fromToml(*wthTbl.as_table()) : Weather {};
     }
 
     if constexpr (DRAC_ENABLE_PACKAGECOUNT) {

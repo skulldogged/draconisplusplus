@@ -9,13 +9,6 @@ lib_sources = {
   'base' : files('Localization.cpp'),
   'packages' : files('Services/Packages.cpp'),
   'plugins' : files('Core/PluginManager.cpp'),
-  'weather' : files(
-    'Services/Weather/MetNoService.cpp',
-    'Services/Weather/OpenMeteoService.cpp',
-    'Services/Weather/OpenWeatherMapService.cpp',
-    'Services/Weather/WeatherFactory.cpp',
-    'Services/Weather/WeatherUtils.cpp',
-  ),
 }
 
 # Static plugin sources - dynamically discovered from the plugins/ directory
@@ -43,10 +36,6 @@ if get_option('packagecount').enabled()
   lib_all_sources += lib_sources['packages']
 endif
 
-if get_option('weather').enabled()
-  lib_all_sources += lib_sources['weather']
-endif
-
 # Add platform sources
 lib_all_sources += platform_sources.get(host_system, files())
 
@@ -68,12 +57,6 @@ if get_option('precompiled_config')
     static_plugin_cpp_args += '-DDRAC_STATIC_PLUGIN_BUILD=1'
     
     foreach plugin_name : static_plugins
-      # Check platform compatibility
-      if plugin_name == 'windows_info' and host_system != 'windows'
-        warning('Plugin "windows_info" is only available on Windows, skipping.')
-        continue
-      endif
-      
       # Dynamically find the plugin source file
       plugin_source_path = plugins_dir / plugin_name / (plugin_name + '.cpp')
       

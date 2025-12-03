@@ -80,6 +80,12 @@ namespace draconis::core::plugin {
     fn operator=(LoadedPlugin&&)->LoadedPlugin&      = default;
   };
 
+  /**
+   * @brief Get the plugin context with standard paths
+   * @return PluginContext with config, cache, and data directories
+   */
+  fn GetPluginContext() -> PluginContext;
+
   class PluginManager {
    private:
     Map<String, LoadedPlugin> m_plugins;
@@ -87,8 +93,11 @@ namespace draconis::core::plugin {
     Vec<fs::path>             m_pluginSearchPaths;
 
     // Type-safe, sorted plugin caches for fast access
-    Vec<ISystemInfoPlugin*>   m_systemInfoPlugins;
+    Vec<IInfoProviderPlugin*> m_infoProviderPlugins;
     Vec<IOutputFormatPlugin*> m_outputFormatPlugins;
+
+    // Plugin context (paths for config, cache, data)
+    PluginContext m_context;
 
     mutable std::shared_mutex m_mutex;
     std::atomic<bool>         m_initialized = false;
@@ -130,8 +139,14 @@ namespace draconis::core::plugin {
 
     // Plugin access (read-only, thread-safe)
     fn getPlugin(const String& pluginName) const -> Option<IPlugin*>;
-    fn getSystemInfoPlugins() const -> Vec<ISystemInfoPlugin*>;
+    fn getInfoProviderPlugins() const -> Vec<IInfoProviderPlugin*>;
     fn getOutputFormatPlugins() const -> Vec<IOutputFormatPlugin*>;
+    fn getInfoProviderByName(const String& providerId) const -> Option<IInfoProviderPlugin*>;
+
+    // Legacy alias
+    fn getSystemInfoPlugins() const -> Vec<IInfoProviderPlugin*> {
+      return getInfoProviderPlugins();
+    }
 
     // Plugin metadata
     fn listLoadedPlugins() const -> Vec<PluginMetadata>;

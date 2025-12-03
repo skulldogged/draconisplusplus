@@ -54,6 +54,22 @@ namespace draconis::utils::cache {
      */
     static inline bool ignoreCache = false;
 
+    /**
+     * @brief Get the persistent cache directory path for the current platform.
+     * @return The path to the cache directory (e.g., ~/.cache/draconis++ on Linux,
+     *         ~/Library/Caches/draconis++ on macOS, %USERPROFILE%/.cache/draconis++ on Windows)
+     */
+    static fn getPersistentCacheDir() -> fs::path {
+#ifdef __APPLE__
+      return fs::path(std::format("{}/Library/Caches/draconis++", draconis::utils::env::GetEnv("HOME").value_or(".")));
+#elif defined(_WIN32)
+      // On Windows, use USERPROFILE as HOME is not typically set
+      return fs::path(std::format("{}/.cache/draconis++", draconis::utils::env::GetEnv("USERPROFILE").value_or(draconis::utils::env::GetEnv("HOME").value_or("."))));
+#else
+      return fs::path(std::format("{}/.cache/draconis++", draconis::utils::env::GetEnv("HOME").value_or(".")));
+#endif
+    }
+
     CacheManager() : m_globalPolicy { .location = CacheLocation::Persistent, .ttl = days(1) } {}
 
     fn setGlobalPolicy(const CachePolicy& policy) -> types::Unit {
@@ -140,10 +156,14 @@ namespace draconis::utils::cache {
 
         m_inMemoryCache[key] = { binaryBuffer, inMemoryExpiryTp };
 
-        if (policy.location != CacheLocation::InMemory) {
-          fs::create_directories(filePath->parent_path());
-          std::ofstream ofs(*filePath, std::ios::binary | std::ios::trunc);
-          ofs.write(binaryBuffer.data(), static_cast<std::streamsize>(binaryBuffer.size()));
+        if (policy.location != CacheLocation::InMemory && filePath) {
+          std::error_code errc;
+          fs::create_directories(filePath->parent_path(), errc);
+          if (!errc) {
+            if (std::ofstream ofs(*filePath, std::ios::binary | std::ios::trunc); ofs.is_open()) {
+              ofs.write(binaryBuffer.data(), static_cast<std::streamsize>(binaryBuffer.size()));
+            }
+          }
         }
 
         return fetchedResult;
@@ -210,11 +230,7 @@ namespace draconis::utils::cache {
         m_inMemoryCache.clear();
 
         // Remove all files from persistent cache directory.
-#ifdef __APPLE__
-        const fs::path persistentDir = std::format("{}/Library/Caches/draconis++", draconis::utils::env::GetEnv("HOME").value_or("."));
-#else
-        const fs::path persistentDir = std::format("{}/.cache/draconis++", draconis::utils::env::GetEnv("HOME").value_or("."));
-#endif
+        const fs::path persistentDir = getPersistentCacheDir();
 
         if (fs::exists(persistentDir)) {
           std::error_code errc;
@@ -269,6 +285,7 @@ namespace draconis::utils::cache {
    private:
     CachePolicy m_globalPolicy;
 
+    // BEVE-encoded cache entries (for typed data with automatic serialization)
     types::UnorderedMap<types::String, types::Pair<types::String, system_clock::time_point>> m_inMemoryCache;
 
     types::Mutex m_cacheMutex;
@@ -285,11 +302,7 @@ namespace draconis::utils::cache {
         return types::Some(fs::temp_directory_path() / key);
 
       if (location == CacheLocation::Persistent)
-#ifdef __APPLE__
-        return types::Some(std::format("{}/Library/Caches/draconis++/{}", draconis::utils::env::GetEnv("HOME").value_or("."), key));
-#else
-        return types::Some(std::format("{}/.cache/draconis++/{}", draconis::utils::env::GetEnv("HOME").value_or("."), key));
-#endif
+        return types::Some(getPersistentCacheDir() / key);
 
       if (cacheDir) {
         fs::create_directories(*cacheDir);

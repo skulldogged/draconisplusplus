@@ -47,7 +47,7 @@ namespace {
       return m_metadata;
     }
 
-    fn initialize(::IPluginCache& /*cache*/) -> Result<Unit> override {
+    fn initialize(const draconis::core::plugin::PluginContext& /*ctx*/, ::PluginCache& /*cache*/) -> Result<Unit> override {
       m_ready = true;
       return {};
     }
@@ -60,7 +60,11 @@ namespace {
       return m_ready;
     }
 
-    fn formatOutput(const String& /*formatName*/, const Map<String, String>& data) const -> Result<String> override {
+    fn formatOutput(
+      const String& /*formatName*/,
+      const Map<String, String>&              data,
+      const Map<String, Map<String, String>>& pluginData
+    ) const -> Result<String> override {
       if (!m_ready)
         return Err(draconis::utils::error::DracError { draconis::utils::error::DracErrorCode::Other, "MarkdownFormatPlugin is not ready." });
 
@@ -222,20 +226,15 @@ namespace {
           markdown += "\n";
         }
 
-      // Plugin fields section
-      bool   hasPluginFields = false;
-      String pluginSection;
-
-      for (const auto& [key, value] : data)
-        if (key.starts_with("plugin_") && !value.empty()) {
-          pluginSection += std::format("- **{}**: {}\n", key.substr(7), value);
-          hasPluginFields = true;
-        }
-
-      if (hasPluginFields) {
+      // Plugin data section - use pluginData directly
+      if (!pluginData.empty()) {
         markdown += "## Plugin Data\n\n";
-        markdown += pluginSection;
-        markdown += "\n";
+        for (const auto& [pluginId, fields] : pluginData) {
+          markdown += std::format("### {}\n\n", pluginId);
+          for (const auto& [fieldName, value] : fields)
+            markdown += std::format("- **{}**: {}\n", fieldName, value);
+          markdown += "\n";
+        }
       }
 
       return markdown;
