@@ -18,6 +18,10 @@
 
 #if DRAC_PRECOMPILED_CONFIG
 
+  #include <array>
+
+  #include <Drac++/Config/PrecompiledLayout.hpp>
+
   #if DRAC_ENABLE_PACKAGECOUNT
     #include <Drac++/Services/Packages.hpp>
   #endif
@@ -54,6 +58,101 @@ namespace draconis::config {
    */
   constexpr services::packages::Manager DRAC_ENABLED_PACKAGE_MANAGERS = services::packages::Manager::Cargo;
   #endif
+
+  /**
+   * @brief UI Layout Configuration
+   *
+   * The UI is organized into groups, each containing rows that display system information.
+   * Each row is created using the `Row()` helper function with the following signature:
+   *
+   * @code{.cpp}
+   * Row(key, label = nullptr, icon = nullptr)
+   * @endcode
+   *
+   * @param key    The data key identifying what information to display.
+   *               Built-in keys include: "date", "host", "os", "kernel", "cpu", "gpu",
+   *               "ram", "disk", "uptime", "shell", "packages", "de", "wm", "playing".
+   *               Plugin keys use the format "plugin.<name>" (e.g., "plugin.weather").
+   * @param label  Optional custom label. If nullptr or empty, uses the default label.
+   * @param icon   Optional custom icon. If nullptr or empty, uses the default icon.
+   *
+   * Groups are created using the `Group()` helper:
+   * @code{.cpp}
+   * Group(name, rows_array)
+   * @endcode
+   *
+   * @note Row arrays must be declared as separate `inline constexpr` variables because
+   *       `PrecompiledLayoutGroup` uses `std::span` internally, which requires the
+   *       underlying data to have static storage duration. Inline temporaries would
+   *       result in dangling pointers.
+   *
+   * @note The array size in the template parameter (e.g., `std::array<..., 3>`) must
+   *       match the actual number of elements in the initializer list.
+   *
+   * Example with custom label and icon:
+   * @code{.cpp}
+   * inline constexpr std::array<PrecompiledLayoutRow, 2> DRAC_UI_INTRO_ROWS = {
+   *   Row("date"),
+   *   Row("plugin.weather", "Weather", " 󰖐  "),  // Custom label and icon
+   * };
+   * @endcode
+   */
+
+  /**
+   * @brief Introductory information rows (date, weather, etc.)
+   */
+  inline constexpr std::array<PrecompiledLayoutRow, 1> DRAC_UI_INTRO_ROWS = {
+    Row("date"),
+  };
+
+  /**
+   * @brief System information rows (host, OS, kernel)
+   */
+  inline constexpr std::array<PrecompiledLayoutRow, 3> DRAC_UI_SYSTEM_ROWS = {
+    Row("host"),
+    Row("os"),
+    Row("kernel"),
+  };
+
+  /**
+   * @brief Hardware information rows (CPU, GPU, RAM, disk, uptime)
+   */
+  inline constexpr std::array<PrecompiledLayoutRow, 5> DRAC_UI_HARDWARE_ROWS = {
+    Row("cpu"),
+    Row("gpu"),
+    Row("ram"),
+    Row("disk"),
+    Row("uptime"),
+  };
+
+  /**
+   * @brief Software information rows (shell, package counts)
+   */
+  inline constexpr std::array<PrecompiledLayoutRow, 2> DRAC_UI_SOFTWARE_ROWS = {
+    Row("shell"),
+    Row("packages"),
+  };
+
+  /**
+   * @brief Session information rows (desktop environment, window manager, now playing)
+   */
+  inline constexpr std::array<PrecompiledLayoutRow, 3> DRAC_UI_SESSION_ROWS = {
+    Row("de"),
+    Row("wm"),
+    Row("playing"),
+  };
+
+  /**
+   * @brief The complete UI layout combining all groups.
+   * @details Groups are displayed in the order they appear in this array.
+   */
+  inline constexpr std::array<PrecompiledLayoutGroup, 5> DRAC_UI_LAYOUT = {
+    Group("intro", DRAC_UI_INTRO_ROWS),
+    Group("system", DRAC_UI_SYSTEM_ROWS),
+    Group("hardware", DRAC_UI_HARDWARE_ROWS),
+    Group("software", DRAC_UI_SOFTWARE_ROWS),
+    Group("session", DRAC_UI_SESSION_ROWS),
+  };
 } // namespace draconis::config
 
 #endif // DRAC_PRECOMPILED_CONFIG

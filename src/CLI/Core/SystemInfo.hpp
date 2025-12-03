@@ -58,6 +58,15 @@ namespace draconis::core::system {
     // Plugin-contributed data organized by plugin ID
     types::Map<types::String, types::Map<types::String, types::String>> pluginData;
 
+    struct PluginDisplayInfo {
+      types::String                icon;
+      types::String                label;
+      types::Option<types::String> value = std::nullopt;
+    };
+
+    // Display data provided by plugins (icon/label/value)
+    types::Map<types::String, PluginDisplayInfo> pluginDisplay;
+
     /**
      * @brief Get plugin-contributed field value
      * @param pluginId ID of the plugin (e.g., "weather")

@@ -94,6 +94,30 @@ namespace draconis::config {
     }
   };
 
+  /**
+   * @brief A single row in the UI layout, optionally overriding label/icon.
+   */
+  struct UILayoutRow {
+    draconis::utils::types::String                                 key;                  ///< Identifier for the row (e.g., "cpu", "plugin.weather.temp").
+    draconis::utils::types::Option<draconis::utils::types::String> label = std::nullopt; ///< Optional label override.
+    draconis::utils::types::Option<draconis::utils::types::String> icon  = std::nullopt; ///< Optional icon override.
+  };
+
+  /**
+   * @brief A group of rows in the UI layout.
+   */
+  struct UILayoutGroup {
+    draconis::utils::types::String           name;
+    draconis::utils::types::Vec<UILayoutRow> rows;
+  };
+
+  /**
+   * @brief UI-specific configuration.
+   */
+  struct UI {
+    draconis::utils::types::Vec<UILayoutGroup> layout;
+  };
+
 #if DRAC_ENABLE_NOWPLAYING
   /**
    * @struct NowPlaying
@@ -123,6 +147,7 @@ namespace draconis::config {
   struct Config {
     General general; ///< General configuration settings.
     Logo    logo;
+    UI      ui; ///< UI layout configuration.
 #if DRAC_ENABLE_NOWPLAYING
     NowPlaying nowPlaying; ///< Now Playing configuration settings.
 #endif

@@ -1,5 +1,7 @@
 #include "UI.hpp"
 
+#include <algorithm>
+#include <cctype>
 #include <fstream>
 #include <iostream>
 #include <sstream>
@@ -21,6 +23,8 @@ using namespace draconis::utils::localization;
 namespace draconis::ui {
   using config::Config;
   using config::LogoProtocol;
+  using config::UILayoutGroup;
+  using config::UILayoutRow;
 
   using core::system::SystemInfo;
 
@@ -645,141 +649,316 @@ namespace draconis::ui {
       return lines;
     }
 
+    constexpr fn ToLowerCopy(String str) -> String {
+      std::ranges::transform(
+        str,
+        str.begin(),
+        [](unsigned char chr) -> char {
+          return static_cast<char>(std::tolower(chr));
+        }
+      );
+      return str;
+    }
+
+    constexpr fn ParsePluginKey(const String& key) -> Option<Pair<String, Option<String>>> {
+      const StringView prefixDot        = "plugin.";
+      const StringView prefixUnderscore = "plugin_";
+
+      if (!key.starts_with(prefixDot) && !key.starts_with(prefixUnderscore))
+        return None;
+
+      const usize prefixLen = key.starts_with(prefixDot) ? prefixDot.size() : prefixUnderscore.size();
+      const char  separator = key.starts_with(prefixDot) ? '.' : '_';
+
+      if (key.size() <= prefixLen)
+        return None;
+
+      const String remainder = key.substr(prefixLen);
+      const usize  sepPos    = remainder.find(separator);
+
+      if (sepPos == String::npos)
+        return Pair<String, Option<String>> { remainder, None };
+
+      String pluginId = remainder.substr(0, sepPos);
+      String field    = remainder.substr(sepPos + 1);
+
+      return Pair<String, Option<String>> { std::move(pluginId), Option<String>(std::move(field)) };
+    }
+
+    fn BuildDefaultLayout(const SystemInfo& data) -> Vec<UILayoutGroup> {
+      Vec<UILayoutGroup> layout;
+
+      UILayoutGroup introGroup;
+      introGroup.name = "intro";
+      introGroup.rows.push_back(UILayoutRow { .key = "date" });
+
+#if DRAC_ENABLE_PLUGINS
+      for (const auto& [pluginId, displayInfo] : data.pluginDisplay) {
+        (void)displayInfo;
+        introGroup.rows.push_back(UILayoutRow { .key = std::format("plugin.{}", pluginId) });
+      }
+#endif
+
+      layout.push_back(std::move(introGroup));
+
+      UILayoutGroup systemGroup;
+      systemGroup.name = "system";
+      systemGroup.rows.push_back(UILayoutRow { .key = "host" });
+      systemGroup.rows.push_back(UILayoutRow { .key = "os" });
+      systemGroup.rows.push_back(UILayoutRow { .key = "kernel" });
+      layout.push_back(std::move(systemGroup));
+
+      UILayoutGroup hardwareGroup;
+      hardwareGroup.name = "hardware";
+      hardwareGroup.rows.push_back(UILayoutRow { .key = "ram" });
+      hardwareGroup.rows.push_back(UILayoutRow { .key = "disk" });
+      hardwareGroup.rows.push_back(UILayoutRow { .key = "cpu" });
+      hardwareGroup.rows.push_back(UILayoutRow { .key = "gpu" });
+      hardwareGroup.rows.push_back(UILayoutRow { .key = "uptime" });
+      layout.push_back(std::move(hardwareGroup));
+
+      UILayoutGroup softwareGroup;
+      softwareGroup.name = "software";
+      softwareGroup.rows.push_back(UILayoutRow { .key = "shell" });
+#if DRAC_ENABLE_PACKAGECOUNT
+      softwareGroup.rows.push_back(UILayoutRow { .key = "packages" });
+#endif
+      layout.push_back(std::move(softwareGroup));
+
+      UILayoutGroup envGroup;
+      envGroup.name = "environment";
+      envGroup.rows.push_back(UILayoutRow { .key = "de" });
+      envGroup.rows.push_back(UILayoutRow { .key = "wm" });
+      layout.push_back(std::move(envGroup));
+
+      return layout;
+    }
+
+    fn BuildRowFromLayout(
+      const UILayoutRow&      layoutRow,
+      const Icons&            iconType,
+      const SystemInfo&       data,
+      Option<StringView>      distroIcon,
+      bool&                   nowPlayingConsumed
+    ) -> Option<RowInfo> {
+      const String keyLower = ToLowerCopy(layoutRow.key);
+
+      if (const auto pluginKey = ParsePluginKey(layoutRow.key)) {
+#if DRAC_ENABLE_PLUGINS
+        const String&             pluginId  = pluginKey->first;
+        const Option<String>&     fieldName = pluginKey->second;
+        Option<String> value     = None;
+        String         icon      = String(iconType.palette);
+        String         label     = pluginId;
+        const auto     displayIt = data.pluginDisplay.find(pluginId);
+        const bool     hasDisplayInfo = displayIt != data.pluginDisplay.end();
+
+        if (fieldName) {
+          if (const auto pluginDataIt = data.pluginData.find(pluginId); pluginDataIt != data.pluginData.end()) {
+            if (const auto valueIt = pluginDataIt->second.find(*fieldName); valueIt != pluginDataIt->second.end())
+              value = valueIt->second;
+          }
+
+          if (!value)
+            return None;
+
+          if (hasDisplayInfo) {
+            if (!displayIt->second.icon.empty())
+              icon = displayIt->second.icon;
+            if (!displayIt->second.label.empty())
+              label = std::format("{} {}", displayIt->second.label, *fieldName);
+            else
+              label = *fieldName;
+          } else
+            label = *fieldName;
+        } else {
+          if (!hasDisplayInfo)
+            return None;
+
+          icon  = displayIt->second.icon.empty() ? iconType.palette : displayIt->second.icon;
+          label = displayIt->second.label.empty() ? pluginId : displayIt->second.label;
+
+          if (displayIt->second.value)
+            value = *displayIt->second.value;
+        }
+
+        if (!value)
+          return None;
+
+        RowInfo row {
+          .icon  = std::move(icon),
+          .label = std::move(label),
+          .value = *std::move(value)
+        };
+
+        if (layoutRow.icon)
+          row.icon = *layoutRow.icon;
+        if (layoutRow.label)
+          row.label = *layoutRow.label;
+
+        return row;
+#else
+        (void)pluginKey;
+        return None;
+#endif
+      }
+
+      RowInfo row;
+
+      if (keyLower == "date") {
+        if (!data.date)
+          return None;
+        row.icon  = iconType.calendar;
+        row.label = _("date");
+        row.value = *data.date;
+      } else if (keyLower == "host") {
+        if (!data.host || data.host->empty())
+          return None;
+        row.icon  = iconType.host;
+        row.label = _("host");
+        row.value = *data.host;
+      } else if (keyLower == "os") {
+        if (!data.operatingSystem)
+          return None;
+        row.icon = distroIcon ? String(*distroIcon) : String(iconType.os);
+        row.label = _("os");
+        row.value = std::format("{} {}", data.operatingSystem->name, data.operatingSystem->version);
+      } else if (keyLower == "kernel") {
+        if (!data.kernelVersion)
+          return None;
+        row.icon  = iconType.kernel;
+        row.label = _("kernel");
+        row.value = *data.kernelVersion;
+      } else if (keyLower == "ram") {
+        if (!data.memInfo)
+          return None;
+        row.icon  = iconType.memory;
+        row.label = _("ram");
+        row.value = std::format("{}/{}", BytesToGiB(data.memInfo->usedBytes), BytesToGiB(data.memInfo->totalBytes));
+      } else if (keyLower == "disk") {
+        if (!data.diskUsage)
+          return None;
+        row.icon  = iconType.disk;
+        row.label = _("disk");
+        row.value = std::format("{}/{}", BytesToGiB(data.diskUsage->usedBytes), BytesToGiB(data.diskUsage->totalBytes));
+      } else if (keyLower == "cpu") {
+        if (!data.cpuModel)
+          return None;
+        row.icon  = iconType.cpu;
+        row.label = _("cpu");
+        row.value = *data.cpuModel;
+      } else if (keyLower == "gpu") {
+        if (!data.gpuModel)
+          return None;
+        row.icon  = iconType.gpu;
+        row.label = _("gpu");
+        row.value = *data.gpuModel;
+      } else if (keyLower == "uptime") {
+        if (!data.uptime)
+          return None;
+        row.icon  = iconType.uptime;
+        row.label = _("uptime");
+        row.value = std::format("{}", SecondsToFormattedDuration { *data.uptime });
+      } else if (keyLower == "shell") {
+        if (!data.shell)
+          return None;
+        row.icon  = iconType.shell;
+        row.label = _("shell");
+        row.value = *data.shell;
+      }
+#if DRAC_ENABLE_PACKAGECOUNT
+      else if (keyLower == "packages" || keyLower == "package") {
+        if (!data.packageCount || *data.packageCount == 0)
+          return None;
+        row.icon  = iconType.package;
+        row.label = _("packages");
+        row.value = std::format("{}", *data.packageCount);
+      }
+#endif
+      else if (keyLower == "de") {
+        if (!data.desktopEnv)
+          return None;
+        if (data.windowMgr && *data.desktopEnv == *data.windowMgr)
+          return None;
+        row.icon  = iconType.desktopEnvironment;
+        row.label = _("de");
+        row.value = *data.desktopEnv;
+      } else if (keyLower == "wm") {
+        if (!data.windowMgr)
+          return None;
+        row.icon  = iconType.windowManager;
+        row.label = _("wm");
+        row.value = *data.windowMgr;
+      }
+#if DRAC_ENABLE_NOWPLAYING
+      else if (keyLower == "playing" || keyLower == "nowplaying") {
+        if (!data.nowPlaying)
+          return None;
+        row.icon  = iconType.music;
+        row.label = _("playing");
+        row.value = std::format(
+          "{} - {}",
+          data.nowPlaying->artist.value_or("Unknown Artist"),
+          data.nowPlaying->title.value_or("Unknown Title")
+        );
+        nowPlayingConsumed = true;
+      }
+#endif
+      else
+        return None;
+
+      if (layoutRow.icon)
+        row.icon = *layoutRow.icon;
+      if (layoutRow.label)
+        row.label = *layoutRow.label;
+
+      return row;
+    }
+
   } // namespace
 
   fn CreateUI(const Config& config, const SystemInfo& data, bool noAscii) -> String {
     const String& name     = config.general.getName();
     const Icons&  iconType = ICON_TYPE;
 
-    UIGroup initialGroup;
-    UIGroup systemInfoGroup;
-    UIGroup hardwareGroup;
-    UIGroup softwareGroup;
-    UIGroup envInfoGroup;
-
-    // Reserve capacity to avoid reallocations
-    initialGroup.rows.reserve(4);    // date, weather
-    systemInfoGroup.rows.reserve(4); // host, os, kernel
-    hardwareGroup.rows.reserve(6);   // memory, disk, cpu, gpu, uptime
-    softwareGroup.rows.reserve(4);   // shell, packages
-    envInfoGroup.rows.reserve(4);    // de, wm
-
-    // Reserve capacity for other vectors too
-    for (UIGroup* group : { &initialGroup, &systemInfoGroup, &hardwareGroup, &softwareGroup, &envInfoGroup }) {
-      group->iconWidths.reserve(4);
-      group->labelWidths.reserve(4);
-      group->valueWidths.reserve(4);
-      group->coloredIcons.reserve(4);
-      group->coloredLabels.reserve(4);
-      group->coloredValues.reserve(4);
-    }
-
-    {
-      if (data.date)
-        initialGroup.rows.emplace_back(String(iconType.calendar), _("date"), *data.date);
-
-#if DRAC_ENABLE_PLUGINS
-      // Add rows from info provider plugins
-      auto& pluginManager = draconis::core::plugin::GetPluginManager();
-      if (pluginManager.isInitialized()) {
-        for (auto* plugin : pluginManager.getInfoProviderPlugins()) {
-          if (plugin && plugin->isReady() && plugin->isEnabled()) {
-            if (auto displayValue = plugin->getDisplayValue(); displayValue) {
-              initialGroup.rows.emplace_back(
-                plugin->getDisplayIcon(),
-                plugin->getDisplayLabel(),
-                *displayValue
-              );
-            }
-          }
-        }
-      }
-#endif
-    }
-
-    {
-      if (data.host && !data.host->empty()) {
-        String hostLabel = _("host");
-        debug_log("Host label translation: '{}'", hostLabel);
-        systemInfoGroup.rows.emplace_back(String(iconType.host), hostLabel, *data.host);
-      }
-
-      if (data.operatingSystem)
-        systemInfoGroup.rows.emplace_back(
+    Option<StringView> distroIcon = None;
 #ifdef __linux__
-          String(GetDistroIcon(data.operatingSystem->id).value_or(iconType.os)),
-#else
-          String(iconType.os),
+    if (data.operatingSystem)
+      distroIcon = GetDistroIcon(data.operatingSystem->id);
 #endif
-          _("os"),
-          std::format("{} {}", data.operatingSystem->name, data.operatingSystem->version)
-        );
 
-      if (data.kernelVersion) {
-        String kernelLabel = _("kernel");
-        debug_log("Kernel label translation: '{}'", kernelLabel);
-        systemInfoGroup.rows.emplace_back(String(iconType.kernel), kernelLabel, *data.kernelVersion);
+    const Vec<UILayoutGroup>* layoutGroups = &config.ui.layout;
+    Vec<UILayoutGroup>        defaultLayout;
+
+    if (layoutGroups->empty()) {
+      defaultLayout = BuildDefaultLayout(data);
+      layoutGroups  = &defaultLayout;
+    }
+
+    Vec<UIGroup> groups;
+    groups.reserve(layoutGroups->size());
+
+    bool nowPlayingConsumed = false;
+
+    for (const auto& groupCfg : *layoutGroups) {
+      UIGroup group;
+      group.rows.reserve(groupCfg.rows.size());
+
+      for (const auto& rowCfg : groupCfg.rows) {
+        if (auto row = BuildRowFromLayout(rowCfg, iconType, data, distroIcon, nowPlayingConsumed))
+          group.rows.push_back(std::move(*row));
       }
+
+      groups.push_back(std::move(group));
     }
-
-    {
-      if (data.memInfo)
-        hardwareGroup.rows.emplace_back(String(iconType.memory), _("ram"), std::format("{}/{}", BytesToGiB(data.memInfo->usedBytes), BytesToGiB(data.memInfo->totalBytes)));
-
-      if (data.diskUsage)
-        hardwareGroup.rows.emplace_back(String(iconType.disk), _("disk"), std::format("{}/{}", BytesToGiB(data.diskUsage->usedBytes), BytesToGiB(data.diskUsage->totalBytes)));
-
-      if (data.cpuModel)
-        hardwareGroup.rows.emplace_back(String(iconType.cpu), _("cpu"), *data.cpuModel);
-
-      if (data.gpuModel)
-        hardwareGroup.rows.emplace_back(String(iconType.gpu), _("gpu"), *data.gpuModel);
-
-      if (data.uptime) {
-        String uptimeLabel = _("uptime");
-        debug_log("Uptime label translation: '{}'", uptimeLabel);
-        hardwareGroup.rows.emplace_back(String(iconType.uptime), uptimeLabel, std::format("{}", SecondsToFormattedDuration { *data.uptime }));
-      }
-    }
-
-    {
-      if (data.shell)
-        softwareGroup.rows.emplace_back(String(iconType.shell), _("shell"), *data.shell);
-
-      if constexpr (DRAC_ENABLE_PACKAGECOUNT)
-        if (data.packageCount && *data.packageCount > 0) {
-          String packagesLabel = _("packages");
-          debug_log("Packages label translation: '{}'", packagesLabel);
-          softwareGroup.rows.emplace_back(String(iconType.package), packagesLabel, std::format("{}", *data.packageCount));
-        }
-    }
-
-    {
-      const bool deExists = data.desktopEnv.has_value();
-      const bool wmExists = data.windowMgr.has_value();
-
-      if (deExists && wmExists) {
-        if (*data.desktopEnv == *data.windowMgr)
-          envInfoGroup.rows.emplace_back(String(iconType.windowManager), _("wm"), *data.windowMgr);
-        else {
-          envInfoGroup.rows.emplace_back(String(iconType.desktopEnvironment), _("de"), *data.desktopEnv);
-          envInfoGroup.rows.emplace_back(String(iconType.windowManager), _("wm"), *data.windowMgr);
-        }
-      } else if (deExists)
-        envInfoGroup.rows.emplace_back(String(iconType.desktopEnvironment), _("de"), *data.desktopEnv);
-      else if (wmExists)
-        envInfoGroup.rows.emplace_back(String(iconType.windowManager), _("wm"), *data.windowMgr);
-    }
-
-    Vec<UIGroup*> groups = { &initialGroup, &systemInfoGroup, &hardwareGroup, &softwareGroup, &envInfoGroup };
 
     usize maxContentWidth = 0;
 
-    for (UIGroup* group : groups) {
-      if (group->rows.empty())
+    for (UIGroup& group : groups) {
+      if (group.rows.empty())
         continue;
 
-      maxContentWidth = std::max(maxContentWidth, ProcessGroup(*group));
+      maxContentWidth = std::max(maxContentWidth, ProcessGroup(group));
     }
 
     String greetingLine = std::format("{}{}", iconType.user, _format_f("hello", name));
@@ -797,7 +976,7 @@ namespace draconis::ui {
     bool   nowPlayingActive = false;
     String npText;
 
-    if (config.nowPlaying.enabled && data.nowPlaying) {
+    if (!nowPlayingConsumed && config.nowPlaying.enabled && data.nowPlaying) {
       npText           = std::format("{} - {}", data.nowPlaying->artist.value_or("Unknown Artist"), data.nowPlaying->title.value_or("Unknown Title"));
       nowPlayingActive = true;
     }
@@ -807,8 +986,8 @@ namespace draconis::ui {
 
     usize estimatedLines = 4;
 
-    for (const UIGroup* grp : groups)
-      estimatedLines += grp->rows.empty() ? 0 : (grp->rows.size() + 1);
+    for (const UIGroup& grp : groups)
+      estimatedLines += grp.rows.empty() ? 0 : (grp.rows.size() + 1);
 
     if constexpr (DRAC_ENABLE_NOWPLAYING)
       if (nowPlayingActive)
@@ -854,8 +1033,8 @@ namespace draconis::ui {
 
     bool hasRenderedContent = true;
 
-    for (const UIGroup* group : groups)
-      RenderGroup(out, *group, maxContentWidth, hBorder, hasRenderedContent);
+    for (const UIGroup& group : groups)
+      RenderGroup(out, group, maxContentWidth, hBorder, hasRenderedContent);
 
     if constexpr (DRAC_ENABLE_NOWPLAYING)
       if (nowPlayingActive) {

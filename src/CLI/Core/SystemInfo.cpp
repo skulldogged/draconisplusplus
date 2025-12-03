@@ -245,9 +245,8 @@ namespace draconis::core::system {
 
     debug_log("Found {} info provider plugins", infoProviderPlugins.size());
 
-    if (infoProviderPlugins.empty()) {
+    if (infoProviderPlugins.empty())
       return;
-    }
 
     // Collect data from each plugin efficiently
     // Create a PluginCache using the persistent cache directory for plugins
@@ -268,6 +267,11 @@ namespace draconis::core::system {
       const auto  pluginId = plugin->getProviderId();
       debug_log("Collecting data from plugin: {} (id: {})", metadata.name, pluginId);
 
+      PluginDisplayInfo displayInfo {
+        .icon  = plugin->getDisplayIcon(),
+        .label = plugin->getDisplayLabel()
+      };
+
       try {
         // Collect plugin data with error handling
         if (auto result = plugin->collectData(pluginCacheInstance); result) {
@@ -281,6 +285,9 @@ namespace draconis::core::system {
             debug_log("Adding plugin field: {}[{}] = {}", pluginId, key, value);
             pluginFields.emplace(key, std::move(value));
           }
+
+          if (auto displayValue = plugin->getDisplayValue(); displayValue)
+            displayInfo.value = *displayValue;
         } else {
           debug_log("Plugin '{}' failed to collect data: {}", metadata.name, result.error().message);
         }
@@ -289,6 +296,8 @@ namespace draconis::core::system {
       } catch (...) {
         debug_log("Unknown exception in plugin '{}'", metadata.name);
       }
+
+      pluginDisplay[pluginId] = std::move(displayInfo);
     }
 
     debug_log("Total plugins with data: {}", pluginData.size());

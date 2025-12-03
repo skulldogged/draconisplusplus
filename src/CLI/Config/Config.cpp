@@ -54,12 +54,28 @@ namespace {
     Vec<String> autoLoad;
   };
 
+  struct TomlLayoutRow {
+    String key;   // Required identifier
+    String label; // Optional override, empty = not provided
+    String icon;  // Optional override, empty = not provided
+  };
+
+  struct TomlLayoutGroup {
+    String             name;
+    Vec<TomlLayoutRow> rows;
+  };
+
+  struct TomlUI {
+    Vec<TomlLayoutGroup> layout;
+  };
+
   struct TomlConfig {
     TomlGeneral    general;
     TomlLogo       logo;
     TomlNowPlaying nowPlaying;
     TomlPackages   packages;
     TomlPlugins    plugins;
+    TomlUI         ui;
   };
 } // namespace
 
@@ -101,9 +117,40 @@ struct glz::meta<TomlPlugins> {
 };
 
 template <>
+struct glz::meta<TomlLayoutRow> {
+  using T                     = TomlLayoutRow;
+  static constexpr auto value = object("key", &T::key, "label", &T::label, "icon", &T::icon);
+};
+
+template <>
+struct glz::meta<TomlLayoutGroup> {
+  using T                     = TomlLayoutGroup;
+  static constexpr auto value = object("name", &T::name, "rows", &T::rows);
+};
+
+template <>
+struct glz::meta<TomlUI> {
+  using T                     = TomlUI;
+  static constexpr auto value = object("layout", &T::layout);
+};
+
+template <>
 struct glz::meta<TomlConfig> {
   using T                     = TomlConfig;
-  static constexpr auto value = object("general", &T::general, "logo", &T::logo, "now_playing", &T::nowPlaying, "packages", &T::packages, "plugins", &T::plugins);
+  static constexpr auto value = object(
+    "general",
+    &T::general,
+    "logo",
+    &T::logo,
+    "now_playing",
+    &T::nowPlaying,
+    "packages",
+    &T::packages,
+    "plugins",
+    &T::plugins,
+    "ui",
+    &T::ui
+  );
 };
 
   #ifdef __clang__
@@ -206,6 +253,37 @@ namespace {
 #endif // !DRAC_PRECOMPILED_CONFIG
 
 namespace draconis::config {
+#if DRAC_PRECOMPILED_CONFIG
+  namespace {
+    fn PopulatePrecompiledLayout(Config& cfg) -> void {
+      cfg.ui.layout.clear();
+
+      for (const auto& group : DRAC_UI_LAYOUT) {
+        UILayoutGroup cfgGroup;
+        cfgGroup.name = group.name ? group.name : "";
+
+        for (const auto& row : group.rows) {
+          if (row.key == nullptr || std::strlen(row.key) == 0)
+            continue;
+
+          UILayoutRow cfgRow;
+          cfgRow.key = row.key;
+
+          if (row.label != nullptr && std::strlen(row.label) > 0)
+            cfgRow.label = row.label;
+          if (row.icon != nullptr && std::strlen(row.icon) > 0)
+            cfgRow.icon = row.icon;
+
+          cfgGroup.rows.push_back(std::move(cfgRow));
+        }
+
+        if (!cfgGroup.rows.empty())
+          cfg.ui.layout.push_back(std::move(cfgGroup));
+      }
+    }
+  } // namespace
+#endif
+
   fn Config::getInstance() -> Config {
 #if DRAC_PRECOMPILED_CONFIG
     using namespace draconis::config;
@@ -225,6 +303,8 @@ namespace draconis::config {
 
     if constexpr (DRAC_ENABLE_NOWPLAYING)
       cfg.nowPlaying.enabled = true;
+
+    PopulatePrecompiledLayout(cfg);
 
     debug_log("Using precompiled configuration.");
     return cfg;
@@ -349,6 +429,28 @@ namespace draconis::config {
       if constexpr (DRAC_ENABLE_PLUGINS) {
         cfg.plugins.enabled  = tomlCfg.plugins.enabled;
         cfg.plugins.autoLoad = tomlCfg.plugins.autoLoad;
+      }
+
+      // UI layout settings
+      cfg.ui.layout.clear();
+      for (const TomlLayoutGroup& group : tomlCfg.ui.layout) {
+        UILayoutGroup cfgGroup;
+        cfgGroup.name = group.name;
+
+        for (const TomlLayoutRow& row : group.rows) {
+          if (row.key.empty())
+            continue;
+
+          UILayoutRow cfgRow;
+          cfgRow.key = row.key;
+          if (!row.label.empty())
+            cfgRow.label = row.label;
+          if (!row.icon.empty())
+            cfgRow.icon = row.icon;
+          cfgGroup.rows.push_back(std::move(cfgRow));
+        }
+
+        cfg.ui.layout.push_back(std::move(cfgGroup));
       }
 
       return cfg;
