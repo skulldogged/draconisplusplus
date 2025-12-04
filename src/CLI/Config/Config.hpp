@@ -26,11 +26,12 @@ namespace draconis::config {
   enum class LogoProtocol : draconis::utils::types::u8 {
     Kitty,
     KittyDirect,
+    Iterm2,
   };
 
   struct Logo {
     draconis::utils::types::Option<draconis::utils::types::String> imagePath;
-    draconis::utils::types::Option<draconis::utils::types::String> protocol; // "kitty" or "kitty-direct"
+    draconis::utils::types::Option<draconis::utils::types::String> protocol; // "kitty", "kitty-direct", or "iterm2"
     draconis::utils::types::Option<draconis::utils::types::u32>    width;
     draconis::utils::types::Option<draconis::utils::types::u32>    height;
 
@@ -39,7 +40,11 @@ namespace draconis::config {
         return LogoProtocol::Kitty;
       draconis::utils::types::String protoLower = *protocol;
       std::ranges::transform(protoLower, protoLower.begin(), [](unsigned char chr) -> char { return static_cast<char>(std::tolower(chr)); });
-      return protoLower == "kitty-direct" ? LogoProtocol::KittyDirect : LogoProtocol::Kitty;
+      if (protoLower == "kitty-direct")
+        return LogoProtocol::KittyDirect;
+      if (protoLower == "iterm2")
+        return LogoProtocol::Iterm2;
+      return LogoProtocol::Kitty;
     }
   };
 

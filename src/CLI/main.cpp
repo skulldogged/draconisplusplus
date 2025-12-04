@@ -157,25 +157,25 @@ fn main(const i32 argc, CStr* argv[]) -> i32 try {
 
     parser
       .addArguments("--logo-path")
-      .help("Path to an image to render in the logo area (kitty / kitty-direct only).")
+      .help("Path to an image to render in the logo area (kitty / kitty-direct / iterm2).")
       .defaultValue(String(""))
       .bindTo(opts.logoPath);
 
     parser
       .addArguments("--logo-protocol")
-      .help("Logo image protocol: 'kitty' or 'kitty-direct'.")
+      .help("Logo image protocol: 'kitty', 'kitty-direct', or 'iterm2'.")
       .defaultValue(String(""))
       .bindTo(opts.logoProtocol);
 
     parser
       .addArguments("--logo-width")
-      .help("Logo image width in terminal cells.")
+      .help("Logo image width in pixels.")
       .defaultValue(i32(0))
       .bindTo(opts.logoWidth, [](const Argument& arg) -> u32 { return static_cast<u32>(std::max(0, arg.get<i32>())); });
 
     parser
       .addArguments("--logo-height")
-      .help("Logo image height in terminal cells.")
+      .help("Logo image height in pixels.")
       .defaultValue(i32(0))
       .bindTo(opts.logoHeight, [](const Argument& arg) -> u32 { return static_cast<u32>(std::max(0, arg.get<i32>())); });
 

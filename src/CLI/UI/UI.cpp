@@ -2,9 +2,15 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cmath>
+#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <sstream>
+#ifndef _WIN32
+  #include <sys/ioctl.h> // TIOCGWINSZ
+  #include <unistd.h>    // STDOUT_FILENO
+#endif
 
 #include <Drac++/Utils/Localization.hpp>
 #include <Drac++/Utils/Logging.hpp>
@@ -28,7 +34,7 @@ namespace draconis::ui {
 
   using core::system::SystemInfo;
 
-  constexpr Theme DEFAULT_THEME = {
+    constexpr Theme DEFAULT_THEME = {
     .icon  = LogColor::Cyan,
     .label = LogColor::Yellow,
     .value = LogColor::White,
@@ -134,10 +140,10 @@ namespace draconis::ui {
   namespace {
     struct LogoRender {
       Vec<String> lines;    // ASCII art lines when using ascii logos
-      String      sequence; // Kitty escape sequence when using kitty logos
+      String      sequence; // Escape sequence when using inline image logos
       usize       width   = 0;
       usize       height  = 0;
-      bool        isKitty = false;
+      bool        isInline = false;
     };
 
     constexpr Array<char, 65> BASE64_TABLE = {
@@ -275,23 +281,124 @@ namespace draconis::ui {
       return buffer;
     }
 
-    fn BuildKittySequence(const config::Logo& logoCfg, usize widthCells, usize heightCells) -> Option<String> {
+    struct ImageSize {
+      usize width  = 0;
+      usize height = 0;
+    };
+
+    // Query terminal cell pixel dimensions (stdout). Returns None if unavailable.
+    fn GetCellMetricsPx() -> Option<Pair<double, double>> {
+#ifndef _WIN32
+      winsize ws {};
+      if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == 0) {
+        if (ws.ws_col > 0 && ws.ws_row > 0 && ws.ws_xpixel > 0 && ws.ws_ypixel > 0) {
+          const double cellW = static_cast<double>(ws.ws_xpixel) / static_cast<double>(ws.ws_col);
+          const double cellH = static_cast<double>(ws.ws_ypixel) / static_cast<double>(ws.ws_row);
+          return Pair<double, double> { cellW, cellH };
+        }
+      }
+#endif
+      return None;
+    }
+
+    // Best-effort probe for PNG and JPEG dimensions to estimate cell footprint.
+    fn ProbeImageSize(const String& path) -> Option<ImageSize> {
+      std::ifstream file(path, std::ios::binary);
+      if (!file)
+        return None;
+
+      // Read enough bytes for signatures/header parsing
+      Array<unsigned char, 64> header {};
+      file.read(reinterpret_cast<char*>(header.data()), static_cast<std::streamsize>(header.size())); // NOLINT
+      const auto readCount = static_cast<usize>(file.gcount());
+      if (readCount < 24)
+        return None;
+
+      // PNG signature
+      const unsigned char pngSig[8] { 137, 80, 78, 71, 13, 10, 26, 10 };
+      if (std::equal(std::begin(pngSig), std::end(pngSig), header.begin())) {
+        // IHDR starts at byte 16
+        const auto be32 = [](const unsigned char* p) -> usize {
+          return (static_cast<usize>(p[0]) << 24) |
+            (static_cast<usize>(p[1]) << 16) |
+            (static_cast<usize>(p[2]) << 8) |
+            static_cast<usize>(p[3]);
+        };
+
+        return ImageSize {
+          .width  = be32(&header[16]),
+          .height = be32(&header[20]),
+        };
+      }
+
+      // JPEG SOF parsing
+      if (header[0] == 0xFF && header[1] == 0xD8) {
+        file.clear();
+        file.seekg(2, std::ios::beg);
+
+        while (file) {
+          int markerPrefix = file.get();
+          if (markerPrefix != 0xFF)
+            break;
+          int marker = file.get();
+          // Skip padding bytes
+          while (marker == 0xFF)
+            marker = file.get();
+          if (marker == 0xD9 || marker == EOF)
+            break;
+
+          // Read segment length
+          unsigned char lenBytes[2] {};
+          file.read(reinterpret_cast<char*>(lenBytes), 2); // NOLINT
+          if (!file)
+            break;
+          const usize segLen = (static_cast<usize>(lenBytes[0]) << 8) | static_cast<usize>(lenBytes[1]);
+          if (segLen < 2)
+            break;
+
+          // SOF0/1/2/3/5/6/7/9/A/B/C/D/E/F markers carry dimensions
+          if ((marker >= 0xC0 && marker <= 0xC3) || (marker >= 0xC5 && marker <= 0xC7) || (marker >= 0xC9 && marker <= 0xCB) || (marker >= 0xCD && marker <= 0xCF)) {
+            unsigned char sof[5] {};
+            file.read(reinterpret_cast<char*>(sof), 5); // NOLINT
+            if (!file)
+              break;
+            const usize height = (static_cast<usize>(sof[1]) << 8) | static_cast<usize>(sof[2]);
+            const usize width  = (static_cast<usize>(sof[3]) << 8) | static_cast<usize>(sof[4]);
+            if (height > 0 && width > 0)
+              return ImageSize { .width = width, .height = height };
+            break;
+          } else {
+            file.seekg(static_cast<std::streamoff>(segLen) - 2, std::ios::cur);
+          }
+        }
+      }
+
+      return None;
+    }
+
+    fn BuildInlineSequence(const config::Logo& logoCfg, usize widthCells, usize heightCells, usize widthPx, usize heightPx) -> Option<String> {
       if (!logoCfg.imagePath)
         return None;
 
-      String sequence;
+      const LogoProtocol protocol = logoCfg.getProtocol();
+      String             sequence;
 
-      if (logoCfg.getProtocol() == LogoProtocol::KittyDirect) {
+      if (protocol == LogoProtocol::KittyDirect) {
         const String payload = Base64Encode(*logoCfg.imagePath);
 
         sequence = "\033_Ga=T,f=100,t=f";
 
         if (widthCells > 0)
           sequence += std::format(",c={}", widthCells);
+        else if (widthPx > 0)
+          sequence += std::format(",s={}", widthPx);
 
         if (heightCells > 0)
           sequence += std::format(",r={}", heightCells);
+        else if (heightPx > 0)
+          sequence += std::format(",v={}", heightPx);
 
+        sequence += ",C=1"; // keep cursor position stable
         sequence += ";";
         sequence += payload;
         sequence += "\033\\";
@@ -301,19 +408,56 @@ namespace draconis::ui {
 
       const Option<Vec<u8>> bytes = ReadFileBytes(*logoCfg.imagePath);
 
-      if (!bytes)
+      if (!bytes || bytes->empty())
         return None;
+
+      const auto formatDimension = [](usize cells, usize px) -> Option<String> {
+        if (cells > 0)
+          return std::make_optional<String>(std::to_string(cells));
+        if (px > 0)
+          return std::make_optional<String>(std::format("{}px", px));
+        return None;
+      };
+
+      if (protocol == LogoProtocol::Iterm2) {
+        const String payload = Base64Encode(Span<const u8>(*bytes));
+
+        sequence = "\033]1337;File=inline=1";
+        sequence += std::format(";size={}", bytes->size());
+
+        const std::filesystem::path filePath(*logoCfg.imagePath);
+        const String                fileName = filePath.filename().string();
+        if (!fileName.empty())
+          sequence += std::format(";name={}", Base64Encode(fileName));
+
+        if (const Option<String> widthArg = formatDimension(widthCells, widthPx))
+          sequence += std::format(";width={}", *widthArg);
+        if (const Option<String> heightArg = formatDimension(heightCells, heightPx))
+          sequence += std::format(";height={}", *heightArg);
+
+        sequence += ";preserveAspectRatio=1";
+        sequence += ":";
+        sequence += payload;
+        sequence += "\a";
+
+        return sequence;
+      }
 
       const String payload = Base64Encode(Span<const u8>(*bytes));
 
       sequence = "\033_Ga=T,f=100";
 
       if (widthCells > 0)
-        sequence += std::format(",s={}", widthCells);
+        sequence += std::format(",c={}", widthCells);
+      else if (widthPx > 0)
+        sequence += std::format(",s={}", widthPx);
 
       if (heightCells > 0)
-        sequence += std::format(",v={}", heightCells);
+        sequence += std::format(",r={}", heightCells);
+      else if (heightPx > 0)
+        sequence += std::format(",v={}", heightPx);
 
+      sequence += ",C=1"; // keep cursor position stable
       sequence += ";";
       sequence += payload;
       sequence += "\033\\";
@@ -321,25 +465,92 @@ namespace draconis::ui {
       return sequence;
     }
 
-    fn BuildKittyLogo(const config::Logo& logoCfg, usize suggestedHeight) -> Option<LogoRender> {
+    fn BuildInlineLogo(const config::Logo& logoCfg, [[maybe_unused]] usize suggestedHeight) -> Option<LogoRender> {
       if (!logoCfg.imagePath)
         return None;
 
-      const usize logoWidth  = std::max<usize>(1, logoCfg.width.value_or(24));
-      usize       logoHeight = logoCfg.height.value_or(suggestedHeight);
+      const LogoProtocol protocol = logoCfg.getProtocol();
+      if (protocol != LogoProtocol::Kitty && protocol != LogoProtocol::KittyDirect && protocol != LogoProtocol::Iterm2)
+        return None;
 
-      if (logoHeight == 0)
-        logoHeight = suggestedHeight == 0 ? 12 : suggestedHeight;
+      usize logoWidthPx  = logoCfg.width.value_or(0);
+      usize logoHeightPx = logoCfg.height.value_or(0); // leave height unset unless explicitly provided
 
-      const Option<String> sequence = BuildKittySequence(logoCfg, logoWidth, logoHeight);
+      // If only one dimension (or none) is provided, try to derive the other from the image aspect ratio.
+      if (const Option<ImageSize> imgSize = ProbeImageSize(*logoCfg.imagePath)) {
+        const double aspect = imgSize->height == 0 ? 1.0 : static_cast<double>(imgSize->width) / static_cast<double>(imgSize->height);
+
+        if (logoWidthPx == 0 && logoHeightPx > 0) {
+          logoWidthPx = std::max<usize>(1, static_cast<usize>(std::llround(aspect * static_cast<double>(logoHeightPx))));
+        } else if (logoHeightPx == 0 && logoWidthPx > 0) {
+          logoHeightPx = std::max<usize>(1, static_cast<usize>(std::llround(static_cast<double>(logoWidthPx) / aspect)));
+        } else if (logoWidthPx == 0 && logoHeightPx == 0) {
+          logoWidthPx  = imgSize->width;
+          logoHeightPx = imgSize->height;
+        }
+      }
+
+      // Only send explicit sizing when the user provided at least one dimension.
+      const bool  hasExplicitSize = logoCfg.width.has_value() || logoCfg.height.has_value();
+      const usize sendWidthPx     = hasExplicitSize ? logoWidthPx : 0;
+      const usize sendHeightPx    = hasExplicitSize ? logoHeightPx : 0;
+
+      // Determine how many terminal columns/rows the image will occupy to shift the text,
+      // and prefer to send cell sizing when possible (kitty scales to fit).
+      usize shiftWidthCells  = 0;
+      usize logoHeightCells  = 0;
+      usize sendWidthCells   = 0;
+      usize sendHeightCells  = 0;
+      const usize renderWidthPx  = logoWidthPx;
+      const usize renderHeightPx = logoHeightPx;
+
+      if (const Option<Pair<double, double>> cellMetrics = GetCellMetricsPx()) {
+        const double cellW = cellMetrics->first;
+        const double cellH = cellMetrics->second;
+        if (cellW > 0.0 && renderWidthPx > 0)
+          shiftWidthCells = std::max<usize>(1, static_cast<usize>(std::llround(static_cast<double>(renderWidthPx) / cellW)));
+        if (cellH > 0.0 && renderHeightPx > 0)
+          logoHeightCells = std::max<usize>(1, static_cast<usize>(std::llround(static_cast<double>(renderHeightPx) / cellH)));
+
+        if (hasExplicitSize) {
+          if (cellW > 0.0 && sendWidthPx > 0)
+            sendWidthCells = std::max<usize>(1, static_cast<usize>(std::llround(static_cast<double>(sendWidthPx) / cellW)));
+          if (cellH > 0.0 && sendHeightPx > 0)
+            sendHeightCells = std::max<usize>(1, static_cast<usize>(std::llround(static_cast<double>(sendHeightPx) / cellH)));
+        }
+      }
+
+      // Fallback to a conservative estimate when the terminal doesn't report pixel metrics,
+      // so explicit pixel sizing still has an effect on display size.
+      if (shiftWidthCells == 0 && renderWidthPx > 0) {
+        shiftWidthCells = std::max<usize>(1, renderWidthPx / 10);
+      }
+      if (logoHeightCells == 0 && renderHeightPx > 0) {
+        logoHeightCells = std::max<usize>(1, renderHeightPx / 10);
+      }
+      if (hasExplicitSize) {
+        if (sendWidthCells == 0 && sendWidthPx > 0)
+          sendWidthCells = std::max<usize>(1, sendWidthPx / 10);
+        if (sendHeightCells == 0 && sendHeightPx > 0)
+          sendHeightCells = std::max<usize>(1, sendHeightPx / 10);
+      }
+
+      if (shiftWidthCells == 0)
+        shiftWidthCells = 24; // minimal gap to avoid overlap when sizing is unknown
+
+      const Option<String> sequence = BuildInlineSequence(logoCfg, sendWidthCells, sendHeightCells, sendWidthPx, sendHeightPx);
 
       if (!sequence)
         return None;
 
       LogoRender render;
-      render.width    = logoWidth;
-      render.height   = logoHeight;
-      render.isKitty  = true;
+      // width/height reported back are used for shifting/padding the text box; ensure
+      // height reflects any sizing we applied (cells or derived pixels).
+      render.width  = shiftWidthCells;
+      render.height = logoHeightCells > 0 ? logoHeightCells
+        : (sendHeightCells > 0 ? sendHeightCells
+                               : (renderHeightPx > 0 ? std::max<usize>(1, renderHeightPx / 10) : 0));
+      render.isInline = true;
       render.sequence = *sequence;
 
       return render;
@@ -1194,19 +1405,19 @@ namespace draconis::ui {
     Vec<String> logoLines;
     usize       maxLogoW      = 0;
     usize       logoHeightOpt = 0;
-    String      kittySequence;
-    bool        isKittyLogo = false;
+    String      inlineSequence;
+    bool        isInlineLogo = false;
 
     if (!noAscii) {
-      if (const Option<LogoRender> kittyLogo = BuildKittyLogo(config.logo, boxLines.size())) {
-        logoLines     = kittyLogo->lines;
-        maxLogoW      = kittyLogo->width;
-        logoHeightOpt = kittyLogo->height;
-        isKittyLogo   = kittyLogo->isKitty;
-        kittySequence = kittyLogo->sequence;
+      if (const Option<LogoRender> inlineLogo = BuildInlineLogo(config.logo, boxLines.size())) {
+        logoLines      = inlineLogo->lines;
+        maxLogoW       = inlineLogo->width;
+        logoHeightOpt  = inlineLogo->height;
+        isInlineLogo   = inlineLogo->isInline;
+        inlineSequence = inlineLogo->sequence;
       }
 
-      if (!isKittyLogo) {
+      if (!isInlineLogo) {
         if (logoLines.empty()) {
           const Vec<StringView> asciiLines = ascii::GetAsciiArt(data.operatingSystem->id);
 
@@ -1218,29 +1429,43 @@ namespace draconis::ui {
       }
     }
 
-    if (!isKittyLogo && logoLines.empty())
+    if (!isInlineLogo && logoLines.empty())
       return out;
 
-    const usize logoHeight = isKittyLogo ? (logoHeightOpt ? logoHeightOpt : boxLines.size()) : logoLines.size();
+    const usize logoHeight = isInlineLogo ? (logoHeightOpt ? logoHeightOpt : boxLines.size()) : logoLines.size();
     String      emptyLogo(maxLogoW, ' ');
 
-    // Kitty: emit the image to stdout once, then print the box shifted right by logo width.
-    if (isKittyLogo) {
-      if (!kittySequence.empty())
-        std::cout << "\033[s" << kittySequence << "\033[u" << std::flush;
+      // Inline logo: emit the image to stdout once, then print the box shifted right by logo width.
+      if (isInlineLogo) {
+        const usize shift        = maxLogoW + 2; // logo width plus gap
+        const usize totalHeight  = std::max(logoHeight, boxLines.size());
+        const usize logoPadTop   = (totalHeight > logoHeight) ? (totalHeight - logoHeight) / 2 : 0;
+        const usize boxPadTop    = (totalHeight > boxLines.size()) ? (totalHeight - boxLines.size()) / 2 : 0;
+        const usize boxPadBottom = totalHeight - boxPadTop - boxLines.size();
 
-      String      newOut;
-      const usize shift = maxLogoW + 2; // logo width plus gap
+        if (!inlineSequence.empty()) {
+          std::cout << "\033[s"; // save cursor
+          if (logoPadTop > 0)
+            std::cout << std::format("\033[{}B", logoPadTop); // move down to vertically center logo
+          std::cout << inlineSequence;
+          if (logoPadTop > 0)
+            std::cout << std::format("\033[{}A", logoPadTop); // move back up
+          std::cout << "\033[u" << std::flush; // restore cursor
+        }
 
-      for (const auto& boxLine : boxLines) {
-        newOut += "\r";
-        newOut += std::format("\033[{}C", shift);
-        newOut += boxLine;
-        newOut += "\n";
+        String newOut;
+        for (usize i = 0; i < totalHeight; ++i) {
+          const bool   isBoxLine = i >= boxPadTop && i < boxPadTop + boxLines.size();
+          const String& line     = isBoxLine ? boxLines[i - boxPadTop] : emptyBox;
+
+          newOut += "\r";
+          newOut += std::format("\033[{}C", shift);
+          newOut += line;
+          newOut += "\n";
+        }
+
+        return newOut;
       }
-
-      return newOut;
-    }
 
     // ASCII logo: center relative to box height
     const usize totalHeight = std::max(logoHeight, boxLines.size());

@@ -269,7 +269,7 @@ in {
     };
 
     logo = mkOption {
-      description = "Logo configuration (used for kitty/kitty-direct).";
+      description = "Logo configuration (used for kitty/kitty-direct/iTerm2 inline images).";
       default = {
         path = null;
         protocol = "kitty";
@@ -285,7 +285,7 @@ in {
           };
 
           protocol = mkOption {
-            type = types.enum ["kitty" "kitty-direct"];
+            type = types.enum ["kitty" "kitty-direct" "iterm2"];
             default = "kitty";
             description = "Logo protocol to use.";
           };

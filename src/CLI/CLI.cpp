@@ -538,7 +538,7 @@ _draconis++_completions() {
             COMPREPLY=($(compgen -W "trace debug info warn error" -- "$cur"))
             ;;
         --logo-protocol)
-            COMPREPLY=($(compgen -W "kitty kitty-direct" -- "$cur"))
+            COMPREPLY=($(compgen -W "kitty kitty-direct iterm2" -- "$cur"))
             ;;
         --generate-completions)
             COMPREPLY=($(compgen -W "bash zsh fish powershell" -- "$cur"))
@@ -572,9 +572,9 @@ _draconis++() {
         '--format[Output format]'
         '--compact[Single-line output with template]'
         '--logo-path[Path to logo image]:file:_files'
-        '--logo-protocol[Logo protocol]:protocol:(kitty kitty-direct)'
-        '--logo-width[Logo width in cells]'
-        '--logo-height[Logo height in cells]'
+        '--logo-protocol[Logo protocol]:protocol:(kitty kitty-direct iterm2)'
+        '--logo-width[Logo width in pixels]'
+        '--logo-height[Logo height in pixels]'
         '--version[Show version info]'
         '--help[Show help message]'
         '--benchmark[Show timing for each data source]'
@@ -603,9 +603,9 @@ complete -c draconis++ -l pretty -d 'Pretty-print JSON'
 complete -c draconis++ -l format -x -d 'Output format'
 complete -c draconis++ -l compact -d 'Single-line output with template'
 complete -c draconis++ -l logo-path -r -d 'Path to logo image'
-complete -c draconis++ -l logo-protocol -x -a 'kitty kitty-direct' -d 'Logo protocol'
-complete -c draconis++ -l logo-width -d 'Logo width in cells'
-complete -c draconis++ -l logo-height -d 'Logo height in cells'
+complete -c draconis++ -l logo-protocol -x -a 'kitty kitty-direct iterm2' -d 'Logo protocol'
+complete -c draconis++ -l logo-width -d 'Logo width in pixels'
+complete -c draconis++ -l logo-height -d 'Logo height in pixels'
 complete -c draconis++ -l version -d 'Show version info'
 complete -c draconis++ -l help -d 'Show help message'
 complete -c draconis++ -l benchmark -d 'Show timing for each data source'
@@ -637,8 +637,8 @@ Register-ArgumentCompleter -CommandName draconis++ -ScriptBlock {
         @{ Name = '--compact'; Tooltip = 'Single-line output with template' }
         @{ Name = '--logo-path'; Tooltip = 'Path to logo image' }
         @{ Name = '--logo-protocol'; Tooltip = 'Logo protocol' }
-        @{ Name = '--logo-width'; Tooltip = 'Logo width in cells' }
-        @{ Name = '--logo-height'; Tooltip = 'Logo height in cells' }
+        @{ Name = '--logo-width'; Tooltip = 'Logo width in pixels' }
+        @{ Name = '--logo-height'; Tooltip = 'Logo height in pixels' }
         @{ Name = '--version'; Tooltip = 'Show version info' }
         @{ Name = '--help'; Tooltip = 'Show help message' }
         @{ Name = '--benchmark'; Tooltip = 'Show timing for each data source' }
