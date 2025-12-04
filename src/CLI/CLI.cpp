@@ -68,11 +68,6 @@ namespace draconis::cli {
     (void)config; // Suppress unused warning
 #endif
 
-#if DRAC_ENABLE_NOWPLAYING
-    if (config.nowPlaying.enabled)
-      timeOperation("Now Playing", [&]() { return GetNowPlaying(); });
-#endif
-
 #if DRAC_ENABLE_PLUGINS
     // Benchmark info provider plugins
     auto& pluginManager = draconis::core::plugin::GetPluginManager();
@@ -107,33 +102,72 @@ namespace draconis::cli {
   }
 
   fn PrintBenchmarkReport(const Vec<BenchmarkResult>& results) -> Unit {
-    f64 totalTime = 0.0;
+    f64 totalTime  = 0.0;
+    f64 coreTime   = 0.0;
+    f64 pluginTime = 0.0;
 
-    Println("Benchmark Results:");
-    Println("==================");
-    Println();
+    // Separate core system results from plugin results
+    Vec<BenchmarkResult> coreResults;
+    Vec<BenchmarkResult> pluginResults;
 
-    // Find longest name for alignment
+    for (const auto& result : results) {
+      if (result.name.starts_with("Plugin: "))
+        pluginResults.push_back(result);
+      else
+        coreResults.push_back(result);
+    }
+
+    // Sort each group by duration (slowest first)
+    auto sortByDuration = [](const BenchmarkResult& resA, const BenchmarkResult& resB) -> bool {
+      return resA.durationMs > resB.durationMs;
+    };
+    std::ranges::sort(coreResults, sortByDuration);
+    std::ranges::sort(pluginResults, sortByDuration);
+
+    // Find longest name for alignment (check both groups)
     usize maxNameLen = 0;
-    for (const auto& result : results)
+    for (const auto& result : coreResults)
+      maxNameLen = std::max(maxNameLen, result.name.size());
+    for (const auto& result : pluginResults)
       maxNameLen = std::max(maxNameLen, result.name.size());
 
-    // Print results sorted by duration (slowest first)
-    Vec<BenchmarkResult> sorted = results;
-    std::ranges::sort(
-      sorted,
-      [](const BenchmarkResult& resA, const BenchmarkResult& resB) -> bool {
-        return resA.durationMs > resB.durationMs;
-      }
-    );
-
-    for (const auto& result : sorted) {
+    // Helper to print a single result
+    auto printResult = [&maxNameLen](const BenchmarkResult& result) {
       String status  = result.success ? "✓" : "✗";
       String padding = String(maxNameLen - result.name.size(), ' ');
       Println("  {} {}{} {:>8.2f} ms", status, result.name, padding, result.durationMs);
-      totalTime += result.durationMs;
+    };
+
+    Println("Benchmark Results:");
+    Println("==================");
+
+    // Print core system results
+    if (!coreResults.empty()) {
+      Println();
+      Println("Core System Data:");
+      Println("-----------------");
+      for (const auto& result : coreResults) {
+        printResult(result);
+        coreTime += result.durationMs;
+      }
+      Println();
+      Println("  Subtotal: {:>8.2f} ms ({} sources)", coreTime, coreResults.size());
     }
 
+    // Print plugin results
+    if (!pluginResults.empty()) {
+      Println();
+      Println("Plugin Data:");
+      Println("------------");
+      for (const auto& result : pluginResults) {
+        printResult(result);
+        pluginTime += result.durationMs;
+      }
+      Println();
+      Println("  Subtotal: {:>8.2f} ms ({} plugins)", pluginTime, pluginResults.size());
+    }
+
+    totalTime = coreTime + pluginTime;
     Println();
     Println("  Total: {:>8.2f} ms ({} data sources)", totalTime, results.size());
   }
@@ -143,14 +177,14 @@ namespace draconis::cli {
   ) -> Unit {
     using draconis::utils::error::DracError;
 
-    Array<Option<Pair<String, DracError>>, 10 + DRAC_ENABLE_PACKAGECOUNT + DRAC_ENABLE_NOWPLAYING>
-      failures {};
+    constexpr usize                                          coreReadoutCount = 10 + DRAC_ENABLE_PACKAGECOUNT;
+    Array<Option<Pair<String, DracError>>, coreReadoutCount> coreFailures {};
 
-    usize failureCount = 0;
+    usize coreFailureCount = 0;
 
 #define DRAC_CHECK(expr, label) \
   if (!(expr))                  \
-  failures.at(failureCount++) = { label, (expr).error() }
+  coreFailures.at(coreFailureCount++) = { label, (expr).error() }
 
     DRAC_CHECK(data.date, "Date");
     DRAC_CHECK(data.host, "Host");
@@ -166,29 +200,91 @@ namespace draconis::cli {
     if constexpr (DRAC_ENABLE_PACKAGECOUNT)
       DRAC_CHECK(data.packageCount, "PackageCount");
 
-    if constexpr (DRAC_ENABLE_NOWPLAYING)
-      DRAC_CHECK(data.nowPlaying, "NowPlaying");
-
 #undef DRAC_CHECK
 
-    if (failureCount == 0)
-      Println("All readouts were successful!");
+    // Report core system readouts
+    Println("Doctor Report:");
+    Println("==============");
+    Println();
+    Println("Core System Readouts:");
+    Println("---------------------");
+
+    if (coreFailureCount == 0)
+      Println("  ✓ All {} core readouts were successful!", coreReadoutCount);
     else {
       Println(
-        "Out of {} readouts, {} failed.\n",
-        failures.size(),
-        failureCount
+        "  Out of {} core readouts, {} failed.\n",
+        coreReadoutCount,
+        coreFailureCount
       );
 
-      for (const Option<Pair<String, DracError>>& failure : failures)
+      for (const Option<Pair<String, DracError>>& failure : coreFailures)
         if (failure)
           Println(
-            R"(Readout "{}" failed: {} ({}))",
+            R"(  ✗ "{}" failed: {} ({}))",
             failure->first,
             failure->second.message,
             magic_enum::enum_name(failure->second.code)
           );
     }
+
+#if DRAC_ENABLE_PLUGINS
+    // Report plugin readouts
+    const auto& pluginDisplay = data.pluginDisplay;
+
+    if (!pluginDisplay.empty()) {
+      Vec<String> pluginFailures;
+      Vec<String> pluginSuccesses;
+
+      for (const auto& [pluginId, displayInfo] : pluginDisplay) {
+        if (displayInfo.value.has_value())
+          pluginSuccesses.push_back(displayInfo.label);
+        else
+          pluginFailures.push_back(displayInfo.label);
+      }
+
+      Println();
+      Println("Plugin Readouts:");
+      Println("----------------");
+
+      if (pluginFailures.empty())
+        Println("  ✓ All {} plugin readouts were successful!", pluginDisplay.size());
+      else {
+        Println(
+          "  Out of {} plugin readouts, {} failed.\n",
+          pluginDisplay.size(),
+          pluginFailures.size()
+        );
+
+        for (const auto& label : pluginFailures)
+          Println(R"(  ✗ Plugin "{}" failed to provide data)", label);
+      }
+
+      if (!pluginSuccesses.empty()) {
+        Println();
+        Println("  Successful plugins:");
+        for (const auto& label : pluginSuccesses)
+          Println("    ✓ {}", label);
+      }
+    }
+#endif
+
+    // Summary
+    Println();
+    usize totalReadouts = coreReadoutCount;
+    usize totalFailures = coreFailureCount;
+
+#if DRAC_ENABLE_PLUGINS
+    totalReadouts += data.pluginDisplay.size();
+    for (const auto& [pluginId, displayInfo] : data.pluginDisplay)
+      if (!displayInfo.value.has_value())
+        totalFailures++;
+#endif
+
+    if (totalFailures == 0)
+      Println("Summary: All {} readouts passed! ✓", totalReadouts);
+    else
+      Println("Summary: {}/{} readouts passed ({} failed)", totalReadouts - totalFailures, totalReadouts, totalFailures);
   }
 
   fn PrintJsonOutput(
@@ -219,9 +315,6 @@ namespace draconis::cli {
 
     if constexpr (DRAC_ENABLE_PACKAGECOUNT)
       DRAC_SET_OPTIONAL(packageCount);
-
-    if constexpr (DRAC_ENABLE_NOWPLAYING)
-      DRAC_SET_OPTIONAL(nowPlaying);
 
 #if DRAC_ENABLE_PLUGINS
     output.pluginFields = data.pluginData;

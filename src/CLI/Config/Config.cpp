@@ -1,5 +1,7 @@
 #include "Config.hpp"
 
+#include <magic_enum/magic_enum.hpp>
+
 #include <Drac++/Utils/Logging.hpp>
 
 #if !DRAC_PRECOMPILED_CONFIG
@@ -41,10 +43,6 @@ namespace {
     u32    height = 0; // 0 = not provided
   };
 
-  struct TomlNowPlaying {
-    bool enabled = true;
-  };
-
   struct TomlPackages {
     Vec<String> enabled;
   };
@@ -55,9 +53,11 @@ namespace {
   };
 
   struct TomlLayoutRow {
-    String key;   // Required identifier
-    String label; // Optional override, empty = not provided
-    String icon;  // Optional override, empty = not provided
+    String key;              // Required identifier
+    String label;            // Optional override, empty = not provided
+    String icon;             // Optional override, empty = not provided
+    String color;            // Optional value color name, empty = default
+    bool   autoWrap = false; // Enable automatic word wrapping
   };
 
   struct TomlLayoutGroup {
@@ -70,12 +70,11 @@ namespace {
   };
 
   struct TomlConfig {
-    TomlGeneral    general;
-    TomlLogo       logo;
-    TomlNowPlaying nowPlaying;
-    TomlPackages   packages;
-    TomlPlugins    plugins;
-    TomlUI         ui;
+    TomlGeneral  general;
+    TomlLogo     logo;
+    TomlPackages packages;
+    TomlPlugins  plugins;
+    TomlUI       ui;
   };
 } // namespace
 
@@ -99,12 +98,6 @@ struct glz::meta<TomlLogo> {
 };
 
 template <>
-struct glz::meta<TomlNowPlaying> {
-  using T                     = TomlNowPlaying;
-  static constexpr auto value = object("enabled", &T::enabled);
-};
-
-template <>
 struct glz::meta<TomlPackages> {
   using T                     = TomlPackages;
   static constexpr auto value = object("enabled", &T::enabled);
@@ -119,7 +112,7 @@ struct glz::meta<TomlPlugins> {
 template <>
 struct glz::meta<TomlLayoutRow> {
   using T                     = TomlLayoutRow;
-  static constexpr auto value = object("key", &T::key, "label", &T::label, "icon", &T::icon);
+  static constexpr auto value = object("key", &T::key, "label", &T::label, "icon", &T::icon, "color", &T::color, "auto_wrap", &T::autoWrap);
 };
 
 template <>
@@ -142,8 +135,6 @@ struct glz::meta<TomlConfig> {
     &T::general,
     "logo",
     &T::logo,
-    "now_playing",
-    &T::nowPlaying,
     "packages",
     &T::packages,
     "plugins",
@@ -218,10 +209,6 @@ namespace {
       TomlConfig defaultCfg;
       defaultCfg.general.name = draconis::config::General::getDefaultName();
 
-  #if DRAC_ENABLE_NOWPLAYING
-      defaultCfg.nowPlaying.enabled = true;
-  #endif
-
   #if DRAC_ENABLE_PLUGINS
       defaultCfg.plugins.enabled = true;
   #endif
@@ -273,6 +260,8 @@ namespace draconis::config {
             cfgRow.label = row.label;
           if (row.icon != nullptr && std::strlen(row.icon) > 0)
             cfgRow.icon = row.icon;
+          cfgRow.color    = row.color;
+          cfgRow.autoWrap = row.autoWrap;
 
           cfgGroup.rows.push_back(std::move(cfgRow));
         }
@@ -301,10 +290,8 @@ namespace draconis::config {
       cfg.plugins.autoLoad.emplace_back(entry.name);
   #endif
 
-    if constexpr (DRAC_ENABLE_NOWPLAYING)
-      cfg.nowPlaying.enabled = true;
-
     PopulatePrecompiledLayout(cfg);
+    ;
 
     debug_log("Using precompiled configuration.");
     return cfg;
@@ -361,11 +348,6 @@ namespace draconis::config {
       cfg.logo.protocol  = tomlCfg.logo.protocol.empty() ? std::nullopt : Option<String>(tomlCfg.logo.protocol);
       cfg.logo.width     = tomlCfg.logo.width == 0 ? std::nullopt : Option<u32>(tomlCfg.logo.width);
       cfg.logo.height    = tomlCfg.logo.height == 0 ? std::nullopt : Option<u32>(tomlCfg.logo.height);
-
-      // Now Playing settings
-      if constexpr (DRAC_ENABLE_NOWPLAYING) {
-        cfg.nowPlaying.enabled = tomlCfg.nowPlaying.enabled;
-      }
 
       // Package manager settings
       if constexpr (DRAC_ENABLE_PACKAGECOUNT) {
@@ -447,6 +429,11 @@ namespace draconis::config {
             cfgRow.label = row.label;
           if (!row.icon.empty())
             cfgRow.icon = row.icon;
+          if (!row.color.empty())
+            if (auto parsed = magic_enum::enum_cast<LogColor>(row.color, magic_enum::case_insensitive))
+              cfgRow.color = *parsed;
+
+          cfgRow.autoWrap = row.autoWrap;
           cfgGroup.rows.push_back(std::move(cfgRow));
         }
 

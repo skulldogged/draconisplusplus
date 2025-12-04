@@ -200,9 +200,9 @@ namespace draconis::utils::logging {
    * @brief Options for text styling with ANSI codes.
    */
   struct Style {
-    types::Option<LogColor> color  = types::None; ///< Optional color to apply
-    bool                    bold   = false;       ///< Whether to make text bold
-    bool                    italic = false;       ///< Whether to make text italic
+    LogColor color  = LogColor::White; ///< Optional color to apply
+    bool     bold   = false;           ///< Whether to make text bold
+    bool     italic = false;           ///< Whether to make text italic
   };
 
   /**
@@ -212,7 +212,7 @@ namespace draconis::utils::logging {
    * @return Styled string with ANSI codes
    */
   inline fn Stylize(const types::StringView text, const Style& style) -> types::String {
-    const bool hasStyle = style.bold || style.italic || style.color.has_value();
+    const bool hasStyle = style.bold || style.italic || style.color != LogColor::White;
 
     if (!hasStyle)
       return types::String(text);
@@ -224,8 +224,8 @@ namespace draconis::utils::logging {
       result += LogLevelConst::BOLD_START;
     if (style.italic)
       result += LogLevelConst::ITALIC_START;
-    if (style.color)
-      result += LogLevelConst::COLOR_CODE_LITERALS.at(static_cast<types::usize>(*style.color));
+    if (style.color != LogColor::White)
+      result += LogLevelConst::COLOR_CODE_LITERALS.at(static_cast<types::usize>(style.color));
 
     result += text;
     result += LogLevelConst::RESET_CODE;

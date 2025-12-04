@@ -30,13 +30,6 @@ option(
 )
 
 option(
-  'nowplaying',
-  type: 'feature',
-  value: 'enabled',
-  description: 'Enable now playing media info (requires DBus on Linux/BSD, MediaRemote.framework on macOS)',
-)
-
-option(
   'caching',
   type: 'feature',
   value: 'enabled',

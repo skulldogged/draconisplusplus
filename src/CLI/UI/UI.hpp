@@ -30,9 +30,6 @@ namespace draconis::ui {
     types::StringView cpu;
     types::StringView gpu;
     types::StringView uptime;
-#if DRAC_ENABLE_NOWPLAYING
-    types::StringView music;
-#endif
     types::StringView os;
 #if DRAC_ENABLE_PACKAGECOUNT
     types::StringView package;

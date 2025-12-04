@@ -24,6 +24,86 @@ namespace {
 
   using namespace draconis::utils::types;
 
+  /**
+   * @brief Zero-overhead builder for generating Markdown documents
+   *
+   * Handles the "only print header if data exists" logic automatically.
+   * Sections are buffered and only committed if they contain content.
+   */
+  class MarkdownBuilder {
+    String m_fullDoc;
+    String m_currentSectionBuffer;
+    String m_currentHeader;
+
+   public:
+    MarkdownBuilder() {
+      m_fullDoc.reserve(2048);
+    }
+
+    /**
+     * @brief Start a new section (e.g., "Hardware")
+     * @param title The section title
+     *
+     * Won't be written to the main doc until commit() or a new section starts
+     */
+    fn section(std::string_view title) -> void {
+      commit();
+      m_currentHeader = std::format("## {}\n\n", title);
+    }
+
+    /**
+     * @brief Add a line entry "- **Label**: Value"
+     * @param label The label text
+     * @param value The value text (skipped if empty)
+     */
+    fn line(std::string_view label, std::string_view value) -> void {
+      if (!value.empty())
+        std::format_to(std::back_inserter(m_currentSectionBuffer), "- **{}**: {}\n", label, value);
+    }
+
+    /**
+     * @brief Look up map key, check existence and empty, add line if valid
+     * @param data The data map to search
+     * @param key The key to look up
+     * @param label The display label for the line
+     */
+    fn mapEntry(const Map<String, String>& data, const String& key, std::string_view label) -> void {
+      if (auto iter = data.find(key); iter != data.end() && !iter->second.empty())
+        line(label, iter->second);
+    }
+
+    /**
+     * @brief Finalize and return the document
+     * @return The complete markdown string
+     */
+    fn build() -> String {
+      commit();
+      return std::move(m_fullDoc);
+    }
+
+    /**
+     * @brief Add raw markdown directly (for titles, etc)
+     * @param text Raw markdown text to append
+     */
+    fn raw(std::string_view text) -> void {
+      commit();
+      m_fullDoc += text;
+    }
+
+   private:
+    /**
+     * @brief Only appends header + section if section has content
+     */
+    fn commit() -> void {
+      if (!m_currentSectionBuffer.empty()) {
+        m_fullDoc += m_currentHeader;
+        m_fullDoc += m_currentSectionBuffer;
+        m_fullDoc += '\n';
+        m_currentSectionBuffer.clear();
+      }
+    }
+  };
+
   class MarkdownFormatPlugin : public draconis::core::plugin::IOutputFormatPlugin {
    private:
     draconis::core::plugin::PluginMetadata m_metadata;
@@ -66,178 +146,81 @@ namespace {
       const Map<String, Map<String, String>>& pluginData
     ) const -> Result<String> override {
       if (!m_ready)
-        return Err(draconis::utils::error::DracError { draconis::utils::error::DracErrorCode::Other, "MarkdownFormatPlugin is not ready." });
+        return Err(
+          draconis::utils::error::DracError { draconis::utils::error::DracErrorCode::Other, "MarkdownFormatPlugin is not ready." }
+        );
 
-      String markdown;
-      markdown.reserve(2048);
+      MarkdownBuilder builder;
 
-      // Title
-      markdown += "# System Information\n\n";
+      // 1. Title
+      builder.raw("# System Information\n\n");
 
-      // Date section
-      if (auto date = data.find("date"); date != data.end() && !date->second.empty()) {
-        markdown += "## General\n\n";
-        markdown += std::format("- **Date**: {}\n", date->second);
-      }
+      // 2. General Section
+      builder.section("General");
+      builder.mapEntry(data, "date", "Date");
 
-      // Weather section
-      if (auto weatherTemp = data.find("weather_temperature"); weatherTemp != data.end()) {
-        if (!weatherTemp->second.empty()) {
-          String weatherValue;
-          double temperature = 0.0;
-          try {
-            temperature = std::stod(weatherTemp->second);
-          } catch (...) {
-            temperature = 0.0;
-          }
-
-          if (auto townName = data.find("weather_town"); townName != data.end() && !townName->second.empty())
-            weatherValue = std::format("{}° in {}", std::lround(temperature), townName->second);
-          else if (auto description = data.find("weather_description"); description != data.end())
-            weatherValue = std::format("{}°, {}", std::lround(temperature), description->second);
-          else
-            weatherValue = std::format("{}°", std::lround(temperature));
-
-          if (!weatherValue.empty()) {
-            if (markdown.find("## General\n\n") == std::string::npos)
-              markdown += "## General\n\n";
-
-            markdown += std::format("- **Weather**: {}\n", weatherValue);
-          }
-        }
-      }
-
-      markdown += "\n";
-
-      // System Information section
-      bool   hasSystemInfo = false;
-      String systemSection;
-
-      if (auto host = data.find("host"); host != data.end() && !host->second.empty()) {
-        systemSection += std::format("- **Host**: {}\n", host->second);
-        hasSystemInfo = true;
-      }
-
-      if (auto operSys = data.find("os"); operSys != data.end() && !operSys->second.empty()) {
-        systemSection += std::format("- **OS**: {}\n", operSys->second);
-        hasSystemInfo = true;
-      }
-
-      if (auto kernel = data.find("kernel"); kernel != data.end() && !kernel->second.empty()) {
-        systemSection += std::format("- **Kernel**: {}\n", kernel->second);
-        hasSystemInfo = true;
-      }
-
-      if (hasSystemInfo) {
-        markdown += "## System\n\n";
-        markdown += systemSection;
-        markdown += "\n";
-      }
-
-      // Hardware section
-      bool   hasHardwareInfo = false;
-      String hardwareSection;
-
-      if (auto ram = data.find("ram"); ram != data.end() && !ram->second.empty()) {
-        hardwareSection += std::format("- **RAM**: {}\n", ram->second);
-        hasHardwareInfo = true;
-      }
-
-      if (auto disk = data.find("disk"); disk != data.end() && !disk->second.empty()) {
-        hardwareSection += std::format("- **Disk**: {}\n", disk->second);
-        hasHardwareInfo = true;
-      }
-
-      if (auto cpu = data.find("cpu"); cpu != data.end() && !cpu->second.empty()) {
-        hardwareSection += std::format("- **CPU**: {}\n", cpu->second);
-        hasHardwareInfo = true;
-      }
-
-      if (auto gpu = data.find("gpu"); gpu != data.end() && !gpu->second.empty()) {
-        hardwareSection += std::format("- **GPU**: {}\n", gpu->second);
-        hasHardwareInfo = true;
-      }
-
-      if (auto uptime = data.find("uptime"); uptime != data.end() && !uptime->second.empty()) {
-        hardwareSection += std::format("- **Uptime**: {}\n", uptime->second);
-        hasHardwareInfo = true;
-      }
-
-      if (hasHardwareInfo) {
-        markdown += "## Hardware\n\n";
-        markdown += hardwareSection;
-        markdown += "\n";
-      }
-
-      // Software section
-      bool   hasSoftwareInfo = false;
-      String softwareSection;
-
-      if (auto shell = data.find("shell"); shell != data.end() && !shell->second.empty()) {
-        softwareSection += std::format("- **Shell**: {}\n", shell->second);
-        hasSoftwareInfo = true;
-      }
-
-      if (auto packages = data.find("packages"); packages != data.end() && !packages->second.empty()) {
+      // Weather requires special handling due to formatting logic
+      if (auto iter = data.find("weather_temperature"); iter != data.end() && !iter->second.empty()) {
         try {
-          unsigned long long packageCount = std::stoull(packages->second);
-          if (packageCount > 0) {
-            softwareSection += std::format("- **Packages**: {}\n", packageCount);
-            hasSoftwareInfo = true;
-          }
-        } catch (const std::exception& ex) {
-          (void)ex;
+          double temperature = std::stod(iter->second);
+          String suffix;
+
+          if (auto town = data.find("weather_town"); town != data.end() && !town->second.empty())
+            suffix = std::format(" in {}", town->second);
+          else if (auto desc = data.find("weather_description"); desc != data.end() && !desc->second.empty())
+            suffix = std::format(", {}", desc->second);
+
+          builder.line("Weather", std::format("{}°{}", std::lround(temperature), suffix));
+        } catch (...) {
+          (void)0; // Ignore invalid temperature values
         }
       }
 
-      if (hasSoftwareInfo) {
-        markdown += "## Software\n\n";
-        markdown += softwareSection;
-        markdown += "\n";
-      }
+      // 3. System Section
+      builder.section("System");
+      builder.mapEntry(data, "host", "Host");
+      builder.mapEntry(data, "os", "OS");
+      builder.mapEntry(data, "kernel", "Kernel");
 
-      // Environment section
-      bool   hasEnvironmentInfo = false;
-      String environmentSection;
+      // 4. Hardware Section
+      builder.section("Hardware");
+      builder.mapEntry(data, "ram", "RAM");
+      builder.mapEntry(data, "disk", "Disk");
+      builder.mapEntry(data, "cpu", "CPU");
+      builder.mapEntry(data, "gpu", "GPU");
+      builder.mapEntry(data, "uptime", "Uptime");
 
-      if (auto desktop = data.find("de"); desktop != data.end() && !desktop->second.empty()) {
-        environmentSection += std::format("- **Desktop Environment**: {}\n", desktop->second);
-        hasEnvironmentInfo = true;
-      }
+      // 5. Software Section
+      builder.section("Software");
+      builder.mapEntry(data, "shell", "Shell");
 
-      if (auto winMgr = data.find("wm"); winMgr != data.end() && !winMgr->second.empty()) {
-        environmentSection += std::format("- **Window Manager**: {}\n", winMgr->second);
-        hasEnvironmentInfo = true;
-      }
-
-      if (hasEnvironmentInfo) {
-        markdown += "## Environment\n\n";
-        markdown += environmentSection;
-        markdown += "\n";
-      }
-
-      // Now Playing section (always show if data present)
-      if (auto artist = data.find("playing_artist"); artist != data.end())
-        if (auto title = data.find("playing_title"); title != data.end()) {
-          String artistStr = artist->second.empty() ? "Unknown Artist" : artist->second;
-          String titleStr  = title->second.empty() ? "Unknown Title" : title->second;
-          markdown += "## Media\n\n";
-          markdown += std::format("- **Now Playing**: {} - {}\n", artistStr, titleStr);
-          markdown += "\n";
+      // Packages requires validation (skip if zero)
+      if (auto iter = data.find("packages"); iter != data.end() && !iter->second.empty()) {
+        try {
+          if (u64 count = std::stoull(iter->second); count > 0)
+            builder.line("Packages", std::to_string(count));
+        } catch (...) {
+          (void)0; // Ignore invalid package count values
         }
+      }
 
-      // Plugin data section - use pluginData directly
+      // 6. Environment Section
+      builder.section("Environment");
+      builder.mapEntry(data, "de", "Desktop Environment");
+      builder.mapEntry(data, "wm", "Window Manager");
+
+      // 7. Dynamic Plugin Data
       if (!pluginData.empty()) {
-        markdown += "## Plugin Data\n\n";
+        builder.raw("## Plugin Data\n\n");
         for (const auto& [pluginId, fields] : pluginData) {
-          markdown += std::format("### {}\n\n", pluginId);
+          builder.raw(std::format("### {}\n\n", pluginId));
           for (const auto& [fieldName, value] : fields)
-            markdown += std::format("- **{}**: {}\n", fieldName, value);
-          markdown += "\n";
+            builder.raw(std::format("- **{}**: {}\n", fieldName, value));
+          builder.raw("\n");
         }
       }
 
-      return markdown;
+      return builder.build();
     }
 
     [[nodiscard]] fn getFormatNames() const -> Vec<String> override {

@@ -50,9 +50,6 @@ namespace draconis::core::system {
 #if DRAC_ENABLE_PACKAGECOUNT
     types::Result<types::u64> packageCount;
 #endif
-#if DRAC_ENABLE_NOWPLAYING
-    types::Result<types::MediaInfo> nowPlaying;
-#endif
 
 #if DRAC_ENABLE_PLUGINS
     // Plugin-contributed data organized by plugin ID
@@ -160,9 +157,6 @@ namespace draconis::core::system {
 #if DRAC_ENABLE_PACKAGECOUNT
     types::Option<types::u64> packageCount;
 #endif
-#if DRAC_ENABLE_NOWPLAYING
-    types::Option<types::MediaInfo> nowPlaying;
-#endif
 #if DRAC_ENABLE_PLUGINS
     // Plugin-contributed fields organized by plugin ID
     types::Map<types::String, types::Map<types::String, types::String>> pluginFields;
@@ -179,15 +173,6 @@ namespace glz {
     static constexpr detail::Object value = object("usedBytes", &T::usedBytes, "totalBytes", &T::totalBytes);
   };
 
-#if DRAC_ENABLE_NOWPLAYING
-  template <>
-  struct meta<draconis::utils::types::MediaInfo> {
-    using T = draconis::utils::types::MediaInfo;
-
-    static constexpr detail::Object value = object("title", &T::title, "artist", &T::artist);
-  };
-#endif
-
   template <>
   struct meta<draconis::core::system::JsonInfo> {
     using T = draconis::core::system::JsonInfo;
@@ -196,9 +181,6 @@ namespace glz {
     static constexpr detail::Object value = object(
 #if DRAC_ENABLE_PACKAGECOUNT
       "packageCount",    &T::packageCount,
-#endif
-#if DRAC_ENABLE_NOWPLAYING
-      "nowPlaying",      &T::nowPlaying,
 #endif
 #if DRAC_ENABLE_PLUGINS
       "pluginFields",    &T::pluginFields,

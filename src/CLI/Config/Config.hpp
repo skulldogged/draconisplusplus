@@ -98,9 +98,11 @@ namespace draconis::config {
    * @brief A single row in the UI layout, optionally overriding label/icon.
    */
   struct UILayoutRow {
-    draconis::utils::types::String                                 key;                  ///< Identifier for the row (e.g., "cpu", "plugin.weather.temp").
-    draconis::utils::types::Option<draconis::utils::types::String> label = std::nullopt; ///< Optional label override.
-    draconis::utils::types::Option<draconis::utils::types::String> icon  = std::nullopt; ///< Optional icon override.
+    draconis::utils::types::String                                 key;                                                  ///< Identifier for the row (e.g., "cpu", "plugin.weather.temp").
+    draconis::utils::types::Option<draconis::utils::types::String> label    = std::nullopt;                              ///< Optional label override.
+    draconis::utils::types::Option<draconis::utils::types::String> icon     = std::nullopt;                              ///< Optional icon override.
+    draconis::utils::logging::LogColor                             color    = draconis::utils::logging::LogColor::White; ///< Value foreground color.
+    bool                                                           autoWrap = false;                                     ///< Enable automatic word wrapping based on available width.
   };
 
   /**
@@ -117,16 +119,6 @@ namespace draconis::config {
   struct UI {
     draconis::utils::types::Vec<UILayoutGroup> layout;
   };
-
-#if DRAC_ENABLE_NOWPLAYING
-  /**
-   * @struct NowPlaying
-   * @brief Holds configuration settings for the Now Playing feature.
-   */
-  struct NowPlaying {
-    bool enabled = true; ///< Flag to enable or disable the Now Playing feature.
-  };
-#endif // DRAC_ENABLE_NOWPLAYING
 
 #if DRAC_ENABLE_PLUGINS
   /**
@@ -148,9 +140,6 @@ namespace draconis::config {
     General general; ///< General configuration settings.
     Logo    logo;
     UI      ui; ///< UI layout configuration.
-#if DRAC_ENABLE_NOWPLAYING
-    NowPlaying nowPlaying; ///< Now Playing configuration settings.
-#endif
 #if DRAC_ENABLE_PACKAGECOUNT
     draconis::services::packages::Manager enabledPackageManagers; ///< Enabled package managers.
 #endif

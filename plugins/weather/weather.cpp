@@ -1154,21 +1154,16 @@ units = "metric"
     [[nodiscard]] fn getFields() const -> Map<String, String> override {
       Map<String, String> fields;
 
-      if (m_data.temperature) {
-        String tempStr        = std::format("{:.1f}°{}", *m_data.temperature, m_data.units == weather::UnitSystem::Metric ? "C" : "F");
-        fields["temp"]        = tempStr;
-        fields["temperature"] = tempStr;
-      }
+      if (m_data.temperature)
+        fields["temperature"] = std::format("{:.1f}", *m_data.temperature);
 
       if (m_data.description)
-        fields["desc"] = *m_data.description;
+        fields["description"] = *m_data.description;
 
       if (m_data.location)
         fields["location"] = *m_data.location;
 
-      // Combined field for compact display
-      if (m_data.temperature && m_data.description)
-        fields["summary"] = std::format("{:.1f}°{}, {}", *m_data.temperature, m_data.units == weather::UnitSystem::Metric ? "C" : "F", *m_data.description);
+      fields["units"] = m_data.units == weather::UnitSystem::Metric ? "metric" : "imperial";
 
       return fields;
     }

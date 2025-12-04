@@ -61,7 +61,7 @@ namespace draconis::utils::types {
    * @struct MediaInfo
    * @brief Holds structured metadata about currently playing media.
    *
-   * Used as the success type for os::GetNowPlaying.
+   * Used by the now_playing plugin to report media information.
    * Using Option<> for fields that might not always be available.
    */
   struct MediaInfo {

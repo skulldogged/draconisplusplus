@@ -67,7 +67,6 @@ feature_states = {}
 
 # Define which options are features vs booleans
 feature_options = [
-  'nowplaying',
   'caching',
   'weather',
   'packagecount',
@@ -79,7 +78,6 @@ feature_options = [
 
 foreach option, define : {
   'caching': 'DRAC_ENABLE_CACHING',
-  'nowplaying': 'DRAC_ENABLE_NOWPLAYING',
   'packagecount': 'DRAC_ENABLE_PACKAGECOUNT',
   'plugins': 'DRAC_ENABLE_PLUGINS',
   'precompiled_config': 'DRAC_PRECOMPILED_CONFIG',
@@ -201,6 +199,13 @@ if get_option('precompiled_config') and 'weather' in get_option('static_plugins'
   lib_deps += dependency('libcurl', include_type: 'system', static: true)
 endif
 
+# Add dbus-1 dependency if now_playing plugin is in static plugins (Linux/BSD only)
+if get_option('precompiled_config') and 'now_playing' in get_option('static_plugins')
+  if host_system not in ['windows', 'darwin', 'serenity', 'haiku']
+    lib_deps += dependency('dbus-1', include_type: 'system')
+  endif
+endif
+
 if feature_states['packagecount'] and host_system in ['darwin', 'linux']
   lib_deps += dependency('SQLiteCpp')
 endif
@@ -223,7 +228,6 @@ if host_system == 'darwin'
       'coregraphics',
       'foundation',
       'iokit',
-      feature_states['nowplaying'] ? 'mediaplayer' : '',
       'metal',
       'systemconfiguration',
     ],
@@ -241,8 +245,6 @@ elif host_system == 'windows'
     cpp.find_library('ws2_32'),
   ]
 elif host_system not in ['serenity', 'haiku']
-  lib_deps += dependency('dbus-1', required: feature_states['nowplaying'])
-
   lib_deps += dependency('xau', required: get_option('xcb'))
   lib_deps += dependency('xcb', required: get_option('xcb'))
   lib_deps += dependency('xcb-randr', required: get_option('xcb'))
@@ -325,7 +327,6 @@ summary(
 summary(
   {
     'Package counting': feature_states['packagecount'],
-    'Now Playing': feature_states['nowplaying'],
     'Caching': feature_states['caching'],
     'Plugin system': feature_states['plugins'],
     'Precompiled config': get_option('precompiled_config'),
@@ -356,6 +357,38 @@ summary(
   section: 'Build Options',
   bool_yn: true,
 )
+
+# Plugins section
+if get_option('precompiled_config') and get_option('static_plugins').length() > 0
+  # Static plugins mode
+  static_plugin_list = get_option('static_plugins')
+  plugins_summary = {}
+  foreach plugin_name : static_plugin_list
+    plugins_summary += {plugin_name: true}
+  endforeach
+  summary(
+    plugins_summary,
+    section: 'Static Plugins',
+    bool_yn: true,
+  )
+elif feature_states['plugins']
+  # Dynamic plugins mode - show what's being built
+  summary(
+    {
+      'Mode': 'Dynamic (shared libraries)',
+      'Install directory': get_option('libdir') / 'draconis++' / 'plugins',
+    },
+    section: 'Plugins',
+  )
+else
+  summary(
+    {
+      'Enabled': false,
+    },
+    section: 'Plugins',
+    bool_yn: true,
+  )
+endif
 
 summary(
   {

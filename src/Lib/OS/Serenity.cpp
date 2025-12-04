@@ -115,12 +115,6 @@ namespace draconis::core::system {
     return ResourceUsage(usedMem, totalMem);
   }
 
-  #if DRAC_ENABLE_NOWPLAYING
-  fn GetNowPlaying() -> Result<MediaInfo> {
-    return Err(DracError(NotSupported, "Now playing is not supported on SerenityOS"));
-  }
-  #endif
-
   fn GetWindowManager(CacheManager& cache) -> Result<String> {
     return cache.getOrSet<String>("serenity_wm", []() -> Result<String> {
       return "WindowManager";

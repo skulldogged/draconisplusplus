@@ -63,13 +63,10 @@ if get_option('precompiled_config')
       # Check if the plugin source exists
       if fs.is_file(plugin_source_path)
         lib_all_sources += files(plugin_source_path)
-        message('Static plugin enabled: ' + plugin_name)
       else
         error('Plugin source not found: "@0@". Expected file: @1@'.format(plugin_name, plugin_source_path))
       endif
     endforeach
-  else
-    message('No static plugins specified, plugin system disabled in precompiled mode')
   endif
 else
   # Non-precompiled mode: use the plugins feature option for dynamic plugin loading

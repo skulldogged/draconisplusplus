@@ -23,7 +23,6 @@
 
 #include <Drac++/Core/System.hpp>
 #include <Drac++/Services/Packages.hpp>
-#include <Drac++/Services/Weather.hpp>
 
 #include <Drac++/Utils/CacheManager.hpp>
 #include <Drac++/Utils/DataTypes.hpp>
@@ -32,7 +31,6 @@
 
 using namespace draconis::utils::types;
 using namespace draconis::core::system;
-using namespace draconis::services::weather;
 using namespace draconis::services::packages;
 using namespace draconis::utils::cache;
 using enum draconis::utils::error::DracErrorCode;
@@ -113,9 +111,7 @@ struct ComprehensiveInfo {
   NetworkInfoResponse      network;
   DisplayInfoResponse      display;
   UptimeInfoResponse       uptime;
-  Option<Report>           weather;
   Option<Map<String, u64>> packages;
-  Option<MediaInfo>        nowPlaying;
 };
 
 namespace glz {
@@ -238,21 +234,7 @@ namespace glz {
       "network",    &T::network,
       "display",    &T::display,
       "uptime",     &T::uptime,
-      "weather",    &T::weather,
-      "packages",   &T::packages,
-      "nowPlaying", &T::nowPlaying
-    );
-    // clang-format on
-  };
-
-  template <>
-  struct meta<MediaInfo> {
-    using T = MediaInfo;
-
-    // clang-format off
-    static constexpr detail::Object value = object(
-      "title",  &T::title,
-      "artist", &T::artist
+      "packages",   &T::packages
     );
     // clang-format on
   };
@@ -275,8 +257,8 @@ namespace {
   using NoParamToolHandler = Fn<ToolResponse()>;
 
   fn GetCacheManager() -> CacheManager& {
-    static CacheManager s_cacheManager;
-    return s_cacheManager;
+    static CacheManager SCacheManager;
+    return SCacheManager;
   }
 
   template <typename T>
@@ -360,49 +342,6 @@ namespace {
       info.diskUsage = *res;
 
     return { makeSuccessResult(info) };
-  }
-
-  fn WeatherHandler(const Map<String, String>& params) -> ToolResponse {
-    if constexpr (DRAC_ENABLE_WEATHER) {
-      Result<Coords> coordsResult;
-      String         location;
-
-      auto iter = params.find("location");
-
-      if (iter != params.end() && !iter->second.empty()) {
-        location     = iter->second;
-        coordsResult = Geocode(location);
-        if (!coordsResult)
-          return { makeErrorResult("Failed to geocode location '" + location + "': " + coordsResult.error().message), true };
-      } else {
-        Result<IPLocationInfo> locationInfoResult = GetCurrentLocationInfoFromIP();
-        if (!locationInfoResult)
-          return { makeErrorResult("Failed to get current location from IP: " + locationInfoResult.error().message), true };
-
-        const IPLocationInfo& locationInfo = *locationInfoResult;
-        coordsResult                       = locationInfo.coords;
-        location                           = locationInfo.locationName;
-      }
-
-      UniquePointer<IWeatherService> weatherService = CreateWeatherService(
-        Provider::MetNo, *coordsResult, UnitSystem::Imperial
-      );
-
-      if (!weatherService)
-        return { makeErrorResult("Failed to create weather service"), true };
-
-      String         weatherCacheKey = "weather_" + location;
-      Result<Report> weatherResult   = GetCacheManager().getOrSet<Report>(
-        weatherCacheKey, [&]() -> Result<Report> { return weatherService->getWeatherInfo(); }
-      );
-
-      if (!weatherResult)
-        return { makeErrorResult("Failed to fetch weather data: " + weatherResult.error().message), true };
-
-      return { makeSuccessResult(*weatherResult) };
-    } else {
-      return { makeErrorResult("Weather service not enabled in this build"), true };
-    }
   }
 
   fn PackageCountHandler(const Map<String, String>& params) -> ToolResponse {
@@ -520,19 +459,7 @@ namespace {
     return { makeSuccessResult(info) };
   }
 
-  fn NowPlayingHandler() -> ToolResponse {
-    if constexpr (DRAC_ENABLE_NOWPLAYING) {
-      Result<MediaInfo> nowPlayingResult = GetNowPlaying();
-      if (!nowPlayingResult)
-        return { makeErrorResult("Failed to get now playing info: " + nowPlayingResult.error().message), true };
-
-      return { makeSuccessResult(*nowPlayingResult) };
-    } else {
-      return { makeErrorResult("Now playing functionality not enabled in this build"), true };
-    }
-  }
-
-  fn ComprehensiveInfoHandler(const Map<String, String>& params) -> ToolResponse {
+  fn ComprehensiveInfoHandler([[maybe_unused]] const Map<String, String>& params) -> ToolResponse {
     CacheManager& cacheManager = GetCacheManager();
 
     ComprehensiveInfo info;
@@ -570,32 +497,6 @@ namespace {
       info.uptime          = { .seconds = seconds, .formatted = std::format("{}h {}m {}s", hours, minutes, remainingSeconds) };
     }
 
-    if constexpr (DRAC_ENABLE_WEATHER) {
-      if (auto locIter = params.find("location"); locIter != params.end() && !locIter->second.empty()) {
-        if (Result<Coords> coords = Geocode(locIter->second); coords) {
-          if (UniquePointer<IWeatherService> weatherService = CreateWeatherService(Provider::MetNo, *coords, UnitSystem::Imperial)) {
-            String weatherCacheKey = "weather_" + locIter->second;
-            if (Result<Report> weather = cacheManager.getOrSet<Report>(weatherCacheKey, [&]() -> Result<Report> { return weatherService->getWeatherInfo(); }); weather)
-              info.weather = *weather;
-          }
-        }
-      } else {
-        if (Result<IPLocationInfo> locationInfo = GetCurrentLocationInfoFromIP(); locationInfo) {
-          if (UniquePointer<IWeatherService> weatherService = CreateWeatherService(Provider::MetNo, locationInfo->coords, UnitSystem::Imperial)) {
-            String weatherCacheKey = "weather_" + locationInfo->locationName;
-            if (Result<Report> weather = cacheManager.getOrSet<Report>(
-                  weatherCacheKey,
-                  [&]() -> Result<Report> {
-                    return weatherService->getWeatherInfo();
-                  }
-                );
-                weather)
-              info.weather = *weather;
-          }
-        }
-      }
-    }
-
     if constexpr (DRAC_ENABLE_PACKAGECOUNT) {
       using enum Manager;
 
@@ -619,11 +520,6 @@ namespace {
 
       if (Result<Map<String, u64>> packages = GetIndividualCounts(cacheManager, enabledManagers); packages)
         info.packages = *packages;
-    }
-
-    if constexpr (DRAC_ENABLE_NOWPLAYING) {
-      if (Result<MediaInfo> nowPlaying = GetNowPlaying(); nowPlaying)
-        info.nowPlaying = *nowPlaying;
     }
 
     return { makeSuccessResult(info) };
@@ -693,8 +589,8 @@ class DracStdioServer {
           }
 
           String responseStr;
-          if (glz::error_ctx errc = glz::write_json(response, responseStr); errc)
-            ERR_FMT(ParseError, "Failed to serialize response: {}", glz::format_error(errc, responseStr));
+          if (glz::error_ctx writeErrc = glz::write_json(response, responseStr); writeErrc)
+            ERR_FMT(ParseError, "Failed to serialize response: {}", glz::format_error(writeErrc, responseStr));
 
           std::cout << responseStr << '\n';
           std::cout.flush();
@@ -712,8 +608,8 @@ class DracStdioServer {
           };
 
           String responseStr;
-          if (glz::error_ctx errc = glz::write_json(response, responseStr); errc)
-            ERR_FMT(ParseError, "Failed to serialize error response: {}", glz::format_error(errc, responseStr));
+          if (glz::error_ctx writeErrc = glz::write_json(response, responseStr); writeErrc)
+            ERR_FMT(ParseError, "Failed to serialize error response: {}", glz::format_error(writeErrc, responseStr));
 
           std::cout << responseStr << '\n';
           std::cout.flush();
@@ -820,8 +716,8 @@ class DracStdioServer {
       String outStr;
 
       if (!result.result.is_string()) {
-        if (glz::error_ctx errc = glz::write_json(result.result, outStr); errc)
-          ERR_FMT(ParseError, "Failed to serialize result: {}", glz::format_error(errc, outStr));
+        if (glz::error_ctx writeErrc = glz::write_json(result.result, outStr); writeErrc)
+          ERR_FMT(ParseError, "Failed to serialize result: {}", glz::format_error(writeErrc, outStr));
       } else
         outStr = result.result.get<String>();
 
@@ -863,17 +759,10 @@ fn main() -> i32 {
 
   Tool cacheClearTool("cache_clear", "Clear all cached data");
   Tool systemInfoTool("system_info", "Get system information (OS, kernel, host, shell, desktop environment, window manager)");
-  Tool hardwareInfoTool("hardware_info", "Get hardware information (CPU, GPU, memory, disk, battery)");
+  Tool hardwareInfoTool("hardware_info", "Get hardware information (CPU, GPU, memory, disk)");
   Tool networkInfoTool("network_info", "Get network interface information");
   Tool displayInfoTool("display_info", "Get display/monitor information");
   Tool uptimeTool("uptime", "Get system uptime");
-  Tool nowPlayingTool("now_playing", "Get currently playing media information (title and artist)");
-
-  Tool weatherTool(
-    "weather",
-    "Get current weather information. If no location is specified, automatically detects your current location from IP address.",
-    ToolParam("location", "Location name (e.g., 'New York, NY', 'London, UK', 'Tokyo, Japan'). Omit this parameter to use your current location.")
-  );
 
   Tool packageCountTool(
     "package_count",
@@ -883,19 +772,16 @@ fn main() -> i32 {
 
   Tool comprehensiveTool(
     "comprehensive_info",
-    "Get all system information at once (system, hardware, network, display, uptime, weather, individual package counts)",
-    ToolParam("location", "Location name for weather information (e.g., 'New York, NY', 'London, UK'). Omit this parameter to use your current location for weather.")
+    "Get all system information at once (system, hardware, network, display, uptime, individual package counts)"
   );
 
   server.registerTool(cacheClearTool, CacheClearHandler);
   server.registerTool(systemInfoTool, SystemInfoHandler);
   server.registerTool(hardwareInfoTool, HardwareInfoHandler);
-  server.registerTool(weatherTool, WeatherHandler);
   server.registerTool(packageCountTool, PackageCountHandler);
   server.registerTool(networkInfoTool, NetworkInfoHandler);
   server.registerTool(displayInfoTool, DisplayInfoHandler);
   server.registerTool(uptimeTool, UptimeHandler);
-  server.registerTool(nowPlayingTool, NowPlayingHandler);
   server.registerTool(comprehensiveTool, ComprehensiveInfoHandler);
 
   Result<> res = server.run();

@@ -44,10 +44,7 @@ namespace draconis::ui {
     .cpu                = "",
     .gpu                = "",
     .uptime             = "",
-#if DRAC_ENABLE_NOWPLAYING
-    .music = "",
-#endif
-    .os = "",
+    .os                 = "",
 #if DRAC_ENABLE_PACKAGECOUNT
     .package = "",
 #endif
@@ -71,9 +68,6 @@ namespace draconis::ui {
 #endif
     .gpu    = "   ",
     .uptime = "   ",
-#if DRAC_ENABLE_NOWPLAYING
-    .music = "   ",
-#endif
 #ifdef __linux__
     .os = " 󰌽  ",
 #elifdef __APPLE__
@@ -104,10 +98,7 @@ namespace draconis::ui {
     .cpu                = " 💻 ",
     .gpu                = " 🎨 ",
     .uptime             = " ⏰ ",
-#if DRAC_ENABLE_NOWPLAYING
-    .music = " 🎵 ",
-#endif
-    .os = " 🤖 ",
+    .os                 = " 🤖 ",
 #if DRAC_ENABLE_PACKAGECOUNT
     .package = " 📦 ",
 #endif
@@ -120,20 +111,24 @@ namespace draconis::ui {
   constexpr inline Icons ICON_TYPE = NERD;
 
   struct RowInfo {
-    String icon;
-    String label;
-    String value;
+    String   icon;
+    String   label;
+    String   value;
+    LogColor color    = LogColor::White;
+    bool     autoWrap = false;
   };
 
   struct UIGroup {
-    Vec<RowInfo> rows;
-    Vec<usize>   iconWidths;
-    Vec<usize>   labelWidths;
-    Vec<usize>   valueWidths;
-    Vec<String>  coloredIcons;
-    Vec<String>  coloredLabels;
-    Vec<String>  coloredValues;
-    usize        maxLabelWidth = 0;
+    Vec<RowInfo>  rows;
+    Vec<usize>    iconWidths;
+    Vec<usize>    labelWidths;
+    Vec<usize>    valueWidths;
+    Vec<String>   coloredIcons;
+    Vec<String>   coloredLabels;
+    Vec<String>   coloredValues;
+    Vec<bool>     autoWraps;
+    Vec<LogColor> valueColors;
+    usize         maxLabelWidth = 0;
   };
 
   namespace {
@@ -501,6 +496,160 @@ namespace draconis::ui {
       return width;
     }
 
+    /**
+     * @brief Word-wrap text to a specified visual width with balanced line lengths
+     * @param text The text to wrap
+     * @param wrapWidth Maximum visual width per line (0 = no wrap)
+     * @return Vector of wrapped lines
+     */
+    fn WordWrap(const StringView& text, const usize wrapWidth) -> Vec<String> {
+      Vec<String> lines;
+
+      if (wrapWidth == 0) {
+        lines.emplace_back(text);
+        return lines;
+      }
+
+      // First, split into words with their widths
+      Vec<String>       words;
+      Vec<usize>        wordWidths;
+      std::stringstream textStream((String(text)));
+      String            word;
+      while (textStream >> word) {
+        wordWidths.push_back(GetVisualWidth(word));
+        words.push_back(std::move(word));
+      }
+
+      if (words.empty())
+        return lines;
+
+      // Calculate prefix sums for efficient width calculation
+      // prefixWidth[i] = total width of words 0..i-1 including spaces between them
+      Vec<usize> prefixWidth(words.size() + 1, 0);
+      for (usize idx = 0; idx < words.size(); ++idx) {
+        prefixWidth[idx + 1] = prefixWidth[idx] + wordWidths[idx] + (idx > 0 ? 1 : 0);
+      }
+
+      // Helper to get width of words[start..end) with spaces
+      auto getLineWidth = [&](usize start, usize end) -> usize {
+        if (start >= end)
+          return 0;
+        // Width is: sum of word widths + (end-start-1) spaces
+        usize width = 0;
+        for (usize idx = start; idx < end; ++idx)
+          width += wordWidths[idx];
+        if (end > start)
+          width += end - start - 1; // spaces between words
+        return width;
+      };
+
+      // Do greedy wrap first to determine minimum number of lines needed
+      Vec<usize> greedyBreaks; // indices where lines start
+      greedyBreaks.push_back(0);
+      usize currentWidth = 0;
+      for (usize idx = 0; idx < words.size(); ++idx) {
+        const usize addedWidth = wordWidths[idx] + (currentWidth > 0 ? 1 : 0);
+        if (currentWidth > 0 && currentWidth + addedWidth > wrapWidth) {
+          greedyBreaks.push_back(idx);
+          currentWidth = wordWidths[idx];
+        } else {
+          currentWidth += addedWidth;
+        }
+      }
+
+      const usize numLines = greedyBreaks.size();
+
+      // If only one line, return as-is
+      if (numLines == 1) {
+        String line;
+        for (usize idx = 0; idx < words.size(); ++idx) {
+          if (idx > 0)
+            line += " ";
+          line += words[idx];
+        }
+        lines.push_back(line);
+        return lines;
+      }
+
+      // For balanced wrapping, find optimal break points
+      // Use dynamic programming to find breaks that minimize max line length difference
+      // For simplicity with 2 lines, just find the break that makes lines most equal
+      if (numLines == 2) {
+        usize bestBreak = 1;
+        usize bestDiff  = std::numeric_limits<usize>::max();
+
+        for (usize breakPoint = 1; breakPoint < words.size(); ++breakPoint) {
+          const usize firstWidth  = getLineWidth(0, breakPoint);
+          const usize secondWidth = getLineWidth(breakPoint, words.size());
+
+          // Both lines must fit within wrapWidth
+          if (firstWidth > wrapWidth || secondWidth > wrapWidth)
+            continue;
+
+          const usize diff = firstWidth > secondWidth ? firstWidth - secondWidth : secondWidth - firstWidth;
+          if (diff < bestDiff) {
+            bestDiff  = diff;
+            bestBreak = breakPoint;
+          }
+        }
+
+        // Build lines from best break
+        String line1, line2;
+        for (usize idx = 0; idx < bestBreak; ++idx) {
+          if (idx > 0)
+            line1 += " ";
+          line1 += words[idx];
+        }
+        for (usize idx = bestBreak; idx < words.size(); ++idx) {
+          if (idx > bestBreak)
+            line2 += " ";
+          line2 += words[idx];
+        }
+        lines.push_back(line1);
+        lines.push_back(line2);
+        return lines;
+      }
+
+      // For 3+ lines, use a generalized approach: aim for equal distribution
+      const usize totalWidth  = getLineWidth(0, words.size());
+      const usize targetWidth = (totalWidth + numLines - 1) / numLines;
+
+      lines.clear();
+      String currentLine;
+      currentWidth    = 0;
+      usize linesLeft = numLines;
+
+      for (usize idx = 0; idx < words.size(); ++idx) {
+        const usize widthIfAdded        = currentWidth + wordWidths[idx] + (currentWidth > 0 ? 1 : 0);
+        const usize remainingWidth      = getLineWidth(idx, words.size());
+        const usize avgRemainingPerLine = linesLeft > 0 ? (remainingWidth + linesLeft - 1) / linesLeft : 0;
+
+        // Break if: exceeds max, or current line is at target and remaining fits well in remaining lines
+        const bool shouldBreak = !currentLine.empty() &&
+          (widthIfAdded > wrapWidth ||
+           (currentWidth >= targetWidth && linesLeft > 1 && remainingWidth >= avgRemainingPerLine));
+
+        if (shouldBreak) {
+          lines.push_back(currentLine);
+          currentLine.clear();
+          currentWidth = 0;
+          linesLeft--;
+        }
+
+        if (!currentLine.empty()) {
+          currentLine += " ";
+          currentWidth += 1;
+        }
+        currentLine += words[idx];
+        currentWidth += wordWidths[idx];
+      }
+
+      if (!currentLine.empty())
+        lines.push_back(currentLine);
+
+      return lines;
+    }
+
     constexpr fn CreateDistributedColorCircles(usize availableWidth) -> String {
       if (COLOR_CIRCLES.empty() || availableWidth == 0)
         return "";
@@ -546,6 +695,8 @@ namespace draconis::ui {
       group.coloredIcons.reserve(group.rows.size());
       group.coloredLabels.reserve(group.rows.size());
       group.coloredValues.reserve(group.rows.size());
+      group.autoWraps.reserve(group.rows.size());
+      group.valueColors.reserve(group.rows.size());
 
       usize groupMaxWidth = 0;
 
@@ -559,10 +710,12 @@ namespace draconis::ui {
         group.iconWidths.push_back(iconW);
         group.labelWidths.push_back(labelWidth);
         group.valueWidths.push_back(valueW);
+        group.autoWraps.push_back(row.autoWrap);
+        group.valueColors.push_back(row.color);
 
         String coloredIcon  = Stylize(row.icon, { .color = DEFAULT_THEME.icon });
         String coloredLabel = Stylize(row.label, { .color = DEFAULT_THEME.label });
-        String coloredValue = Stylize(row.value, { .color = DEFAULT_THEME.value });
+        String coloredValue = Stylize(row.value, { .color = row.color });
 
         // Debug: check if colored strings have different visual widths
         usize coloredIconW  = GetVisualWidth(coloredIcon);
@@ -582,7 +735,9 @@ namespace draconis::ui {
         group.coloredLabels.push_back(coloredLabel);
         group.coloredValues.push_back(coloredValue);
 
-        groupMaxWidth = std::max(groupMaxWidth, iconW + valueW); // label handled after loop
+        // Don't include value width for autoWrap rows - they will wrap to fit available width
+        if (!row.autoWrap)
+          groupMaxWidth = std::max(groupMaxWidth, iconW + valueW);
       }
 
       groupMaxWidth += group.maxLabelWidth + 1;
@@ -601,52 +756,63 @@ namespace draconis::ui {
       }
 
       for (usize i = 0; i < group.rows.size(); ++i) {
-        const usize leftWidth  = group.iconWidths[i] + group.maxLabelWidth;
-        const usize rightWidth = group.valueWidths[i];
-        const usize padding    = (maxContentWidth >= leftWidth + rightWidth)
-             ? maxContentWidth - (leftWidth + rightWidth)
-             : 0;
+        const usize    leftWidth  = group.iconWidths[i] + group.maxLabelWidth;
+        const LogColor valueColor = group.valueColors[i];
 
-        out += "│";
-        out += group.coloredIcons[i];
-        out += group.coloredLabels[i];
-        out.append(group.maxLabelWidth - group.labelWidths[i], ' ');
-        out.append(padding, ' ');
-        out += group.coloredValues[i];
-        out += " │\n";
+        // Handle word wrapping if enabled for this row
+        if (group.autoWraps[i]) {
+          // Leave at least 1 space between label and value
+          const usize       availableWidth = maxContentWidth - leftWidth - 1;
+          const Vec<String> wrappedLines   = WordWrap(group.rows[i].value, availableWidth);
+
+          if (!wrappedLines.empty()) {
+            // First line: icon + label + first wrapped segment
+            const String coloredFirstLine = Stylize(wrappedLines[0], { .color = valueColor });
+            const usize  firstLineWidth   = GetVisualWidth(wrappedLines[0]);
+            const usize  firstPadding     = (maxContentWidth >= leftWidth + firstLineWidth + 1)
+                   ? maxContentWidth - (leftWidth + firstLineWidth)
+                   : 1;
+
+            out += "│";
+            out += group.coloredIcons[i];
+            out += group.coloredLabels[i];
+            out.append(group.maxLabelWidth - group.labelWidths[i], ' ');
+            out.append(firstPadding, ' ');
+            out += coloredFirstLine;
+            out += " │\n";
+
+            // Subsequent lines: indent + wrapped segment (right-aligned)
+            for (usize j = 1; j < wrappedLines.size(); ++j) {
+              const String coloredLine = Stylize(wrappedLines[j], { .color = valueColor });
+              const usize  lineWidth   = GetVisualWidth(wrappedLines[j]);
+              const usize  linePadding = (maxContentWidth > lineWidth)
+                 ? maxContentWidth - lineWidth
+                 : 0;
+
+              out += "│";
+              out.append(linePadding, ' ');
+              out += coloredLine;
+              out += " │\n";
+            }
+          }
+        } else {
+          // Normal rendering without word wrap
+          const usize rightWidth = group.valueWidths[i];
+          const usize padding    = (maxContentWidth >= leftWidth + rightWidth)
+               ? maxContentWidth - (leftWidth + rightWidth)
+               : 0;
+
+          out += "│";
+          out += group.coloredIcons[i];
+          out += group.coloredLabels[i];
+          out.append(group.maxLabelWidth - group.labelWidths[i], ' ');
+          out.append(padding, ' ');
+          out += group.coloredValues[i];
+          out += " │\n";
+        }
       }
 
       hasRenderedContent = true;
-    }
-
-    constexpr fn WordWrap(const StringView& text, const usize wrapWidth) -> Vec<String> {
-      Vec<String> lines;
-
-      if (wrapWidth == 0) {
-        lines.emplace_back(text);
-        return lines;
-      }
-
-      std::stringstream textStream((String(text)));
-      String            word;
-      String            currentLine;
-
-      while (textStream >> word) {
-        if (!currentLine.empty() && GetVisualWidth(currentLine) + GetVisualWidth(word) + 1 > wrapWidth) {
-          lines.emplace_back(currentLine);
-          currentLine.clear();
-        }
-
-        if (!currentLine.empty())
-          currentLine += " ";
-
-        currentLine += word;
-      }
-
-      if (!currentLine.empty())
-        lines.emplace_back(currentLine);
-
-      return lines;
     }
 
     constexpr fn ToLowerCopy(String str) -> String {
@@ -735,23 +901,22 @@ namespace draconis::ui {
     }
 
     fn BuildRowFromLayout(
-      const UILayoutRow&      layoutRow,
-      const Icons&            iconType,
-      const SystemInfo&       data,
-      Option<StringView>      distroIcon,
-      bool&                   nowPlayingConsumed
+      const UILayoutRow& layoutRow,
+      const Icons&       iconType,
+      const SystemInfo&  data,
+      Option<StringView> distroIcon
     ) -> Option<RowInfo> {
       const String keyLower = ToLowerCopy(layoutRow.key);
 
       if (const auto pluginKey = ParsePluginKey(layoutRow.key)) {
 #if DRAC_ENABLE_PLUGINS
-        const String&             pluginId  = pluginKey->first;
-        const Option<String>&     fieldName = pluginKey->second;
-        Option<String> value     = None;
-        String         icon      = String(iconType.palette);
-        String         label     = pluginId;
-        const auto     displayIt = data.pluginDisplay.find(pluginId);
-        const bool     hasDisplayInfo = displayIt != data.pluginDisplay.end();
+        const String&         pluginId       = pluginKey->first;
+        const Option<String>& fieldName      = pluginKey->second;
+        Option<String>        value          = None;
+        String                icon           = String(iconType.palette);
+        String                label          = pluginId;
+        const auto            displayIt      = data.pluginDisplay.find(pluginId);
+        const bool            hasDisplayInfo = displayIt != data.pluginDisplay.end();
 
         if (fieldName) {
           if (const auto pluginDataIt = data.pluginData.find(pluginId); pluginDataIt != data.pluginData.end()) {
@@ -786,9 +951,11 @@ namespace draconis::ui {
           return None;
 
         RowInfo row {
-          .icon  = std::move(icon),
-          .label = std::move(label),
-          .value = *std::move(value)
+          .icon     = std::move(icon),
+          .label    = std::move(label),
+          .value    = *std::move(value),
+          .color    = layoutRow.color,
+          .autoWrap = layoutRow.autoWrap
         };
 
         if (layoutRow.icon)
@@ -820,7 +987,7 @@ namespace draconis::ui {
       } else if (keyLower == "os") {
         if (!data.operatingSystem)
           return None;
-        row.icon = distroIcon ? String(*distroIcon) : String(iconType.os);
+        row.icon  = distroIcon ? String(*distroIcon) : String(iconType.os);
         row.label = _("os");
         row.value = std::format("{} {}", data.operatingSystem->name, data.operatingSystem->version);
       } else if (keyLower == "kernel") {
@@ -889,28 +1056,15 @@ namespace draconis::ui {
         row.icon  = iconType.windowManager;
         row.label = _("wm");
         row.value = *data.windowMgr;
-      }
-#if DRAC_ENABLE_NOWPLAYING
-      else if (keyLower == "playing" || keyLower == "nowplaying") {
-        if (!data.nowPlaying)
-          return None;
-        row.icon  = iconType.music;
-        row.label = _("playing");
-        row.value = std::format(
-          "{} - {}",
-          data.nowPlaying->artist.value_or("Unknown Artist"),
-          data.nowPlaying->title.value_or("Unknown Title")
-        );
-        nowPlayingConsumed = true;
-      }
-#endif
-      else
+      } else
         return None;
 
       if (layoutRow.icon)
         row.icon = *layoutRow.icon;
       if (layoutRow.label)
         row.label = *layoutRow.label;
+      row.color    = layoutRow.color;
+      row.autoWrap = layoutRow.autoWrap;
 
       return row;
     }
@@ -938,14 +1092,12 @@ namespace draconis::ui {
     Vec<UIGroup> groups;
     groups.reserve(layoutGroups->size());
 
-    bool nowPlayingConsumed = false;
-
     for (const auto& groupCfg : *layoutGroups) {
       UIGroup group;
       group.rows.reserve(groupCfg.rows.size());
 
       for (const auto& rowCfg : groupCfg.rows) {
-        if (auto row = BuildRowFromLayout(rowCfg, iconType, data, distroIcon, nowPlayingConsumed))
+        if (auto row = BuildRowFromLayout(rowCfg, iconType, data, distroIcon))
           group.rows.push_back(std::move(*row));
       }
 
@@ -972,26 +1124,12 @@ namespace draconis::ui {
     const usize colorCirclesWidth = GetVisualWidth(iconType.palette) + totalCirclesWidth + totalMinSpacing;
     maxContentWidth               = std::max(maxContentWidth, colorCirclesWidth);
 
-#if DRAC_ENABLE_NOWPLAYING
-    bool   nowPlayingActive = false;
-    String npText;
-
-    if (!nowPlayingConsumed && config.nowPlaying.enabled && data.nowPlaying) {
-      npText           = std::format("{} - {}", data.nowPlaying->artist.value_or("Unknown Artist"), data.nowPlaying->title.value_or("Unknown Title"));
-      nowPlayingActive = true;
-    }
-#endif
-
     String out;
 
     usize estimatedLines = 4;
 
     for (const UIGroup& grp : groups)
       estimatedLines += grp.rows.empty() ? 0 : (grp.rows.size() + 1);
-
-    if constexpr (DRAC_ENABLE_NOWPLAYING)
-      if (nowPlayingActive)
-        ++estimatedLines;
 
     out.reserve(estimatedLines * (maxContentWidth + 4));
 
@@ -1035,42 +1173,6 @@ namespace draconis::ui {
 
     for (const UIGroup& group : groups)
       RenderGroup(out, group, maxContentWidth, hBorder, hasRenderedContent);
-
-    if constexpr (DRAC_ENABLE_NOWPLAYING)
-      if (nowPlayingActive) {
-        if (hasRenderedContent) {
-          out += "├";
-          out += hBorder;
-          out += "┤\n";
-        }
-
-        const String leftPart      = Stylize(iconType.music, { .color = DEFAULT_THEME.icon }) + Stylize(_("playing"), { .color = DEFAULT_THEME.label });
-        const usize  leftPartWidth = GetVisualWidth(leftPart);
-
-        const usize availableWidth = maxContentWidth - leftPartWidth;
-
-        const Vec<String> wrappedLines = WordWrap(npText, availableWidth);
-
-        if (!wrappedLines.empty()) {
-          createLine(leftPart, Stylize(wrappedLines[0], { .color = LogColor::Magenta }));
-
-          const String indent(leftPartWidth, ' ');
-
-          for (usize i = 1; i < wrappedLines.size(); ++i) {
-            String rightPart      = Stylize(wrappedLines[i], { .color = LogColor::Magenta });
-            usize  rightPartWidth = GetVisualWidth(rightPart);
-
-            usize padding = (maxContentWidth > leftPartWidth + rightPartWidth)
-              ? maxContentWidth - leftPartWidth - rightPartWidth
-              : 0;
-
-            String lineContent = indent;
-            lineContent.append(padding, ' ');
-            lineContent.append(rightPart);
-            createLine(lineContent);
-          }
-        }
-      }
 
     out += "╰";
     out += hBorder;

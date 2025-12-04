@@ -55,43 +55,6 @@ namespace draconis::core::system {
    */
   fn GetMemInfo(utils::cache::CacheManager& cache) -> utils::types::Result<utils::types::ResourceUsage>;
 
-#if DRAC_ENABLE_NOWPLAYING
-  /**
-   * @brief Fetches now playing media information.
-   * @return The MediaInfo struct containing the title and artist of the currently playing media.
-   *
-   * @details Obtained differently depending on the platform:
-   *  - Windows: `GlobalSystemMediaTransportControlsSessionManager::GetCurrentSession`
-   *  - macOS: `MRMediaRemoteGetNowPlayingInfo` (private framework)
-   *  - Linux/BSD: `DBus`
-   *  - Other: Unsupported
-   *
-   * @warning This function can fail if:
-   *  - Windows: `GlobalSystemMediaTransportControlsSessionManager::GetCurrentSession` fails
-   *  - macOS: `MRMediaRemoteGetNowPlayingInfo` fails / `information` is null
-   *  - Linux/BSD: Various DBus calls fail
-   *  - Other: Unsupported
-   *
-   * @code{.cpp}
-   * #include <print>
-   * #include <Drac++/Core/System.hpp>
-   *
-   * int main() {
-   *   Result<MediaInfo> nowPlaying = draconis::core::system::GetNowPlaying();
-   *
-   *   if (nowPlaying.has_value()) {
-   *     std::println("Now playing: {} - {}", nowPlaying.value().title, nowPlaying.value().artist);
-   *   } else {
-   *     std::println("Failed to get now playing: {}", nowPlaying.error().message());
-   *   }
-   *
-   *   return 0;
-   * }
-   * @endcode
-   */
-  fn GetNowPlaying() -> utils::types::Result<utils::types::MediaInfo>;
-#endif
-
   /**
    * @brief Fetches the OS version.
    * @return The OS version (e.g., "Windows 11", "macOS 26.0 Tahoe", "Ubuntu 24.04.2 LTS", etc.).

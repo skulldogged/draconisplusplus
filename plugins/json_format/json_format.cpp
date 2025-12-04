@@ -54,8 +54,6 @@ namespace {
     Option<String> uptime;
     Option<i64>    uptimeSeconds;
     Option<u64>    packageCount;
-    Option<String> nowPlayingTitle;
-    Option<String> nowPlayingArtist;
     Option<String> weatherTemperature;
     Option<String> weatherDescription;
     Option<String> weatherTown;
@@ -96,8 +94,6 @@ namespace glz {
       "uptime",            &T::uptime,
       "uptimeSeconds",     &T::uptimeSeconds,
       "packageCount",      &T::packageCount,
-      "nowPlayingTitle",   &T::nowPlayingTitle,
-      "nowPlayingArtist",  &T::nowPlayingArtist,
       "weatherTemperature",&T::weatherTemperature,
       "weatherDescription",&T::weatherDescription,
       "weatherTown",       &T::weatherTown,
@@ -225,8 +221,6 @@ namespace {
       output.uptime             = getOptional("uptime");
       output.uptimeSeconds      = getOptionalI64("uptime_seconds");
       output.packageCount       = getOptionalU64("packages");
-      output.nowPlayingTitle    = getOptional("playing_title");
-      output.nowPlayingArtist   = getOptional("playing_artist");
       output.weatherTemperature = getOptional("weather_temperature");
       output.weatherDescription = getOptional("weather_description");
       output.weatherTown        = getOptional("weather_town");

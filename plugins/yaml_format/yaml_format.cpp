@@ -192,20 +192,6 @@ namespace {
         addIfPresent(environment, "window_manager", getValue(data, "wm"));
       }
 
-      // Media section (Now Playing)
-      if (getValue(data, "playing") || getValue(data, "playing_artist") || getValue(data, "playing_title")) {
-        ryml::NodeRef media = root["media"];
-        media |= ryml::MAP;
-        ryml::NodeRef nowPlaying = media["now_playing"];
-        nowPlaying |= ryml::MAP;
-
-        const auto* artist   = getValue(data, "playing_artist");
-        nowPlaying["artist"] = artist ? ryml::to_csubstr(*artist) : ryml::csubstr("Unknown Artist");
-
-        const auto* title   = getValue(data, "playing_title");
-        nowPlaying["title"] = title ? ryml::to_csubstr(*title) : ryml::csubstr("Unknown Title");
-      }
-
       // Plugin data section - use pluginData directly
       if (!pluginData.empty()) {
         ryml::NodeRef pluginsNode = root["plugins"];

@@ -19,19 +19,6 @@ namespace draconis::core::system::macOS {
   namespace types = draconis::utils::types;
 
   /**
-   * @brief Fetches the currently playing song's title and artist from macOS.
-   * @return A Result containing a MediaInfo struct on success, or a DracError on failure.
-   *
-   * @note This function dynamically loads the private MediaRemote.framework to access
-   * the MRMediaRemoteGetNowPlayingInfo function. This is an unsupported Apple API and
-   * could break in future macOS updates.
-   *
-   * The retrieval is asynchronous, so this function uses a dispatch_semaphore to
-   * block and wait for the result from the callback.
-   */
-  fn GetNowPlayingInfo() -> types::Result<types::MediaInfo>;
-
-  /**
    * @brief Gets the model name of the primary system GPU.
    * @return A Result containing the GPU name as a String on success, or a DracError on failure.
    *

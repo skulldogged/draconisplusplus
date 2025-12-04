@@ -2,7 +2,6 @@
 #define ASIO_HAS_STD_COROUTINE 1
 
 #include <asio/error.hpp>            // asio::error::operation_aborted
-#include <chrono>                    // std::chrono::{minutes, steady_clock, time_point}
 #include <csignal>                   // SIGINT, SIGTERM, SIG_ERR, std::signal
 #include <cstdlib>                   // EXIT_FAILURE, EXIT_SUCCESS
 #include <fstream>                   // std::ifstream
@@ -20,8 +19,6 @@
 #include <glaze/core/meta.hpp>       // glz::{meta, detail::Object}
 #include <glaze/net/http_server.hpp> // glz::http_server
 #include <matchit.hpp>               // matchit::impl::Overload
-#include <mutex>                     // std::{mutex, unique_lock}
-#include <optional>                  // std::optional
 #include <utility>                   // std::move
 
 #ifndef fn
@@ -29,7 +26,6 @@
 #endif
 
 #include <Drac++/Core/System.hpp>
-#include <Drac++/Services/Weather.hpp>
 
 #include <Drac++/Utils/CacheManager.hpp>
 #include <Drac++/Utils/Error.hpp>
@@ -37,7 +33,6 @@
 #include <Drac++/Utils/Types.hpp>
 
 using namespace draconis::utils::types;
-using namespace draconis::services::weather;
 using draconis::utils::error::DracError;
 using enum draconis::utils::error::DracErrorCode;
 
@@ -45,24 +40,6 @@ namespace {
   constexpr i16   port        = 3722;
   constexpr PCStr indexFile   = "examples/glaze_http/web/index.mustache";
   constexpr PCStr stylingFile = "examples/glaze_http/web/style.css";
-
-  struct State {
-#if DRAC_ENABLE_WEATHER
-    mutable struct WeatherCache {
-      std::optional<Result<Report>>         report;
-      std::chrono::steady_clock::time_point lastChecked;
-      mutable std::mutex                    mtx;
-    } weatherCache;
-
-    mutable UniquePointer<IWeatherService> weatherService;
-#endif
-  };
-
-  fn GetState() -> const State& {
-    static const State STATE;
-
-    return STATE;
-  }
 
   fn readFile(const std::filesystem::path& path) -> Result<String> {
     if (!std::filesystem::exists(path))
@@ -126,13 +103,6 @@ namespace glz {
 fn main() -> i32 {
   glz::http_server server;
 
-  if constexpr (DRAC_ENABLE_WEATHER) {
-    GetState().weatherService = CreateWeatherService(Provider::MetNo, Coords(40.71427, -74.00597), UnitSystem::Imperial);
-
-    if (!GetState().weatherService)
-      error_log("Error: Failed to initialize WeatherService.");
-  }
-
   server.on_error([](const std::error_code errc, const std::source_location& loc) {
     if (errc != asio::error::operation_aborted)
       error_log("Server error at {}:{} -> {}", loc.file_name(), loc.line(), errc.message());
@@ -186,26 +156,6 @@ fn main() -> i32 {
           else
             sysInfo.properties.emplace_back(name, result.error());
         },
-#if DRAC_ENABLE_NOWPLAYING
-        [&](const String& name, const Result<MediaInfo>& result) -> Unit {
-          if (result)
-            sysInfo.properties.emplace_back(name, std::format("{} - {}", result->title.value_or("Unknown Title"), result->artist.value_or("Unknown Artist")));
-          else if (result.error().code == NotFound)
-            sysInfo.properties.emplace_back(name, "No media playing");
-          else
-            sysInfo.properties.emplace_back(name, result.error());
-        },
-#endif
-#if DRAC_ENABLE_WEATHER
-        [&](const String& name, const Result<Report>& result) -> Unit {
-          if (result)
-            sysInfo.properties.emplace_back(name, std::format("{}°F, {}", std::lround(result->temperature), result->description));
-          else if (result.error().code == NotFound)
-            sysInfo.properties.emplace_back(name, "No weather data available");
-          else
-            sysInfo.properties.emplace_back(name, result.error());
-        },
-#endif
       };
 
       addProperty("OS", GetOperatingSystem(cacheManager));
@@ -218,46 +168,6 @@ fn main() -> i32 {
       addProperty("GPU Model", GetGPUModel(cacheManager));
       addProperty("Memory", GetMemInfo(cacheManager));
       addProperty("Disk Usage", GetDiskUsage(cacheManager));
-      if constexpr (DRAC_ENABLE_NOWPLAYING)
-        addProperty("Now Playing", GetNowPlaying());
-
-      if constexpr (DRAC_ENABLE_WEATHER) {
-        using namespace std::chrono;
-
-        Result<Report> weatherResultToAdd;
-
-        std::unique_lock<std::mutex> lock(GetState().weatherCache.mtx);
-
-        time_point now = steady_clock::now();
-
-        bool needsFetch = true;
-
-        if (GetState().weatherCache.report.has_value() && now - GetState().weatherCache.lastChecked < minutes(10)) {
-          info_log("Using cached weather data.");
-          weatherResultToAdd = *GetState().weatherCache.report;
-          needsFetch         = false;
-        }
-
-        if (needsFetch) {
-          info_log("Fetching new weather data...");
-          if (GetState().weatherService) {
-            Result<Report> fetchedReport        = GetState().weatherService->getWeatherInfo();
-            GetState().weatherCache.report      = fetchedReport;
-            GetState().weatherCache.lastChecked = now;
-            weatherResultToAdd                  = fetchedReport;
-          } else {
-            error_log("Weather service is not initialized. Cannot fetch new data.");
-            Result<Report> errorReport          = Err({ ApiUnavailable, "Weather service not initialized" });
-            GetState().weatherCache.report      = errorReport;
-            GetState().weatherCache.lastChecked = now;
-            weatherResultToAdd                  = errorReport;
-          }
-        }
-
-        lock.unlock();
-
-        addProperty("Weather", weatherResultToAdd);
-      }
     }
 
     Result<String> htmlTemplate = readFile(indexFile);

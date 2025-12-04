@@ -87,10 +87,3 @@ foreach plugin_dir : plugin_dirs
 
   plugins_built += plugin_name
 endforeach
-
-# ======================== #
-#   Plugin Summary         #
-# ======================== #
-message('Building plugins for: ' + host_system)
-message('Plugin install directory: ' + plugin_install_dir)
-message('Plugins discovered: ' + ', '.join(plugins_built))

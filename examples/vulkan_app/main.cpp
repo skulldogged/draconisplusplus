@@ -402,9 +402,6 @@ fn main() -> i32 {
 #if DRAC_ENABLE_PACKAGECOUNT
   Result<u64> packageCount;
 #endif
-#if DRAC_ENABLE_NOWPLAYING
-  Result<MediaInfo> nowPlaying;
-#endif
 
   draconis::utils::cache::CacheManager cacheManager;
 
@@ -429,8 +426,6 @@ fn main() -> i32 {
 
       if constexpr (DRAC_ENABLE_PACKAGECOUNT)
         packageCount = GetTotalCount(cacheManager, Manager::Cargo);
-      if constexpr (DRAC_ENABLE_NOWPLAYING)
-        nowPlaying = GetNowPlaying();
 
       lastUpdateTime = now;
     }
@@ -492,13 +487,6 @@ fn main() -> i32 {
 
       if constexpr (DRAC_ENABLE_PACKAGECOUNT)
         ImGui::TextUnformatted(std::format("Packages: {}", packageCount.value_or(0)).c_str());
-
-      if constexpr (DRAC_ENABLE_NOWPLAYING) {
-        if (nowPlaying)
-          ImGui::TextUnformatted(std::format("Now Playing: {} - {}", nowPlaying->artist.value_or("N/A"), nowPlaying->title.value_or("N/A")).c_str());
-        else
-          ImGui::TextUnformatted("Now Playing: N/A");
-      }
     }
     ImGui::End();
 

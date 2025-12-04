@@ -17,7 +17,6 @@ namespace draconis::core::system {
     using draconis::config::Config;
     using namespace draconis::utils::types;
 
-    using draconis::utils::error::DracError;
     using enum draconis::utils::error::DracErrorCode;
 
 #if DRAC_ENABLE_PLUGINS
@@ -115,11 +114,6 @@ namespace draconis::core::system {
       this->packageCount = draconis::services::packages::GetTotalCount(cache, config.enabledPackageManagers);
     }
 
-    if constexpr (DRAC_ENABLE_NOWPLAYING) {
-      debug_log("SystemInfo: Getting now playing");
-      this->nowPlaying = config.nowPlaying.enabled ? GetNowPlaying() : Err(DracError(ApiUnavailable, "Now Playing API disabled"));
-    }
-
 #if DRAC_ENABLE_PLUGINS
     debug_log("SystemInfo: Collecting plugin data");
     // Collect plugin data efficiently (only if plugins are enabled and initialized)
@@ -194,21 +188,11 @@ namespace draconis::core::system {
       data["packages"] = std::to_string(*packageCount);
 #endif
 
-    // Now playing
-#if DRAC_ENABLE_NOWPLAYING
-    if (nowPlaying) {
-      data["playing"]        = std::format("{} - {}", nowPlaying->artist.value_or("Unknown Artist"), nowPlaying->title.value_or("Unknown Title"));
-      data["playing_artist"] = nowPlaying->artist.value_or("Unknown Artist");
-      data["playing_title"]  = nowPlaying->title.value_or("Unknown Title");
-    }
-#endif
-
     // Plugin data - flatten with plugin_<pluginId>_<fieldName> format for compact templates
 #if DRAC_ENABLE_PLUGINS
-    for (const auto& [pluginId, fields] : pluginData) {
+    for (const auto& [pluginId, fields] : pluginData)
       for (const auto& [fieldName, value] : fields)
         data[std::format("plugin_{}_{}", pluginId, fieldName)] = value;
-    }
 #endif
 
     return data;

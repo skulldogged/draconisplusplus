@@ -5,14 +5,20 @@
   #include <array>
   #include <span>
 
+  #include <Drac++/Utils/Logging.hpp>
+
 namespace draconis::config {
+  using draconis::utils::logging::LogColor;
+
   /**
    * @brief Compile-time UI layout row used by precompiled configs.
    */
   struct PrecompiledLayoutRow {
-    const char* key;   ///< e.g. "cpu", "plugin.weather.temp", "playing"
-    const char* label; ///< Optional label override, nullptr/empty = default
-    const char* icon;  ///< Optional icon override, nullptr/empty = default
+    const char* key;                        ///< e.g. "cpu", "plugin.weather.temp", "playing"
+    const char* label;                      ///< Optional label override, nullptr/empty = default
+    const char* icon;                       ///< Optional icon override, nullptr/empty = default
+    bool        autoWrap = false;           ///< Enable automatic word wrapping
+    LogColor    color    = LogColor::White; ///< Value foreground color
   };
 
   /**
@@ -25,9 +31,20 @@ namespace draconis::config {
 
   /**
    * @brief Helper to build a layout row.
+   * @param key The data key (e.g., "cpu", "plugin.weather")
+   * @param autoWrap Enable automatic word wrapping
+   * @param color Value foreground color (default: White)
+   * @param label Optional label override (nullptr = default)
+   * @param icon Optional icon override (nullptr = default)
    */
-  [[nodiscard]] constexpr fn Row(const char* key, const char* label = nullptr, const char* icon = nullptr) -> PrecompiledLayoutRow {
-    return { .key = key, .label = label, .icon = icon };
+  [[nodiscard]] constexpr fn Row(
+    const char* key,
+    bool        autoWrap = false,
+    LogColor    color    = LogColor::White,
+    const char* label    = nullptr,
+    const char* icon     = nullptr
+  ) -> PrecompiledLayoutRow {
+    return { .key = key, .label = label, .icon = icon, .autoWrap = autoWrap, .color = color };
   }
 
   /**

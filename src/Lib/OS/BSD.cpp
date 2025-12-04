@@ -2,8 +2,6 @@
 
 // clang-format off
 #include <cstring>              // std::strlen
-#include <dbus/dbus-protocol.h> // DBUS_TYPE_*
-#include <dbus/dbus-shared.h>   // DBUS_BUS_SESSION
 #include <fstream>              // ifstream
 #include <sys/socket.h>         // ucred, getsockopt, SOL_SOCKET, SO_PEERCRED
 #include <sys/sysctl.h>         // sysctlbyname
@@ -24,7 +22,6 @@
 
 #include "OS/Unix.hpp"
 
-#include "Wrappers/DBus.hpp"
 #include "Wrappers/Wayland.hpp"
 #include "Wrappers/XCB.hpp"
 // clang-format on
@@ -258,116 +255,6 @@ namespace draconis::core::system {
   #endif
 
     return mem;
-  }
-
-  fn GetNowPlaying() -> Result<MediaInfo> {
-    using namespace dbus;
-
-    Connection connection = TRY(Connection::busGet(DBUS_BUS_SESSION));
-
-    Option<String> activePlayer = None;
-
-    {
-      Message listNamesMsg = TRY(
-        Message::newMethodCall("org.freedesktop.DBus", "/org/freedesktop/DBus", "org.freedesktop.DBus", "ListNames")
-      );
-
-      Message listNamesReply = TRY(connection.sendWithReplyAndBlock(listNamesMsg, 100));
-
-      MessageIter iter = listNamesReply.iterInit();
-      if (!iter.isValid() || iter.getArgType() != DBUS_TYPE_ARRAY)
-        return Err(DracError(DracErrorCode::ParseError, "Invalid DBus ListNames reply format: Expected array"));
-
-      MessageIter subIter = iter.recurse();
-      if (!subIter.isValid())
-        return Err(
-          DracError(DracErrorCode::ParseError, "Invalid DBus ListNames reply format: Could not recurse into array")
-        );
-
-      while (subIter.getArgType() != DBUS_TYPE_INVALID) {
-        if (Option<String> name = subIter.getString())
-          if (name->starts_with("org.mpris.MediaPlayer2.")) {
-            activePlayer = std::move(*name);
-            break;
-          }
-        if (!subIter.next())
-          break;
-      }
-    }
-
-    if (!activePlayer)
-      return Err(DracError(DracErrorCode::NotFound, "No active MPRIS players found"));
-
-    Message msg = TRY(Message::newMethodCall(activePlayer->c_str(), "/org/mpris/MediaPlayer2", "org.freedesktop.DBus.Properties", "Get"));
-
-    if (!msg.appendArgs("org.mpris.MediaPlayer2.Player", "Metadata"))
-      return Err(DracError(DracErrorCode::InternalError, "Failed to append arguments to Properties.Get message"));
-
-    Message reply = TRY(connection.sendWithReplyAndBlock(msg, 100));
-
-    Option<String> title  = None;
-    Option<String> artist = None;
-
-    MessageIter propIter = reply.iterInit();
-    if (!propIter.isValid())
-      return Err(DracError(DracErrorCode::ParseError, "Properties.Get reply has no arguments or invalid iterator"));
-
-    if (propIter.getArgType() != DBUS_TYPE_VARIANT)
-      return Err(DracError(DracErrorCode::ParseError, "Properties.Get reply argument is not a variant"));
-
-    MessageIter variantIter = propIter.recurse();
-    if (!variantIter.isValid())
-      return Err(DracError(DracErrorCode::ParseError, "Could not recurse into variant"));
-
-    if (variantIter.getArgType() != DBUS_TYPE_ARRAY || variantIter.getElementType() != DBUS_TYPE_DICT_ENTRY)
-      return Err(DracError(DracErrorCode::ParseError, "Metadata variant content is not a dictionary array (a{sv})"));
-
-    MessageIter dictIter = variantIter.recurse();
-    if (!dictIter.isValid())
-      return Err(DracError(DracErrorCode::ParseError, "Could not recurse into metadata dictionary array"));
-
-    while (dictIter.getArgType() == DBUS_TYPE_DICT_ENTRY) {
-      MessageIter entryIter = dictIter.recurse();
-      if (!entryIter.isValid()) {
-        if (!dictIter.next())
-          break;
-        continue;
-      }
-
-      Option<String> key = entryIter.getString();
-      if (!key) {
-        if (!dictIter.next())
-          break;
-        continue;
-      }
-
-      if (!entryIter.next() || entryIter.getArgType() != DBUS_TYPE_VARIANT) {
-        if (!dictIter.next())
-          break;
-        continue;
-      }
-
-      MessageIter valueVariantIter = entryIter.recurse();
-      if (!valueVariantIter.isValid()) {
-        if (!dictIter.next())
-          break;
-        continue;
-      }
-
-      if (*key == "xesam:title") {
-        title = valueVariantIter.getString();
-      } else if (*key == "xesam:artist") {
-        if (valueVariantIter.getArgType() == DBUS_TYPE_ARRAY && valueVariantIter.getElementType() == DBUS_TYPE_STRING) {
-          if (MessageIter artistArrayIter = valueVariantIter.recurse(); artistArrayIter.isValid())
-            artist = artistArrayIter.getString();
-        }
-      }
-
-      if (!dictIter.next())
-        break;
-    }
-
-    return MediaInfo(std::move(title), std::move(artist));
   }
 
   fn GetWindowManager(CacheManager& cache) -> Result<String> {

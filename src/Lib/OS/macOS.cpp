@@ -120,10 +120,6 @@ namespace draconis::core::system {
     return ResourceUsage(usedMem, totalMem);
   }
 
-  fn GetNowPlaying() -> Result<MediaInfo> {
-    return macOS::GetNowPlayingInfo();
-  }
-
   fn GetOperatingSystem(CacheManager& cache) -> Result<OSInfo> {
     return cache.getOrSet<OSInfo>("macos_os_info", macOS::GetOSVersion);
   }

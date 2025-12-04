@@ -345,7 +345,12 @@ namespace {
         constexpr u32 kuserSharedNtMinorVersion = kuserSharedData + 0x270;
         constexpr u32 kuserSharedNtBuildNumber  = kuserSharedData + 0x260;
 
-        VersionReadResult result = { 0, 0, 0, false };
+        VersionReadResult result = {
+          .majorVersion = 0,
+          .minorVersion = 0,
+          .buildNumber  = 0,
+          .success      = false,
+        };
 
         // Considering this file is windows-specific, it's fine to use windows-specific extensions.
   #if defined(__clang__)
@@ -675,140 +680,6 @@ namespace draconis::core::system {
 
     ERR_FMT(ApiUnavailable, "GlobalMemoryStatusEx failed with error code {}", GetLastError());
   }
-
-  #if DRAC_ENABLE_NOWPLAYING
-  namespace npsm {
-    // {BCBB9860-C012-4AD7-A938-6E337AE6ABA5}
-    static const GUID CLSID_NowPlayingSessionManager = {
-      0xBCBB9860,
-      0xC012,
-      0x4AD7,
-      { 0xA9, 0x38, 0x6E, 0x33, 0x7A, 0xE6, 0xAB, 0xA5 }
-    };
-
-    // INowPlayingSessionManager - {3b6a7908-ce07-4ba9-878c-6e4a15db5e5b} (19041+)
-    // NOLINTBEGIN(cppcoreguidelines-virtual-class-destructor, readability-identifier-naming)
-    MIDL_INTERFACE("3b6a7908-ce07-4ba9-878c-6e4a15db5e5b")
-    INowPlayingSessionManager : public IUnknown {
-     public:
-      virtual fn STDMETHODCALLTYPE get_Count(ULONG64 * pCount)->HRESULT               = 0;
-      virtual fn STDMETHODCALLTYPE get_CurrentSession(IUnknown * *ppSession)->HRESULT = 0;
-    };
-
-    // INowPlayingSession - {431268cf-7477-4285-950b-6f892a944712} (14393+)
-    MIDL_INTERFACE("431268cf-7477-4285-950b-6f892a944712")
-    INowPlayingSession : public IUnknown {
-     public:
-      virtual fn STDMETHODCALLTYPE get_SessionType(int* pType) -> HRESULT                            = 0;
-      virtual fn STDMETHODCALLTYPE get_SourceAppId(LPWSTR * pszSrcAppId)->HRESULT                    = 0;
-      virtual fn STDMETHODCALLTYPE get_SourceDeviceId(LPWSTR * pszSourceDeviceId)->HRESULT           = 0;
-      virtual fn STDMETHODCALLTYPE get_RenderDeviceId(LPWSTR * pszRenderId)->HRESULT                 = 0;
-      virtual fn STDMETHODCALLTYPE get_HWND(HWND * pHwnd)->HRESULT                                   = 0;
-      virtual fn STDMETHODCALLTYPE get_PID(DWORD * pdwPID)->HRESULT                                  = 0;
-      virtual fn STDMETHODCALLTYPE get_Info(IUnknown * *ppInfo)->HRESULT                             = 0;
-      virtual fn STDMETHODCALLTYPE get_Connection(IUnknown * *ppUnknown)->HRESULT                    = 0;
-      virtual fn STDMETHODCALLTYPE ActivateMediaPlaybackDataSource(IUnknown * *ppMediaCtrl)->HRESULT = 0;
-    };
-
-    // IMediaPlaybackDataSource - {0F4521BE-A0B8-4116-B3B1-BFECEBAEEBE6} (10586+)
-    MIDL_INTERFACE("0F4521BE-A0B8-4116-B3B1-BFECEBAEEBE6")
-    IMediaPlaybackDataSource : public IUnknown {
-     public:
-      virtual fn STDMETHODCALLTYPE GetMediaPlaybackInfo(void* pPlaybackInfo) -> HRESULT       = 0;
-      virtual fn STDMETHODCALLTYPE SendMediaPlaybackCommand(int command) -> HRESULT           = 0;
-      virtual fn STDMETHODCALLTYPE GetMediaObjectInfo(IPropertyStore * *ppPropStore)->HRESULT = 0;
-    };
-    // NOLINTEND(cppcoreguidelines-virtual-class-destructor, readability-identifier-naming)
-
-    // Property keys for media metadata
-    // PKEY_Title = {F29F85E0-4FF9-1068-AB91-08002B27B3D9}, 2
-    static const PROPERTYKEY PKEY_Title = {
-      { 0xF29F85E0, 0x4FF9, 0x1068, { 0xAB, 0x91, 0x08, 0x00, 0x2B, 0x27, 0xB3, 0xD9 } },
-      2
-    };
-
-    // PKEY_Music_Artist = {56A3372E-CE9C-11D2-9F0E-006097C686F6}, 2
-    static const PROPERTYKEY PKEY_Music_Artist = {
-      { 0x56A3372E, 0xCE9C, 0x11D2, { 0x9F, 0x0E, 0x00, 0x60, 0x97, 0xC6, 0x86, 0xF6 } },
-      2
-    };
-  } // namespace npsm
-
-  fn GetNowPlaying() -> Result<MediaInfo> {
-    using namespace npsm;
-
-    Microsoft::WRL::ComPtr<INowPlayingSessionManager> sessionManager;
-
-    #pragma clang diagnostic push
-    #pragma clang diagnostic ignored "-Wlanguage-extension-token"
-    // Create the NowPlayingSessionManager COM object directly
-    // Use CLSCTX_ALL to let COM choose the fastest available context
-    HRESULT result = CoCreateInstance(
-      CLSID_NowPlayingSessionManager,
-      nullptr,
-      CLSCTX_ALL,
-      IID_PPV_ARGS(&sessionManager)
-    );
-    #pragma clang diagnostic pop
-
-    if (FAILED(result))
-      ERR(ApiUnavailable, "Failed to create NowPlayingSessionManager");
-
-    // Get the current session
-    Microsoft::WRL::ComPtr<IUnknown> sessionUnknown;
-    result = sessionManager->get_CurrentSession(&sessionUnknown);
-    if (FAILED(result) || !sessionUnknown)
-      ERR(NotFound, "No media session found");
-
-    // Query for INowPlayingSession interface
-    Microsoft::WRL::ComPtr<INowPlayingSession> session;
-    result = sessionUnknown.As(&session);
-    if (FAILED(result))
-      ERR(ApiUnavailable, "Failed to get INowPlayingSession interface");
-
-    // Activate the media playback data source
-    Microsoft::WRL::ComPtr<IUnknown> dataSourceUnknown;
-    result = session->ActivateMediaPlaybackDataSource(&dataSourceUnknown);
-    if (FAILED(result) || !dataSourceUnknown)
-      ERR(ApiUnavailable, "Failed to activate MediaPlaybackDataSource");
-
-    // Query for IMediaPlaybackDataSource interface
-    Microsoft::WRL::ComPtr<IMediaPlaybackDataSource> dataSource;
-    result = dataSourceUnknown.As(&dataSource);
-    if (FAILED(result))
-      ERR(ApiUnavailable, "Failed to get IMediaPlaybackDataSource interface");
-
-    // Get the property store containing media info
-    Microsoft::WRL::ComPtr<IPropertyStore> propStore;
-    result = dataSource->GetMediaObjectInfo(&propStore);
-    if (FAILED(result) || !propStore)
-      ERR(ApiUnavailable, "Failed to get media object info");
-
-    Option<String> title  = None;
-    Option<String> artist = None;
-
-    PROPVARIANT pVar;
-    PropVariantInit(&pVar);
-
-    // Get title
-    // NOLINTBEGIN(cppcoreguidelines-pro-type-union-access) - PROPVARIANT is a Windows API union type
-    if (SUCCEEDED(propStore->GetValue(PKEY_Title, &pVar)) && pVar.vt == VT_LPWSTR && pVar.pwszVal)
-      if (Result<String> titleStr = helpers::ConvertWStringToUTF8(pVar.pwszVal); titleStr && !titleStr->empty())
-        title = std::move(*titleStr);
-
-    PropVariantClear(&pVar);
-
-    // Get artist
-    if (SUCCEEDED(propStore->GetValue(PKEY_Music_Artist, &pVar)) && pVar.vt == VT_LPWSTR && pVar.pwszVal)
-      if (Result<String> artistStr = helpers::ConvertWStringToUTF8(pVar.pwszVal); artistStr && !artistStr->empty())
-        artist = std::move(*artistStr);
-    // NOLINTEND(cppcoreguidelines-pro-type-union-access)
-
-    PropVariantClear(&pVar);
-
-    return MediaInfo(std::move(title), std::move(artist));
-  }
-  #endif // DRAC_ENABLE_NOWPLAYING
 
   fn GetOperatingSystem(CacheManager& cache) -> Result<OSInfo> {
     return cache.getOrSet<OSInfo>("windows_os_version", []() -> Result<OSInfo> {

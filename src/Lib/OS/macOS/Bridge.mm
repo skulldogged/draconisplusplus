@@ -12,7 +12,6 @@
   #include "Bridge.hpp"
 
   #include <Metal/Metal.h>       // For MTLDevice to identify the GPU.
-  #include <dispatch/dispatch.h> // For Grand Central Dispatch (GCD) semaphores and queues.
 
   #include <Drac++/Utils/Error.hpp>
 
@@ -20,78 +19,7 @@ using namespace draconis::utils::types;
 using draconis::utils::error::DracError;
 using enum draconis::utils::error::DracErrorCode;
 
-// Forward-declare the function pointer type for the private MediaRemote API.
-using MRMediaRemoteGetNowPlayingInfoFn =
-  void (*)(dispatch_queue_t queue, void (^handler)(NSDictionary* information));
-
 namespace draconis::core::system::macOS {
-  fn GetNowPlayingInfo() -> Result<MediaInfo> {
-    @autoreleasepool {
-      // Since MediaRemote.framework is private, we cannot link against it directly.
-      // Instead, it must be loaded at runtime using CFURL and CFBundle.
-      CFURLRef urlRef = CFURLCreateWithFileSystemPath(
-        kCFAllocatorDefault,
-        CFSTR("/System/Library/PrivateFrameworks/MediaRemote.framework"),
-        kCFURLPOSIXPathStyle,
-        false
-      );
-
-      if (!urlRef)
-        return Err(DracError(NotFound, "Failed to create CFURL for MediaRemote.framework"));
-
-      // Create a bundle from the URL (basically an in-memory representation of the framework).
-      CFBundleRef bundleRef = CFBundleCreate(kCFAllocatorDefault, urlRef);
-      CFRelease(urlRef); // urlRef is no longer needed after bundle creation.
-
-      if (!bundleRef)
-        return Err(DracError(ApiUnavailable, "Failed to create bundle for MediaRemote.framework"));
-
-      // Ensure CFRelease is called even if an error occurs.
-      SharedPointer<std::remove_pointer_t<CFBundleRef>> managedBundle(bundleRef, [](CFBundleRef bundle) {
-        if (bundle)
-          CFRelease(bundle);
-      });
-
-      // Get a pointer to the MRMediaRemoteGetNowPlayingInfo function from the bundle.
-      auto mrMediaRemoteGetNowPlayingInfo = std::bit_cast<MRMediaRemoteGetNowPlayingInfoFn>(
-        CFBundleGetFunctionPointerForName(bundleRef, CFSTR("MRMediaRemoteGetNowPlayingInfo"))
-      );
-
-      if (!mrMediaRemoteGetNowPlayingInfo)
-        return Err(DracError(ApiUnavailable, "Failed to get MRMediaRemoteGetNowPlayingInfo function pointer"));
-
-      // A semaphore is used to make this asynchronous call behave synchronously.
-      // Wait on the semaphore until the callback signals that it has completed.
-      __block Result<MediaInfo>  result;
-      const dispatch_semaphore_t semaphore = dispatch_semaphore_create(0);
-
-      mrMediaRemoteGetNowPlayingInfo(
-        dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0),
-        ^(NSDictionary* information) {
-          if (!information) {
-            result = Err(DracError(NotFound, "No media is currently playing"));
-          } else {
-            // Extract the title and artist from the dictionary. These keys are also from the private framework.
-            const NSString* const title  = [information objectForKey:@"kMRMediaRemoteNowPlayingInfoTitle"];
-            const NSString* const artist = [information objectForKey:@"kMRMediaRemoteNowPlayingInfoArtist"];
-
-            result = MediaInfo(
-              title ? Some([title UTF8String]) : None,
-              artist ? Some([artist UTF8String]) : None
-            );
-          }
-
-          // Signal the semaphore to unblock the waiting thread.
-          dispatch_semaphore_signal(semaphore);
-        }
-      );
-
-      // Block this thread indefinitely until the callback signals completion.
-      dispatch_semaphore_wait(semaphore, DISPATCH_TIME_FOREVER);
-      return result;
-    }
-  }
-
   fn GetGPUModel() -> Result<String> {
     @autoreleasepool {
       // Get the default Metal device, which typically corresponds to the active, primary GPU.
