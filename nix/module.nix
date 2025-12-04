@@ -126,7 +126,7 @@ with lib; let
           name = group.name;
           rowsCode = ''
             inline constexpr std::array<PrecompiledLayoutRow, ${toString (builtins.length rows)}> ${arrayName} = {
-              ${builtins.concatStringsSep "\n              " (map (row: layoutRowToHpp row) rows)}
+              ${builtins.concatStringsSep ",\n              " (map (row: layoutRowToHpp row) rows)}
             };
           '';
         }
