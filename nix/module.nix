@@ -49,6 +49,118 @@ with lib; let
       height = cfg.logo.height;
     };
 
+  defaultLayout = [
+    {
+      name = "intro";
+      rows = [{key = "date";}];
+    }
+    {
+      name = "system";
+      rows = [
+        {key = "host";}
+        {key = "os";}
+        {key = "kernel";}
+      ];
+    }
+    {
+      name = "hardware";
+      rows = [
+        {key = "cpu";}
+        {key = "gpu";}
+        {key = "ram";}
+        {key = "disk";}
+        {key = "uptime";}
+      ];
+    }
+    {
+      name = "software";
+      rows = [
+        {key = "shell";}
+        {key = "packages";}
+      ];
+    }
+    {
+      name = "session";
+      rows = [
+        {key = "de";}
+        {key = "wm";}
+        {key = "playing";}
+      ];
+    }
+  ];
+
+  sanitizeLayoutName = name: lib.toUpper (lib.strings.replaceStrings [" " "-" "."] ["_" "_" "_"] name);
+
+  escapeCppString =
+    s:
+    builtins.replaceStrings
+    ["\\" "\""]
+    ["\\\\"
+      "\\\""]
+    s;
+
+  layoutRowToHpp =
+    row:
+    let
+      autoWrapVal = if (row.autoWrap or false) then "true" else "false";
+      labelVal =
+        let label = row.label or null;
+        in if label == null then "nullptr" else "\"${escapeCppString label}\"";
+      iconVal =
+        let icon = row.icon or null;
+        in if icon == null then "nullptr" else "\"${escapeCppString icon}\"";
+      colorVal =
+        let color = row.color or null;
+        in if color == null then "LogColor::White" else "LogColor::${color}";
+      keyVal = "\"${escapeCppString row.key}\"";
+    in "Row(${keyVal}, ${autoWrapVal}, ${colorVal}, ${labelVal}, ${iconVal})";
+
+  layoutGroupHppEntries =
+    map (
+      group:
+        let
+          rows      = group.rows or [];
+          arrayName = "DRAC_UI_${sanitizeLayoutName group.name}_ROWS";
+        in {
+          inherit arrayName;
+          name = group.name;
+          rowsCode = ''
+            inline constexpr std::array<PrecompiledLayoutRow, ${toString (builtins.length rows)}> ${arrayName} = {
+              ${builtins.concatStringsSep "\n              " (map (row: layoutRowToHpp row) rows)}
+            };
+          '';
+        }
+    )
+    cfg.layout;
+
+  layoutGroupsHppCode = builtins.concatStringsSep "\n\n        " (map (g: g.rowsCode) layoutGroupHppEntries);
+
+  layoutArrayHppCode = ''
+        inline constexpr std::array<PrecompiledLayoutGroup, ${toString (builtins.length layoutGroupHppEntries)}> DRAC_UI_LAYOUT = {
+          ${builtins.concatStringsSep "\n          " (map (g: ''Group("${g.name}", ${g.arrayName}),'') layoutGroupHppEntries)}
+        };
+  '';
+
+  layoutToml =
+    map (
+      group: {
+        name = group.name;
+        rows =
+          map (
+            row:
+              filterAttrs (_: v: v != null) {
+                key = row.key;
+                label = row.label or null;
+                icon = row.icon or null;
+                color = row.color or null;
+                auto_wrap = row.autoWrap or false;
+              }
+          )
+          (group.rows or []);
+      }
+    )
+    cfg.layout;
+
   cfgDelimiter = "DRACCFG";
 
   pluginConfigEntries =
@@ -98,42 +210,9 @@ with lib; let
         constexpr services::packages::Manager DRAC_ENABLED_PACKAGE_MANAGERS = ${packageManagerValue};
         #endif
 
-        inline constexpr std::array<PrecompiledLayoutRow, 1> DRAC_UI_INTRO_ROWS = {
-          Row("date"),
-        };
+        ${layoutGroupsHppCode}
 
-        inline constexpr std::array<PrecompiledLayoutRow, 3> DRAC_UI_SYSTEM_ROWS = {
-          Row("host"),
-          Row("os"),
-          Row("kernel"),
-        };
-
-        inline constexpr std::array<PrecompiledLayoutRow, 5> DRAC_UI_HARDWARE_ROWS = {
-          Row("cpu"),
-          Row("gpu"),
-          Row("ram"),
-          Row("disk"),
-          Row("uptime"),
-        };
-
-        inline constexpr std::array<PrecompiledLayoutRow, 2> DRAC_UI_SOFTWARE_ROWS = {
-          Row("shell"),
-          Row("packages"),
-        };
-
-        inline constexpr std::array<PrecompiledLayoutRow, 3> DRAC_UI_SESSION_ROWS = {
-          Row("de"),
-          Row("wm"),
-          Row("playing"),
-        };
-
-        inline constexpr std::array<PrecompiledLayoutGroup, 5> DRAC_UI_LAYOUT = {
-          Group("intro", DRAC_UI_INTRO_ROWS),
-          Group("system", DRAC_UI_SYSTEM_ROWS),
-          Group("hardware", DRAC_UI_HARDWARE_ROWS),
-          Group("software", DRAC_UI_SOFTWARE_ROWS),
-          Group("session", DRAC_UI_SESSION_ROWS),
-        };
+        ${layoutArrayHppCode}
 
         ${pluginConfigArray}
       }
@@ -275,6 +354,73 @@ in {
       description = "Plugin names to auto-load at runtime.";
     };
 
+    layout = mkOption {
+      type = types.listOf (types.submodule {
+        options = {
+          name = mkOption {
+            type = types.str;
+            description = "Display name for the layout group (not rendered, for readability).";
+          };
+
+          rows = mkOption {
+            type = types.listOf (types.submodule {
+              options = {
+                key = mkOption {
+                  type = types.str;
+                  description = "Data key to render (e.g., \"cpu\", \"plugin.weather\").";
+                };
+
+                label = mkOption {
+                  type = types.nullOr types.str;
+                  default = null;
+                  description = "Optional label override.";
+                };
+
+                icon = mkOption {
+                  type = types.nullOr types.str;
+                  default = null;
+                  description = "Optional icon override.";
+                };
+
+                color = mkOption {
+                  type = types.nullOr types.str;
+                  default = null;
+                  description = "Optional value color (matches LogColor enum, e.g., \"Magenta\").";
+                };
+
+                autoWrap = mkOption {
+                  type = types.bool;
+                  default = false;
+                  description = "Enable automatic word wrapping for this row.";
+                };
+              };
+            });
+            default = [];
+            description = "Rows to render within this group.";
+          };
+        };
+      });
+      default = defaultLayout;
+      description = "UI layout groups and rows for the draconis++ dashboard.";
+      example = literalExpression ''
+        [
+          {
+            name = "intro";
+            rows = [
+              { key = "date"; }
+              { key = "plugin.weather"; color = "Magenta"; autoWrap = true; }
+            ];
+          }
+          {
+            name = "nowplaying";
+            rows = [
+              { key = "plugin.now_playing"; color = "Magenta"; autoWrap = true; }
+            ];
+          }
+        ]
+      '';
+    };
+
     enablePackageCount = mkOption {
       type = types.bool;
       default = true;
@@ -313,6 +459,7 @@ in {
                   auto_load = cfg.pluginAutoLoad;
                 }
                 // cfg.pluginConfigs;
+              ui = {layout = layoutToml;};
             }
             // lib.optionalAttrs (logoAttrs != {}) {logo = logoAttrs;}
           );
