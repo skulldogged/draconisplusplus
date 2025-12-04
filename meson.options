@@ -16,8 +16,6 @@ option(
   description: 'Build example applications',
 )
 
-option('build_tests', type: 'boolean', value: true, description: 'Build test suite')
-
 # ===================== #
 #     Core Features     #
 # ===================== #

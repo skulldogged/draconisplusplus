@@ -17,12 +17,14 @@
   #include <Drac++/Utils/Env.hpp>
   #include <Drac++/Utils/Error.hpp>
   #include <Drac++/Utils/Logging.hpp>
+  #include <fstream> // std::ofstream
 
   #include "../../CLI/Config/Config.hpp"
 
   // Include static plugins header when using precompiled config
   #if DRAC_PRECOMPILED_CONFIG
     #include <Drac++/Core/StaticPlugins.hpp>
+    #include "../../config.hpp"
   #endif
 
   #ifdef _WIN32
@@ -120,10 +122,38 @@ namespace draconis::core::plugin {
       if (const char* xdgData = getenv("XDG_DATA_HOME"))
         return fs::path(xdgData) / "draconis++";
       if (const char* home = getenv("HOME"))
-        return fs::path(home) / ".local" / "share" / "draconis++";
+      return fs::path(home) / ".local" / "share" / "draconis++";
       return GetConfigDir() / "data";
   #endif
     }
+
+  #if DRAC_PRECOMPILED_CONFIG
+    fn WritePrecompiledPluginConfigs(const fs::path& configDir) -> void {
+    #if defined(DRAC_HAS_PLUGIN_CONFIGS) && DRAC_HAS_PLUGIN_CONFIGS
+      std::error_code errc;
+      fs::create_directories(configDir, errc);
+      if (errc) {
+        warn_log("Failed to create plugin config directory {}: {}", configDir.string(), errc.message());
+        return;
+      }
+
+      for (const auto& entry : draconis::config::DRAC_PLUGIN_CONFIGS) {
+        if (entry.name.empty())
+          continue;
+
+        fs::path pluginConfigPath = configDir / (std::string(entry.name) + ".toml");
+        std::ofstream out(pluginConfigPath, std::ios::trunc);
+        if (!out) {
+          warn_log("Failed to write precompiled config for plugin {} at {}", entry.name, pluginConfigPath.string());
+          continue;
+        }
+
+        out << entry.config;
+        debug_log("Wrote precompiled plugin config: {}", pluginConfigPath.string());
+      }
+    #endif
+    }
+  #endif
   } // namespace
 
   fn GetPluginContext() -> PluginContext {
@@ -152,6 +182,10 @@ namespace draconis::core::plugin {
     // Use the provided config or get from singleton
     std::optional<draconis::config::Config> singletonConfig;
     const draconis::config::Config&         effectiveConfig = config ? *config : (singletonConfig = draconis::config::Config::getInstance(), *singletonConfig);
+
+  #if DRAC_PRECOMPILED_CONFIG
+    WritePrecompiledPluginConfigs(GetConfigDir() / "plugins");
+  #endif
 
     // Check if plugins are enabled in config
   #if DRAC_ENABLE_PLUGINS

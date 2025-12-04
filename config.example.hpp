@@ -20,6 +20,7 @@
 
   #include <array>
 
+  #include <Drac++/Config/PrecompiledPlugins.hpp>
   #include <Drac++/Config/PrecompiledLayout.hpp>
 
   #if DRAC_ENABLE_PACKAGECOUNT
@@ -153,6 +154,26 @@ namespace draconis::config {
     Group("software", DRAC_UI_SOFTWARE_ROWS),
     Group("session", DRAC_UI_SESSION_ROWS),
   };
+
+  /**
+   * @brief Precompiled plugin configurations written to ~/.config/draconis++/plugins
+   *
+   * Each entry provides TOML content for a plugin. The filename will be
+   * <name>.toml (e.g., "weather.toml").
+   */
+  inline constexpr bool DRAC_HAS_PLUGIN_CONFIGS = true;
+  inline constexpr std::array<PrecompiledPluginConfig, 1> DRAC_PLUGIN_CONFIGS = {{
+    PrecompiledPluginConfig {
+      .name   = "weather",
+      .config = R"(enabled = true
+provider = "openmeteo"
+units = "metric"
+[coords]
+lat = 40.7128
+lon = -74.0060
+)",
+    },
+  }};
 } // namespace draconis::config
 
 #endif // DRAC_PRECOMPILED_CONFIG

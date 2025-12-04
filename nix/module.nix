@@ -11,17 +11,69 @@ with lib; let
 
   defaultPackage = self.packages.${pkgs.system}.default;
 
-  apiKey =
-    if cfg.weatherApiKey == null
-    then "std::nullopt"
-    else cfg.weatherApiKey;
+  stdenvHost = pkgs.stdenv;
+  isLinux = stdenvHost.isLinux or false;
+  isDarwin = stdenvHost.isDarwin or false;
 
-  location =
-    if isAttrs cfg.location
-    then
-      # cpp
-      "services::weather::Coords { .lat = ${toString cfg.location.lat}, .lon = ${toString cfg.location.lon} }"
-    else "${cfg.location}";
+  managerEnumMap = {
+    cargo = "Cargo";
+    nix = "Nix";
+    apk = "Apk";
+    dpkg = "Dpkg";
+    moss = "Moss";
+    pacman = "Pacman";
+    rpm = "Rpm";
+    xbps = "Xbps";
+    homebrew = "Homebrew";
+    macports = "Macports";
+    winget = "Winget";
+    chocolatey = "Chocolatey";
+    scoop = "Scoop";
+    pkgng = "PkgNg";
+    pkgsrc = "PkgSrc";
+    haikupkg = "HaikuPkg";
+  };
+
+  selectedManagers = map (pkg: "services::packages::Manager::${managerEnumMap.${pkg}}") cfg.packageManagers;
+
+  packageManagerValue =
+    if selectedManagers == []
+    then "services::packages::Manager::None"
+    else builtins.concatStringsSep " | " selectedManagers;
+
+  logoAttrs =
+    filterAttrs (_: v: v != null) {
+      path = cfg.logo.path;
+      protocol = cfg.logo.protocol;
+      width = cfg.logo.width;
+      height = cfg.logo.height;
+    };
+
+  cfgDelimiter = "DRACCFG";
+
+  pluginConfigEntries =
+    lib.mapAttrsToList (
+      name: val:
+        let
+          content = builtins.readFile (tomlFormat.generate "${name}.toml" val);
+        in ''
+          PrecompiledPluginConfig{ .name = "${name}", .config = R"${cfgDelimiter}(${content})${cfgDelimiter}" },
+        ''
+    )
+    cfg.pluginConfigs;
+
+  pluginConfigArray =
+    if pluginConfigEntries == []
+    then ''
+      inline constexpr bool DRAC_HAS_PLUGIN_CONFIGS = false;
+      inline constexpr std::array<PrecompiledPluginConfig, 0> DRAC_PLUGIN_CONFIGS = {};
+    ''
+    else ''
+      inline constexpr bool DRAC_HAS_PLUGIN_CONFIGS = true;
+      inline constexpr std::array<PrecompiledPluginConfig, ${toString (builtins.length pluginConfigEntries)}> DRAC_PLUGIN_CONFIGS = {
+        ${builtins.concatStringsSep "\n        " pluginConfigEntries}
+      };
+    '';
 
   configHpp =
     pkgs.writeText "config.hpp"
@@ -31,9 +83,9 @@ with lib; let
 
       #if DRAC_PRECOMPILED_CONFIG
 
-        #if DRAC_ENABLE_WEATHER
-          #include <Drac++/Services/Weather.hpp>
-        #endif
+        #include <array>
+        #include <Drac++/Config/PrecompiledLayout.hpp>
+        #include <Drac++/Config/PrecompiledPlugins.hpp>
 
         #if DRAC_ENABLE_PACKAGECOUNT
           #include <Drac++/Services/Packages.hpp>
@@ -42,37 +94,70 @@ with lib; let
       namespace draconis::config {
         constexpr const char* DRAC_USERNAME = "${cfg.username}";
 
-        #if DRAC_ENABLE_WEATHER
-        constexpr services::weather::Provider DRAC_WEATHER_PROVIDER = services::weather::Provider::${cfg.weatherProvider};
-        constexpr services::weather::UnitSystem DRAC_WEATHER_UNIT = services::weather::UnitSystem::${cfg.weatherUnit};
-        constexpr bool DRAC_SHOW_TOWN_NAME = ${toString cfg.showTownName};
-        constexpr std::optional<std::string> DRAC_API_KEY = ${apiKey};
-        constexpr services::weather::Location DRAC_LOCATION = ${location};
+        #if DRAC_ENABLE_PACKAGECOUNT
+        constexpr services::packages::Manager DRAC_ENABLED_PACKAGE_MANAGERS = ${packageManagerValue};
         #endif
 
-        #if DRAC_ENABLE_PACKAGECOUNT
-        constexpr services::packages::Manager DRAC_ENABLED_PACKAGE_MANAGERS = ${builtins.concatStringsSep " | " (map (pkg: "services::packages::Manager::${pkg}") cfg.packageManagers)};
-        #endif
+        inline constexpr std::array<PrecompiledLayoutRow, 1> DRAC_UI_INTRO_ROWS = {
+          Row("date"),
+        };
+
+        inline constexpr std::array<PrecompiledLayoutRow, 3> DRAC_UI_SYSTEM_ROWS = {
+          Row("host"),
+          Row("os"),
+          Row("kernel"),
+        };
+
+        inline constexpr std::array<PrecompiledLayoutRow, 5> DRAC_UI_HARDWARE_ROWS = {
+          Row("cpu"),
+          Row("gpu"),
+          Row("ram"),
+          Row("disk"),
+          Row("uptime"),
+        };
+
+        inline constexpr std::array<PrecompiledLayoutRow, 2> DRAC_UI_SOFTWARE_ROWS = {
+          Row("shell"),
+          Row("packages"),
+        };
+
+        inline constexpr std::array<PrecompiledLayoutRow, 3> DRAC_UI_SESSION_ROWS = {
+          Row("de"),
+          Row("wm"),
+          Row("playing"),
+        };
+
+        inline constexpr std::array<PrecompiledLayoutGroup, 5> DRAC_UI_LAYOUT = {
+          Group("intro", DRAC_UI_INTRO_ROWS),
+          Group("system", DRAC_UI_SYSTEM_ROWS),
+          Group("hardware", DRAC_UI_HARDWARE_ROWS),
+          Group("software", DRAC_UI_SOFTWARE_ROWS),
+          Group("session", DRAC_UI_SESSION_ROWS),
+        };
+
+        ${pluginConfigArray}
       }
 
       #endif
     '';
 
   draconisWithOverrides = cfg.package.overrideAttrs (oldAttrs: {
-    postPatch = ''
-      cp ${configHpp} ./config.hpp
-    '';
+    postPatch =
+      (oldAttrs.postPatch or "")
+      + lib.optionalString (cfg.configFormat == "hpp") ''
+        cp ${configHpp} ./config.hpp
+      '';
 
     mesonFlags =
       (oldAttrs.mesonFlags or [])
       ++ [
-        (lib.optionalString (cfg.configFormat == "hpp") "-Dprecompiled_config=true")
-        (lib.optionalString cfg.usePugixml "-Dpugixml=enabled")
-        (lib.optionalString cfg.enableNowPlaying "-Dnowplaying=enabled")
-        (lib.optionalString cfg.enableWeather "-Dweather=enabled")
-        (lib.optionalString cfg.enablePackageCount "-Dpackagecount=enabled")
-        (lib.optionalString cfg.enableCaching "-Dcaching=enabled")
-      ];
+        "-Dprecompiled_config=${if cfg.configFormat == "hpp" then "true" else "false"}"
+        "-Dcaching=${if cfg.enableCaching then "enabled" else "disabled"}"
+        "-Dpackagecount=${if cfg.enablePackageCount then "enabled" else "disabled"}"
+        "-Dplugins=${if cfg.enablePlugins then "enabled" else "disabled"}"
+        "-Dpugixml=${if cfg.usePugixml then "enabled" else "disabled"}"
+      ]
+      ++ lib.optional (cfg.staticPlugins != []) "-Dstatic_plugins=${lib.concatStringsSep "," cfg.staticPlugins}";
   });
 
   draconisPkg = draconisWithOverrides;
@@ -92,68 +177,102 @@ in {
       description = "The configuration format to use.";
     };
 
-    location = mkOption {
-      type = types.oneOf [
-        types.str
-        (types.submodule {
-          options = {
-            lat = mkOption {
-              type = types.float;
-              description = "Latitude";
-            };
+    username = mkOption {
+      type = types.str;
+      default = config.home.username // "User";
+      description = "Username to display in the application.";
+    };
 
-            lon = mkOption {
-              type = types.float;
-              description = "Longitude";
+    language = mkOption {
+      type = types.str;
+      default = "en";
+      description = "Language code for localization (e.g., \"en\", \"es\").";
+    };
+
+    logo = mkOption {
+      description = "Logo configuration (used for kitty/kitty-direct).";
+      default = {
+        path = null;
+        protocol = "kitty";
+        width = null;
+        height = null;
+      };
+      type = types.submodule {
+        options = {
+          path = mkOption {
+            type = types.nullOr types.str;
+            default = null;
+            description = "Path to the logo image.";
+          };
+
+          protocol = mkOption {
+            type = types.enum ["kitty" "kitty-direct"];
+            default = "kitty";
+            description = "Logo protocol to use.";
+          };
+
+          width = mkOption {
+            type = types.nullOr types.int;
+            default = null;
+            description = "Optional logo width.";
+          };
+
+          height = mkOption {
+            type = types.nullOr types.int;
+            default = null;
+            description = "Optional logo height.";
+          };
+        };
+      };
+    };
+
+    enablePlugins = mkOption {
+      type = types.bool;
+      default = true;
+      description = "Enable plugin system.";
+    };
+
+    pluginConfigs = mkOption {
+      type = types.attrsOf types.attrs;
+      default = {};
+      description = ''
+        Per-plugin configuration written under [plugins.<name>] in config.toml.
+        Keys and values are passed through directly to the TOML generator.
+      '';
+      example = literalExpression ''
+        {
+          weather = {
+            enabled = true;
+            provider = "openmeteo";
+            coords = {
+              lat = 40.7128;
+              lon = -74.0060;
             };
           };
-        })
-      ];
-
-      default = {
-        lat = 40.7128;
-        lon = -74.0060;
-      };
-
-      description = ''
-        Specifies the location for weather data. This can be either a city name
-        (as a string) or an attribute set with `lat` and `lon` coordinates.
-        Using a city name is only supported by the OpenWeatherMap provider.
-      '';
-
-      example = literalExpression ''
-        "New York" or { lat = 40.7128; lon = -74.0060; }
+        }
       '';
     };
 
-    weatherProvider = mkOption {
-      type = types.enum ["OpenMeteo" "MetNo" "OpenWeatherMap"];
-      default = "OpenMeteo";
-      description = "The weather provider to use.";
+    packageManagers = mkOption {
+      type = types.listOf (types.enum (
+        ["cargo"]
+        ++ lib.optionals isLinux ["apk" "dpkg" "moss" "pacman" "rpm" "xbps" "nix"]
+        ++ lib.optionals isDarwin ["homebrew" "macports" "nix"]
+      ));
+      default = [];
+      description = "List of package managers to check for package counts.";
     };
 
-    weatherApiKey = mkOption {
-      type = types.nullOr types.str;
-      default = null;
-      description = "API key, only required for OpenWeatherMap.";
+    staticPlugins = mkOption {
+      type = types.listOf (types.enum ["weather" "now_playing" "json_format" "markdown_format" "yaml_format"]);
+      default = [];
+      description = "Plugins to compile statically into the binary (precompiled config only).";
     };
 
-    usePugixml = mkOption {
-      type = types.bool;
-      default = false;
-      description = "Use pugixml to parse XBPS package metadata. Required for package count functionality on Void Linux.";
-    };
-
-    enableNowPlaying = mkOption {
-      type = types.bool;
-      default = true;
-      description = "Enable nowplaying functionality.";
-    };
-
-    enableWeather = mkOption {
-      type = types.bool;
-      default = true;
-      description = "Enable fetching weather data.";
+    pluginAutoLoad = mkOption {
+      type = types.listOf types.str;
+      default = [];
+      description = "Plugin names to auto-load at runtime.";
     };
 
     enablePackageCount = mkOption {
@@ -168,62 +287,50 @@ in {
       description = "Enable caching functionality.";
     };
 
-    username = mkOption {
-      type = types.str;
-      default = config.home.username // "User";
-      description = "Username to display in the application.";
-    };
-
-    showTownName = mkOption {
+    usePugixml = mkOption {
       type = types.bool;
-      default = true;
-      description = "Show town name in weather display.";
-    };
-
-    weatherUnit = mkOption {
-      type = types.enum ["Metric" "Imperial"];
-      default = "Metric";
-      description = "Unit for temperature display.";
-    };
-
-    packageManagers = mkOption {
-      type = types.listOf (types.enum (
-        ["Cargo" "Nix"]
-        ++ lib.optionals pkgs.stdenv.isLinux ["Apk" "Dpkg" "Moss" "Pacman" "Rpm" "Xbps"]
-        ++ lib.optionals pkgs.stdenv.isDarwin ["Homebrew" "Macports"]
-      ));
-      default = [];
-      description = "List of package managers to check for package counts.";
+      default = false;
+      description = "Use pugixml to parse XBPS package metadata. Required for package count functionality on Void Linux.";
     };
   };
 
   config = mkIf cfg.enable {
     home.packages = [draconisPkg];
 
-    xdg.configFile."draconis++/config.toml" = mkIf (cfg.configFormat == "toml") {
-      source = tomlFormat.generate "config.toml" {
-        location =
-          if lib.isAttrs cfg.location
-          then {inherit (cfg.location) lat lon;}
-          else {name = cfg.location;};
-        weather = {
-          inherit (cfg) weatherProvider weatherApiKey;
+    xdg.configFile =
+      lib.optionalAttrs (cfg.configFormat == "toml") {
+        "draconis++/config.toml" = {
+          source = tomlFormat.generate "config.toml" (
+            {
+              general = {
+                name     = cfg.username;
+                language = cfg.language;
+              };
+              packages.enabled = cfg.packageManagers;
+              plugins =
+                {
+                  enabled   = cfg.enablePlugins;
+                  auto_load = cfg.pluginAutoLoad;
+                }
+                // cfg.pluginConfigs;
+            }
+            // lib.optionalAttrs (logoAttrs != {}) {logo = logoAttrs;}
+          );
         };
       };
-    };
 
     assertions = [
       {
-        assertion = !(lib.isString cfg.location && cfg.weatherProvider != "OpenWeatherMap");
-        message = "A town/city name for the location can only be used with the OpenWeatherMap provider.";
-      }
-      {
-        assertion = !(cfg.weatherApiKey != null && cfg.weatherProvider != "OpenWeatherMap");
-        message = "An API key should not be provided when using the OpenMeteo or MetNo providers.";
-      }
-      {
         assertion = !(cfg.usePugixml && !cfg.enablePackageCount);
         message = "usePugixml should only be enabled when enablePackageCount is also enabled.";
+      }
+      {
+        assertion = !(cfg.pluginAutoLoad != [] && !cfg.enablePlugins);
+        message = "Plugins must be enabled to auto-load plugins.";
+      }
+      {
+        assertion = !(cfg.staticPlugins != [] && cfg.configFormat != "hpp");
+        message = "Static plugins require the precompiled (hpp) configuration.";
       }
     ];
   };

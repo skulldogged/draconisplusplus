@@ -17,13 +17,13 @@
   deps = with pkgs;
     [
       ((glaze.override {enableAvx2 = hostPlatform.isx86;}).overrideAttrs rec {
-        version = "5.5.4";
+        version = "6.1.0";
 
         src = pkgs.fetchFromGitHub {
           owner = "stephenberry";
           repo = "glaze";
           tag = "v${version}";
-          hash = "sha256-v6/IJlwc+nYgTAn8DJcbRC+qhZtUR6xu45dwm7rueV8=";
+          hash = "sha256-H1paMc0LH743aMHCO/Ocp96SaaoXLcl/MDmmbtSJG+Q=";
         };
       })
     ]
@@ -67,9 +67,11 @@
       nativeBuildInputs = with pkgs;
         [
           cmake
+          gitMinimal
           meson
           ninja
           pkg-config
+          python3
         ]
         ++ lib.optional stdenv.isLinux xxd;
 

@@ -26,6 +26,7 @@ namespace fs = std::filesystem;
 #if !DRAC_PRECOMPILED_CONFIG
 using namespace draconis::utils::types;
 using draconis::utils::env::GetEnv;
+using draconis::utils::logging::LogColor;
 
 // Intermediate structs for TOML parsing with glaze
 // Note: glaze's TOML parser doesn't support std::optional directly,

@@ -285,22 +285,9 @@ if get_option('build_examples')
   subdir('examples')
 endif
 
-if get_option('build_tests')
-  subdir('src/Lib/Tests')
-endif
-
 # Build example plugins if plugin support is enabled
 if feature_states['plugins']
   subdir('plugins')
-endif
-
-# =========================== #
-#   Translation Files         #
-# =========================== #
-if not get_option('precompiled_config')
-  # Install translation files
-  translations_dir = get_option('datadir') / 'draconis++' / 'translations'
-  install_subdir('translations', install_dir: translations_dir, strip_directory: false)
 endif
 
 # =========================== #
@@ -352,7 +339,6 @@ endif
 summary(
   {
     'Build examples': get_option('build_examples'),
-    'Build tests': get_option('build_tests'),
   },
   section: 'Build Options',
   bool_yn: true,
