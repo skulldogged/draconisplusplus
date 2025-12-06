@@ -37,7 +37,7 @@ namespace draconis::config {
    * @param label Optional label override (nullptr = default)
    * @param icon Optional icon override (nullptr = default)
    */
-  [[nodiscard]] constexpr fn Row(
+  [[nodiscard]] constexpr auto Row(
     const char* key,
     bool        autoWrap = false,
     LogColor    color    = LogColor::White,
@@ -51,7 +51,7 @@ namespace draconis::config {
    * @brief Helper to build a layout group from a std::array of rows.
    */
   template <std::size_t n>
-  [[nodiscard]] constexpr fn Group(const char* name, const std::array<PrecompiledLayoutRow, n>& rows) -> PrecompiledLayoutGroup {
+  [[nodiscard]] constexpr auto Group(const char* name, const std::array<PrecompiledLayoutRow, n>& rows) -> PrecompiledLayoutGroup {
     return { .name = name, .rows = std::span<const PrecompiledLayoutRow>(rows) };
   }
 } // namespace draconis::config

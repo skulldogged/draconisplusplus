@@ -150,7 +150,7 @@ struct glz::meta<TomlConfig> {
   #endif
 
 namespace draconis::config {
-  fn Config::getConfigPath() -> fs::path {
+  auto Config::getConfigPath() -> fs::path {
     Vec<fs::path> possiblePaths;
 
   #ifdef _WIN32
@@ -196,7 +196,7 @@ namespace draconis::config {
 } // namespace draconis::config
 
 namespace {
-  fn CreateDefaultConfig(const fs::path& configPath) -> bool {
+  auto CreateDefaultConfig(const fs::path& configPath) -> bool {
     try {
       std::error_code errc;
       create_directories(configPath.parent_path(), errc);
@@ -243,7 +243,7 @@ namespace {
 namespace draconis::config {
 #if DRAC_PRECOMPILED_CONFIG
   namespace {
-    fn PopulatePrecompiledLayout(Config& cfg) -> void {
+    auto PopulatePrecompiledLayout(Config& cfg) -> void {
       cfg.ui.layout.clear();
 
       for (const auto& group : DRAC_UI_LAYOUT) {
@@ -274,7 +274,7 @@ namespace draconis::config {
   } // namespace
 #endif
 
-  fn Config::getInstance() -> Config {
+  auto Config::getInstance() -> Config {
 #if DRAC_PRECOMPILED_CONFIG
     using namespace draconis::config;
 
@@ -287,8 +287,8 @@ namespace draconis::config {
   #if DRAC_ENABLE_PLUGINS
     cfg.plugins.enabled = true;
     // Auto-load all statically compiled plugins
-    for (const auto& entry : draconis::core::plugin::GetStaticPlugins())
-      cfg.plugins.autoLoad.emplace_back(entry.name);
+    for (const auto& [name, entry] : draconis::core::plugin::GetStaticPluginRegistry())
+      cfg.plugins.autoLoad.emplace_back(name);
   #endif
 
     PopulatePrecompiledLayout(cfg);

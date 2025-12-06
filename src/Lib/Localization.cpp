@@ -6,12 +6,12 @@
 namespace draconis::utils::localization {
   namespace {
     // Helper function to find translation by hash (much faster than linear search)
-    fn FindTranslation(u64 keyHash, const data::TranslationMap<19>& map) -> StringView {
+    auto FindTranslation(u64 keyHash, const data::TranslationMap<19>& map) -> StringView {
       return map.find(keyHash);
     }
 
     // Fallback helper function using linear search (only when hash fails)
-    fn FindTranslationLinear(StringView key, const Array<data::TranslationEntry, 19>& translations) -> String {
+    auto FindTranslationLinear(StringView key, const Array<data::TranslationEntry, 19>& translations) -> String {
       for (const auto& entry : translations)
         if (entry.key == key)
           return String(entry.value);
@@ -20,7 +20,7 @@ namespace draconis::utils::localization {
     }
 
     // Helper function to find language info by code
-    fn FindLanguageInfo(StringView code) -> const data::LanguageInfo* {
+    auto FindLanguageInfo(StringView code) -> const data::LanguageInfo* {
       for (const auto& lang : data::AVAILABLE_LANGUAGES)
         if (lang.code == code)
           return &lang;
@@ -64,7 +64,7 @@ namespace draconis::utils::localization {
       m_currentLanguage = "en";
   }
 
-  fn TranslationManager::setLanguage(StringView languageCode) -> bool {
+  auto TranslationManager::setLanguage(StringView languageCode) -> bool {
     if (languageCode == m_currentLanguage)
       return true;
 
@@ -80,11 +80,11 @@ namespace draconis::utils::localization {
     return false;
   }
 
-  fn TranslationManager::getCurrentLanguage() const -> StringView {
+  auto TranslationManager::getCurrentLanguage() const -> StringView {
     return m_currentLanguage;
   }
 
-  fn TranslationManager::get(StringView key) const -> String {
+  auto TranslationManager::get(StringView key) const -> String {
     // Use hash-based lookup for O(1) performance (much faster than linear search)
     if (m_currentMap) {
       uint64_t         keyHash = hashKey(key);
@@ -108,7 +108,7 @@ namespace draconis::utils::localization {
     return String(key); // Return key if not found
   }
 
-  fn TranslationManager::getWithFallback(StringView key) const -> String {
+  auto TranslationManager::getWithFallback(StringView key) const -> String {
     // get() already handles current language, so just return that
     String result = get(key);
     if (result != String(key)) {
@@ -119,7 +119,7 @@ namespace draconis::utils::localization {
     return String(key); // Return key if not found anywhere
   }
 
-  fn TranslationManager::hasKey(StringView key) const -> bool {
+  auto TranslationManager::hasKey(StringView key) const -> bool {
     // Use hash-based lookup for O(1) performance
     if (m_currentMap) {
       uint64_t         keyHash = hashKey(key);
@@ -136,7 +136,7 @@ namespace draconis::utils::localization {
     return false;
   }
 
-  fn TranslationManager::getAvailableLanguages() -> Vec<Language> {
+  auto TranslationManager::getAvailableLanguages() -> Vec<Language> {
     Vec<Language> languages;
     languages.reserve(data::AVAILABLE_LANGUAGES.size()); // Avoid reallocations
     for (const auto& lang : data::AVAILABLE_LANGUAGES) {
@@ -148,7 +148,7 @@ namespace draconis::utils::localization {
     return languages;
   }
 
-  fn TranslationManager::getSystemLanguage() -> String {
+  auto TranslationManager::getSystemLanguage() -> String {
     // Try to get from environment variables
     auto langEnv = env::GetEnv("LANG");
     if (langEnv) {
@@ -166,7 +166,7 @@ namespace draconis::utils::localization {
   }
 
   // Helper function to extract language code from locale string
-  fn TranslationManager::extractLanguageCode(StringView localeStr) -> String {
+  auto TranslationManager::extractLanguageCode(StringView localeStr) -> String {
     size_t     dotPos   = localeStr.find('.');
     StringView langPart = localeStr.substr(0, dotPos);
 
@@ -174,7 +174,7 @@ namespace draconis::utils::localization {
     return String(langPart.substr(0, underscorePos));
   }
 
-  fn TranslationManager::loadTranslations(StringView languageCode) -> bool {
+  auto TranslationManager::loadTranslations(StringView languageCode) -> bool {
     const data::LanguageInfo* langInfo = FindLanguageInfo(languageCode);
 
     if (!langInfo) {
@@ -198,7 +198,7 @@ namespace draconis::utils::localization {
     return true;
   }
 
-  fn GetTranslationManager() -> TranslationManager& {
+  auto GetTranslationManager() -> TranslationManager& {
     static TranslationManager GlobalTranslationManager;
     return GlobalTranslationManager;
   }

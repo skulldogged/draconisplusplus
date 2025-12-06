@@ -29,7 +29,7 @@ namespace draconis::cli {
   using namespace core::system;
   using namespace config;
 
-  fn RunBenchmark(
+  auto RunBenchmark(
     utils::cache::CacheManager& cache,
     const Config&               config
   ) -> Vec<BenchmarkResult> {
@@ -98,7 +98,7 @@ namespace draconis::cli {
     return results;
   }
 
-  fn PrintBenchmarkReport(const Vec<BenchmarkResult>& results) -> Unit {
+  auto PrintBenchmarkReport(const Vec<BenchmarkResult>& results) -> Unit {
     f64 totalTime  = 0.0;
     f64 coreTime   = 0.0;
     f64 pluginTime = 0.0;
@@ -169,7 +169,7 @@ namespace draconis::cli {
     Println("  Total: {:>8.2f} ms ({} data sources)", totalTime, results.size());
   }
 
-  fn PrintDoctorReport(
+  auto PrintDoctorReport(
     const SystemInfo& data
   ) -> Unit {
     using draconis::utils::error::DracError;
@@ -284,7 +284,7 @@ namespace draconis::cli {
       Println("Summary: {}/{} readouts passed ({} failed)", totalReadouts - totalFailures, totalReadouts, totalFailures);
   }
 
-  fn PrintJsonOutput(
+  auto PrintJsonOutput(
     const SystemInfo& data,
     bool              prettyJson
   ) -> Unit {
@@ -332,7 +332,7 @@ namespace draconis::cli {
       Print(jsonStr);
   }
 
-  fn PrintCompactOutput(
+  auto PrintCompactOutput(
     const String&     templateStr,
     const SystemInfo& data
   ) -> Unit {
@@ -362,7 +362,7 @@ namespace draconis::cli {
   }
 
 #if DRAC_ENABLE_PLUGINS
-  fn FormatOutputViaPlugin(
+  auto FormatOutputViaPlugin(
     const String&     formatName,
     const SystemInfo& data
   ) -> Unit {
@@ -412,7 +412,7 @@ namespace draconis::cli {
     Print(*result);
   }
 
-  fn HandleListPluginsCommand(const draconis::core::plugin::PluginManager& pluginManager) -> i32 {
+  auto HandleListPluginsCommand(const draconis::core::plugin::PluginManager& pluginManager) -> i32 {
     using draconis::core::plugin::PluginType;
 
     if (!pluginManager.isInitialized()) {
@@ -464,7 +464,7 @@ namespace draconis::cli {
     return EXIT_SUCCESS;
   }
 
-  fn HandlePluginInfoCommand(const draconis::core::plugin::PluginManager& pluginManager, const String& pluginName) -> i32 {
+  auto HandlePluginInfoCommand(const draconis::core::plugin::PluginManager& pluginManager, const String& pluginName) -> i32 {
     if (!pluginManager.isInitialized()) {
       Print("Plugin system not initialized.\n");
       return EXIT_FAILURE;
@@ -518,7 +518,7 @@ namespace draconis::cli {
   }
 #endif
 
-  fn GenerateCompletions(const String& shell) -> Unit {
+  auto GenerateCompletions(const String& shell) -> Unit {
     // Shell completion definitions for draconis++ flags/options
     if (shell == "bash") {
       Print(R"bash(

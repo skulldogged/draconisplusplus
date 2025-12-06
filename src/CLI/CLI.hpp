@@ -32,7 +32,7 @@ namespace draconis::cli {
    * @param config Application configuration
    * @return Vector of benchmark results
    */
-  fn RunBenchmark(
+  auto RunBenchmark(
     utils::cache::CacheManager& cache,
     const config::Config&       config
   ) -> utils::types::Vec<BenchmarkResult>;
@@ -41,20 +41,20 @@ namespace draconis::cli {
    * @brief Print benchmark report showing timing for each data source
    * @param results Vector of benchmark results
    */
-  fn PrintBenchmarkReport(const utils::types::Vec<BenchmarkResult>& results) -> utils::types::Unit;
+  auto PrintBenchmarkReport(const utils::types::Vec<BenchmarkResult>& results) -> utils::types::Unit;
 
   /**
    * @brief Print doctor report showing failed readouts
    * @param data System information data
    */
-  fn PrintDoctorReport(const core::system::SystemInfo& data) -> utils::types::Unit;
+  auto PrintDoctorReport(const core::system::SystemInfo& data) -> utils::types::Unit;
 
   /**
    * @brief Print system information in JSON format
    * @param data System information data
    * @param prettyJson Whether to pretty-print the JSON
    */
-  fn PrintJsonOutput(
+  auto PrintJsonOutput(
     const core::system::SystemInfo& data,
     bool                            prettyJson
   ) -> utils::types::Unit;
@@ -67,7 +67,7 @@ namespace draconis::cli {
    * Placeholders use the format {key} where key matches any field from SystemInfo::toMap().
    * Common keys: date, host, os, kernel, cpu, gpu, ram, disk, uptime, shell, de, wm, packages, playing
    */
-  fn PrintCompactOutput(
+  auto PrintCompactOutput(
     const utils::types::String&     templateStr,
     const core::system::SystemInfo& data
   ) -> utils::types::Unit;
@@ -78,7 +78,7 @@ namespace draconis::cli {
    * @param formatName Name of the format to use
    * @param data System information data
    */
-  fn FormatOutputViaPlugin(
+  auto FormatOutputViaPlugin(
     const utils::types::String&     formatName,
     const core::system::SystemInfo& data
   ) -> utils::types::Unit;
@@ -88,7 +88,7 @@ namespace draconis::cli {
    * @param pluginManager Reference to plugin manager
    * @return Exit code
    */
-  fn HandleListPluginsCommand(const core::plugin::PluginManager& pluginManager) -> utils::types::i32;
+  auto HandleListPluginsCommand(const core::plugin::PluginManager& pluginManager) -> utils::types::i32;
 
   /**
    * @brief Handle --plugin-info command
@@ -96,12 +96,12 @@ namespace draconis::cli {
    * @param pluginName Name of plugin to show info for
    * @return Exit code
    */
-  fn HandlePluginInfoCommand(const core::plugin::PluginManager& pluginManager, const utils::types::String& pluginName) -> utils::types::i32;
+  auto HandlePluginInfoCommand(const core::plugin::PluginManager& pluginManager, const utils::types::String& pluginName) -> utils::types::i32;
 #endif
 
   /**
    * @brief Generate shell completion scripts
    * @param shell The shell to generate completions for (bash, zsh, fish, powershell)
    */
-  fn GenerateCompletions(const utils::types::String& shell) -> utils::types::Unit;
+  auto GenerateCompletions(const utils::types::String& shell) -> utils::types::Unit;
 } // namespace draconis::cli

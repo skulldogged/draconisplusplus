@@ -124,24 +124,24 @@ namespace {
       };
     }
 
-    [[nodiscard]] fn getMetadata() const -> const draconis::core::plugin::PluginMetadata& override {
+    [[nodiscard]] auto getMetadata() const -> const draconis::core::plugin::PluginMetadata& override {
       return m_metadata;
     }
 
-    fn initialize(const draconis::core::plugin::PluginContext& /*ctx*/, ::PluginCache& /*cache*/) -> Result<Unit> override {
+    auto initialize(const draconis::core::plugin::PluginContext& /*ctx*/, ::PluginCache& /*cache*/) -> Result<Unit> override {
       m_ready = true;
       return {};
     }
 
-    fn shutdown() -> Unit override {
+    auto shutdown() -> Unit override {
       m_ready = false;
     }
 
-    [[nodiscard]] fn isReady() const -> bool override {
+    [[nodiscard]] auto isReady() const -> bool override {
       return m_ready;
     }
 
-    fn formatOutput(
+    [[nodiscard]] auto formatOutput(
       const String&                           formatName,
       const Map<String, String>&              data,
       const Map<String, Map<String, String>>& pluginData
@@ -240,11 +240,11 @@ namespace {
       return jsonStr;
     }
 
-    [[nodiscard]] fn getFormatNames() const -> Vec<String> override {
+    [[nodiscard]] auto getFormatNames() const -> Vec<String> override {
       return { FORMAT_JSON, FORMAT_JSON_PRETTY };
     }
 
-    [[nodiscard]] fn getFileExtension(const String& /*formatName*/) const -> String override {
+    [[nodiscard]] auto getFileExtension(const String& /*formatName*/) const -> String override {
       return "json";
     }
   };

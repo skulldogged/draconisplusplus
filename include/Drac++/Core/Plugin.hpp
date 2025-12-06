@@ -73,7 +73,7 @@ class PluginCache {
    * @return The cached value if found and not expired, None otherwise
    */
   template <typename T>
-  [[nodiscard]] fn get(const String& key) const -> Option<T> {
+  [[nodiscard]] auto get(const String& key) const -> Option<T> {
     // Check in-memory cache first
     if (auto iter = m_cache.find(key); iter != m_cache.end()) {
       const auto& [data, expiryTp] = iter->second;
@@ -123,7 +123,7 @@ class PluginCache {
    * @param ttlSeconds Time-to-live in seconds (0 = no expiry)
    */
   template <typename T>
-  fn set(const String& key, const T& value, u32 ttlSeconds = 0) -> void {
+  auto set(const String& key, const T& value, u32 ttlSeconds = 0) -> void {
     using namespace std::chrono;
 
     Option<u64>              expiryTs = None;
@@ -158,7 +158,7 @@ class PluginCache {
    * @brief Invalidate a cached entry
    * @param key Cache key to invalidate
    */
-  fn invalidate(const String& key) -> void {
+  auto invalidate(const String& key) -> void {
     m_cache.erase(key);
     std::error_code errc;
     std::filesystem::remove(m_cacheDir / key, errc);
@@ -217,13 +217,13 @@ namespace draconis::core::plugin {
 
   class IPlugin {
    public:
-    IPlugin()                                                             = default;
-    IPlugin(const IPlugin&)                                               = default;
-    IPlugin(IPlugin&&)                                                    = delete;
-    fn operator=(const IPlugin&)->IPlugin&                                = default;
-    fn operator=(IPlugin&&)->IPlugin&                                     = delete;
-    virtual ~IPlugin()                                                    = default;
-    [[nodiscard]] virtual fn getMetadata() const -> const PluginMetadata& = 0;
+    IPlugin()                                                               = default;
+    IPlugin(const IPlugin&)                                                 = default;
+    IPlugin(IPlugin&&)                                                      = delete;
+    auto operator=(const IPlugin&) -> IPlugin&                              = default;
+    auto operator=(IPlugin&&) -> IPlugin&                                   = delete;
+    virtual ~IPlugin()                                                      = default;
+    [[nodiscard]] virtual auto getMetadata() const -> const PluginMetadata& = 0;
 
     /**
      * @brief Initialize the plugin with context and cache
@@ -231,11 +231,11 @@ namespace draconis::core::plugin {
      * @param cache Cache interface for persistent storage
      * @return Success or error
      */
-    virtual fn initialize(const PluginContext& ctx, ::PluginCache& cache) -> utils::types::Result<utils::types::Unit> = 0;
+    virtual auto initialize(const PluginContext& ctx, ::PluginCache& cache) -> utils::types::Result<utils::types::Unit> = 0;
 
-    virtual fn shutdown() -> utils::types::Unit = 0;
+    virtual auto shutdown() -> utils::types::Unit = 0;
 
-    [[nodiscard]] virtual fn isReady() const -> bool = 0;
+    [[nodiscard]] virtual auto isReady() const -> bool = 0;
   };
 
   /**
@@ -259,7 +259,7 @@ namespace draconis::core::plugin {
      * @return Provider ID (e.g., "weather", "media", "docker")
      * @details Used as the key in JSON output and for compact format placeholders
      */
-    [[nodiscard]] virtual fn getProviderId() const -> utils::types::String = 0;
+    [[nodiscard]] virtual auto getProviderId() const -> utils::types::String = 0;
 
     /**
      * @brief Collect/refresh data from this provider
@@ -267,14 +267,14 @@ namespace draconis::core::plugin {
      * @return Success or error (errors are passed up for doctor mode)
      * @details Called each time the app runs. Plugin should use cache for efficiency.
      */
-    virtual fn collectData(::PluginCache& cache) -> utils::types::Result<utils::types::Unit> = 0;
+    virtual auto collectData(::PluginCache& cache) -> utils::types::Result<utils::types::Unit> = 0;
 
     /**
      * @brief Serialize collected data to JSON
      * @return JSON string representation of the data
      * @details Used for --json output. Plugin defines its own JSON structure.
      */
-    [[nodiscard]] virtual fn toJson() const -> utils::types::Result<utils::types::String> = 0;
+    [[nodiscard]] virtual auto toJson() const -> utils::types::Result<utils::types::String> = 0;
 
     /**
      * @brief Get data as key-value string pairs
@@ -282,42 +282,42 @@ namespace draconis::core::plugin {
      * @details Used for compact format templates (e.g., {weather_temp}, {weather_desc})
      *          Keys should be prefixed with provider ID (e.g., "weather_temp", "weather_desc")
      */
-    [[nodiscard]] virtual fn getFields() const -> utils::types::Map<utils::types::String, utils::types::String> = 0;
+    [[nodiscard]] virtual auto getFields() const -> utils::types::Map<utils::types::String, utils::types::String> = 0;
 
     /**
      * @brief Get a single-line display string for UI
      * @return Formatted string for display (e.g., "72°F, Clear sky")
      * @details Used in the main UI output
      */
-    [[nodiscard]] virtual fn getDisplayValue() const -> utils::types::Result<utils::types::String> = 0;
+    [[nodiscard]] virtual auto getDisplayValue() const -> utils::types::Result<utils::types::String> = 0;
 
     /**
      * @brief Get the icon for UI display (Nerd Font icon with spacing)
      * @return Icon string (e.g., "   " for weather)
      * @details Used in the main UI output. Should include trailing space for alignment.
      */
-    [[nodiscard]] virtual fn getDisplayIcon() const -> utils::types::String = 0;
+    [[nodiscard]] virtual auto getDisplayIcon() const -> utils::types::String = 0;
 
     /**
      * @brief Get the label for UI display
      * @return Label string (e.g., "Weather")
      * @details Used in the main UI output
      */
-    [[nodiscard]] virtual fn getDisplayLabel() const -> utils::types::String = 0;
+    [[nodiscard]] virtual auto getDisplayLabel() const -> utils::types::String = 0;
 
     /**
      * @brief Get the last error from data collection, if any
      * @return Error if collectData() failed, None otherwise
      * @details Used for doctor mode to report failures
      */
-    [[nodiscard]] virtual fn getLastError() const -> utils::types::Option<utils::types::String> = 0;
+    [[nodiscard]] virtual auto getLastError() const -> utils::types::Option<utils::types::String> = 0;
 
     /**
      * @brief Check if this provider is enabled in its config
      * @return True if enabled, false if disabled
      * @details Plugins can be installed but disabled in config
      */
-    [[nodiscard]] virtual fn isEnabled() const -> bool = 0;
+    [[nodiscard]] virtual auto isEnabled() const -> bool = 0;
   };
 
   /**
@@ -333,7 +333,7 @@ namespace draconis::core::plugin {
      * @param pluginData Plugin-contributed data organized by plugin ID
      * @return Formatted output string or error
      */
-    virtual fn formatOutput(
+    virtual auto formatOutput(
       const utils::types::String&                                                                                   formatName,
       const utils::types::Map<utils::types::String, utils::types::String>&                                          data,
       const utils::types::Map<utils::types::String, utils::types::Map<utils::types::String, utils::types::String>>& pluginData
@@ -343,14 +343,14 @@ namespace draconis::core::plugin {
      * @brief Get all format names this plugin supports
      * @return Vector of supported format names (e.g., {"json", "json-pretty"})
      */
-    [[nodiscard]] virtual fn getFormatNames() const -> utils::types::Vec<utils::types::String> = 0;
+    [[nodiscard]] virtual auto getFormatNames() const -> utils::types::Vec<utils::types::String> = 0;
 
     /**
      * @brief Get file extension for a given format
      * @param formatName The format name
      * @return File extension (without dot)
      */
-    [[nodiscard]] virtual fn getFileExtension(const utils::types::String& formatName) const -> utils::types::String = 0;
+    [[nodiscard]] virtual auto getFileExtension(const utils::types::String& formatName) const -> utils::types::String = 0;
   };
 
   // Legacy alias for backward compatibility during migration
@@ -383,26 +383,26 @@ namespace draconis::core::plugin {
  */
 #ifdef DRAC_STATIC_PLUGIN_BUILD
   #include <Drac++/Core/StaticPlugins.hpp>
-  #define DRAC_PLUGIN(PluginClass)                                                \
-    static fn Create_##PluginClass() -> draconis::core::plugin::IPlugin* {        \
-      return new PluginClass();                                                   \
-    }                                                                             \
-    static fn Destroy_##PluginClass(draconis::core::plugin::IPlugin* p) -> void { \
-      delete p;                                                                   \
-    }                                                                             \
-    static const bool g_##PluginClass##_registered =                              \
-      draconis::core::plugin::RegisterStaticPlugin({ #PluginClass, Create_##PluginClass, Destroy_##PluginClass });
+  #define DRAC_PLUGIN(PluginClass)                                                  \
+    static auto Create_##PluginClass() -> draconis::core::plugin::IPlugin* {        \
+      return new PluginClass();                                                     \
+    }                                                                               \
+    static auto Destroy_##PluginClass(draconis::core::plugin::IPlugin* p) -> void { \
+      delete p;                                                                     \
+    }                                                                               \
+    static const bool g_##PluginClass##_registered =                                \
+      draconis::core::plugin::RegisterStaticPlugin(#PluginClass, { Create_##PluginClass, Destroy_##PluginClass });
 #else
 // NOLINTBEGIN(bugprone-macro-parentheses) - false positive
-  #define DRAC_PLUGIN(PluginClass)                                                                          \
-    extern "C" DRAC_PLUGIN_API fn CreatePlugin() -> draconis::core::plugin::IPlugin* {                      \
-      return new PluginClass();                                                                             \
-    }                                                                                                       \
-    extern "C" DRAC_PLUGIN_API fn DestroyPlugin(draconis::core::plugin::IPlugin* plugin) -> void {          \
-      delete plugin;                                                                                        \
-    }                                                                                                       \
-    extern "C" DRAC_PLUGIN_API fn SetPluginLogLevel(draconis::utils::logging::LogLevel* levelPtr) -> void { \
-      draconis::utils::logging::SetLogLevelPtr(levelPtr);                                                   \
+  #define DRAC_PLUGIN(PluginClass)                                                                            \
+    extern "C" DRAC_PLUGIN_API auto CreatePlugin() -> draconis::core::plugin::IPlugin* {                      \
+      return new PluginClass();                                                                               \
+    }                                                                                                         \
+    extern "C" DRAC_PLUGIN_API auto DestroyPlugin(draconis::core::plugin::IPlugin* plugin) -> void {          \
+      delete plugin;                                                                                          \
+    }                                                                                                         \
+    extern "C" DRAC_PLUGIN_API auto SetPluginLogLevel(draconis::utils::logging::LogLevel* levelPtr) -> void { \
+      draconis::utils::logging::SetLogLevelPtr(levelPtr);                                                     \
     }
 // NOLINTEND(bugprone-macro-parentheses)
 #endif

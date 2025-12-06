@@ -30,7 +30,7 @@ using enum draconis::utils::error::DracErrorCode;
 namespace {
   constexpr const char* CACHE_KEY_PREFIX = "pkg_count_";
 
-  fn GetCountFromDirectoryImplNoCache(
+  auto GetCountFromDirectoryImplNoCache(
     const String&         pmId,
     const fs::path&       dirPath,
     const Option<String>& fileExtensionFilter,
@@ -94,7 +94,7 @@ namespace {
     return count;
   }
 
-  fn GetCountFromDirectoryImpl(
+  auto GetCountFromDirectoryImpl(
     CacheManager&         cache,
     const String&         pmId,
     const fs::path&       dirPath,
@@ -109,7 +109,7 @@ namespace {
 } // namespace
 
 namespace draconis::services::packages {
-  fn GetCountFromDirectory(
+  auto GetCountFromDirectory(
     CacheManager&   cache,
     const String&   pmId,
     const fs::path& dirPath,
@@ -119,19 +119,19 @@ namespace draconis::services::packages {
     return GetCountFromDirectoryImpl(cache, pmId, dirPath, fileExtensionFilter, subtractOne);
   }
 
-  fn GetCountFromDirectory(CacheManager& cache, const String& pmId, const fs::path& dirPath, const String& fileExtensionFilter) -> Result<u64> {
+  auto GetCountFromDirectory(CacheManager& cache, const String& pmId, const fs::path& dirPath, const String& fileExtensionFilter) -> Result<u64> {
     return GetCountFromDirectoryImpl(cache, pmId, dirPath, fileExtensionFilter, false);
   }
 
-  fn GetCountFromDirectory(CacheManager& cache, const String& pmId, const fs::path& dirPath, const bool subtractOne) -> Result<u64> {
+  auto GetCountFromDirectory(CacheManager& cache, const String& pmId, const fs::path& dirPath, const bool subtractOne) -> Result<u64> {
     return GetCountFromDirectoryImpl(cache, pmId, dirPath, None, subtractOne);
   }
 
-  fn GetCountFromDirectory(CacheManager& cache, const String& pmId, const fs::path& dirPath) -> Result<u64> {
+  auto GetCountFromDirectory(CacheManager& cache, const String& pmId, const fs::path& dirPath) -> Result<u64> {
     return GetCountFromDirectoryImpl(cache, pmId, dirPath, None, false);
   }
 
-  fn GetCountFromDirectoryNoCache(
+  auto GetCountFromDirectoryNoCache(
     const String&         pmId,
     const fs::path&       dirPath,
     const Option<String>& fileExtensionFilter,
@@ -141,7 +141,7 @@ namespace draconis::services::packages {
   }
 
   #if !defined(__serenity__) && !defined(_WIN32)
-  fn GetCountFromDb(
+  auto GetCountFromDb(
     CacheManager&   cache,
     const String&   pmId,
     const fs::path& dbPath,
@@ -179,7 +179,7 @@ namespace draconis::services::packages {
   #endif // __serenity__ || _WIN32
 
   #if defined(__linux__) && defined(HAVE_PUGIXML)
-  fn GetCountFromPlist(
+  auto GetCountFromPlist(
     CacheManager&   cache,
     const String&   pmId,
     const fs::path& plistPath
@@ -234,12 +234,12 @@ namespace draconis::services::packages {
   #endif // __linux__
 
   #if defined(__linux__) || defined(__APPLE__)
-  fn CountNix(CacheManager& cache) -> Result<u64> {
+  auto CountNix(CacheManager& cache) -> Result<u64> {
     return GetCountFromDb(cache, "nix", "/nix/var/nix/db/db.sqlite", "SELECT COUNT(path) FROM ValidPaths WHERE sigs IS NOT NULL");
   }
   #endif // __linux__ || __APPLE__
 
-  fn CountCargo(CacheManager& cache) -> Result<u64> {
+  auto CountCargo(CacheManager& cache) -> Result<u64> {
     using draconis::utils::env::GetEnv;
 
     fs::path cargoPath {};
@@ -255,7 +255,7 @@ namespace draconis::services::packages {
     return GetCountFromDirectory(cache, "cargo", cargoPath);
   }
 
-  fn GetTotalCount(CacheManager& cache, const Manager enabledPackageManagers) -> Result<u64> {
+  auto GetTotalCount(CacheManager& cache, const Manager enabledPackageManagers) -> Result<u64> {
     u64  totalCount   = 0;
     bool oneSucceeded = false;
 
@@ -267,8 +267,8 @@ namespace draconis::services::packages {
         oneSucceeded = true;
       } else {
         match(result.error().code)(
-          is | or_(NotFound, ApiUnavailable, NotSupported) = [&] -> Unit { debug_at(result.error()); },
-          is | _                                           = [&] -> Unit { error_at(result.error()); }
+          is | or_(NotFound, ApiUnavailable, NotSupported) = [&] { debug_at(result.error()); },
+          is | _                                           = [&] { error_at(result.error()); }
         );
       }
     };
@@ -328,7 +328,7 @@ namespace draconis::services::packages {
     return totalCount;
   }
 
-  fn GetIndividualCounts(CacheManager& cache, const Manager enabledPackageManagers) -> Result<Map<String, u64>> {
+  auto GetIndividualCounts(CacheManager& cache, const Manager enabledPackageManagers) -> Result<Map<String, u64>> {
     Map<String, u64> individualCounts;
     bool             oneSucceeded = false;
 
@@ -340,8 +340,8 @@ namespace draconis::services::packages {
         oneSucceeded           = true;
       } else {
         match(result.error().code)(
-          is | or_(NotFound, ApiUnavailable, NotSupported) = [&] -> Unit { debug_at(result.error()); },
-          is | _                                           = [&] -> Unit { error_at(result.error()); }
+          is | or_(NotFound, ApiUnavailable, NotSupported) = [&] { debug_at(result.error()); },
+          is | _                                           = [&] { error_at(result.error()); }
         );
       }
     };

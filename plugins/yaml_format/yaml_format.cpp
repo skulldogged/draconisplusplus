@@ -14,23 +14,13 @@
  * it exports factory functions in a namespace instead of extern "C".
  */
 
-// ryml uses 'fn' as a parameter name,
-// but we use 'fn' as a macro for 'auto'
-#ifdef fn
-  #undef fn
-#endif
-
 #define RYML_SINGLE_HDR_DEFINE_NOW
-#include "ryml_all.hpp"
-
-#ifndef fn
-  #define fn auto
-#endif
-
 #include <Drac++/Core/Plugin.hpp>
 
 #include <Drac++/Utils/Error.hpp>
 #include <Drac++/Utils/Types.hpp>
+
+#include "ryml_all.hpp"
 
 namespace {
 
@@ -47,7 +37,7 @@ namespace {
      * @brief Helper to get value from data map, returning pointer to the string if found
      * @note Returns pointer to the map's string which remains valid during formatOutput
      */
-    static fn getValue(const Map<String, String>& data, const String& key) -> const String* {
+    static auto getValue(const Map<String, String>& data, const String& key) -> const String* {
       if (auto iter = data.find(key); iter != data.end() && !iter->second.empty())
         return &iter->second;
       return nullptr;
@@ -57,7 +47,7 @@ namespace {
      * @brief Add a key-value pair to a YAML node if value exists
      * @note The value pointer must remain valid for the lifetime of the tree
      */
-    static fn addIfPresent(ryml::NodeRef node, const char* key, const String* value) -> void {
+    static auto addIfPresent(ryml::NodeRef node, const char* key, const String* value) -> void {
       if (value)
         node[ryml::to_csubstr(key)] = ryml::to_csubstr(*value);
     }
@@ -74,24 +64,24 @@ namespace {
       };
     }
 
-    [[nodiscard]] fn getMetadata() const -> const draconis::core::plugin::PluginMetadata& override {
+    [[nodiscard]] auto getMetadata() const -> const draconis::core::plugin::PluginMetadata& override {
       return m_metadata;
     }
 
-    fn initialize(const draconis::core::plugin::PluginContext& /*ctx*/, ::PluginCache& /*cache*/) -> Result<Unit> override {
+    auto initialize(const draconis::core::plugin::PluginContext& /*ctx*/, ::PluginCache& /*cache*/) -> Result<Unit> override {
       m_ready = true;
       return {};
     }
 
-    fn shutdown() -> Unit override {
+    auto shutdown() -> Unit override {
       m_ready = false;
     }
 
-    [[nodiscard]] fn isReady() const -> bool override {
+    [[nodiscard]] auto isReady() const -> bool override {
       return m_ready;
     }
 
-    fn formatOutput(
+    auto formatOutput(
       const String& /*formatName*/,
       const Map<String, String>&              data,
       const Map<String, Map<String, String>>& pluginData
@@ -216,11 +206,11 @@ namespace {
       return yaml;
     }
 
-    [[nodiscard]] fn getFormatNames() const -> Vec<String> override {
+    [[nodiscard]] auto getFormatNames() const -> Vec<String> override {
       return { FORMAT_YAML };
     }
 
-    [[nodiscard]] fn getFileExtension(const String& /*formatName*/) const -> String override {
+    [[nodiscard]] auto getFileExtension(const String& /*formatName*/) const -> String override {
       return "yaml";
     }
   };

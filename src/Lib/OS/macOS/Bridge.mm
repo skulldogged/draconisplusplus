@@ -11,7 +11,7 @@
 
   #include "Bridge.hpp"
 
-  #include <Metal/Metal.h>       // For MTLDevice to identify the GPU.
+  #include <Metal/Metal.h> // For MTLDevice to identify the GPU.
 
   #include <Drac++/Utils/Error.hpp>
 
@@ -20,7 +20,7 @@ using draconis::utils::error::DracError;
 using enum draconis::utils::error::DracErrorCode;
 
 namespace draconis::core::system::macOS {
-  fn GetGPUModel() -> Result<String> {
+  auto GetGPUModel() -> Result<String> {
     @autoreleasepool {
       // Get the default Metal device, which typically corresponds to the active, primary GPU.
       id<MTLDevice> device = MTLCreateSystemDefaultDevice();
@@ -36,7 +36,7 @@ namespace draconis::core::system::macOS {
     }
   }
 
-  fn GetOSVersion() -> Result<OSInfo> {
+  auto GetOSVersion() -> Result<OSInfo> {
     @autoreleasepool {
       using matchit::match, matchit::is, matchit::_;
 

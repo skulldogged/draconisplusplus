@@ -34,7 +34,7 @@ using enum draconis::utils::error::DracErrorCode;
 
 namespace {
   #ifdef __FreeBSD__
-  fn GetPathByPid(pid_t pid) -> Result<String> {
+  auto GetPathByPid(pid_t pid) -> Result<String> {
     Array<char, PATH_MAX> exePathBuf {};
     usize                 size = exePathBuf.size();
     Array<i32, 4>         mib {};
@@ -59,7 +59,7 @@ namespace {
   #endif
 
   #if DRAC_ENABLE_X11
-  fn GetX11WindowManager() -> Result<String> {
+  auto GetX11WindowManager() -> Result<String> {
     using namespace xcb;
     using namespace matchit;
     using enum ConnError;
@@ -84,7 +84,7 @@ namespace {
           )
         );
 
-    fn internAtom = [&conn](const StringView name) -> Result<atom_t> {
+    auto internAtom = [&conn](const StringView name) -> Result<atom_t> {
       const ReplyGuard<intern_atom_reply_t> reply(InternAtomReply(conn.get(), InternAtom(conn.get(), 0, static_cast<u16>(name.size()), name.data()), nullptr));
 
       if (!reply)
@@ -135,12 +135,12 @@ namespace {
     return String(nameData, length);
   }
   #else
-  fn GetX11WindowManager() -> Result<String> {
+  auto GetX11WindowManager() -> Result<String> {
     return Err(DracError(DracErrorCode::NotSupported, "XCB (X11) support not available"));
   }
   #endif
 
-  fn GetWaylandCompositor() -> Result<String> {
+  auto GetWaylandCompositor() -> Result<String> {
   #ifndef __FreeBSD__
     return "Wayland Compositor";
   #else
@@ -197,7 +197,7 @@ namespace {
 
 namespace draconis::core::system {
 
-  fn GetOperatingSystem(CacheManager& cache) -> Result<OSInfo> {
+  auto GetOperatingSystem(CacheManager& cache) -> Result<OSInfo> {
     return cache.getOrSet<OSInfo>("bsd_os_info", []() -> Result<OSInfo> {
       constexpr PCStr path = "/etc/os-release";
       String          name;
@@ -244,7 +244,7 @@ namespace draconis::core::system {
     });
   }
 
-  fn GetMemInfo() -> Result<u64> {
+  auto GetMemInfo() -> Result<u64> {
     u64   mem  = 0;
     usize size = sizeof(mem);
 
@@ -257,7 +257,7 @@ namespace draconis::core::system {
     return mem;
   }
 
-  fn GetWindowManager(CacheManager& cache) -> Result<String> {
+  auto GetWindowManager(CacheManager& cache) -> Result<String> {
     return cache.getOrSet<String>("bsd_wm", []() -> Result<String> {
       if (!GetEnv("DISPLAY") && !GetEnv("WAYLAND_DISPLAY") && !GetEnv("XDG_SESSION_TYPE"))
         return Err(DracError(DracErrorCode::NotFound, "Could not find a graphical session"));
@@ -272,7 +272,7 @@ namespace draconis::core::system {
     });
   }
 
-  fn GetDesktopEnvironment(CacheManager& cache) -> Result<String> {
+  auto GetDesktopEnvironment(CacheManager& cache) -> Result<String> {
     return cache.getOrSet<String>("bsd_desktop_environment", []() -> Result<String> {
       if (!GetEnv("DISPLAY") && !GetEnv("WAYLAND_DISPLAY") && !GetEnv("XDG_SESSION_TYPE"))
         return Err(DracError(DracErrorCode::NotFound, "Could not find a graphical session"));
@@ -295,7 +295,7 @@ namespace draconis::core::system {
     });
   }
 
-  fn GetShell(CacheManager& cache) -> Result<String> {
+  auto GetShell(CacheManager& cache) -> Result<String> {
     return cache.getOrSet<String>("bsd_shell", []() -> Result<String> {
       if (const Result<String> shellPath = GetEnv("SHELL")) {
         // clang-format off
@@ -319,7 +319,7 @@ namespace draconis::core::system {
     });
   }
 
-  fn GetHost(CacheManager& cache) -> Result<String> {
+  auto GetHost(CacheManager& cache) -> Result<String> {
     return cache.getOrSet<String>("bsd_host", []() -> Result<String> {
       Array<char, 256> buffer {};
       usize            size = buffer.size();
@@ -353,13 +353,13 @@ namespace draconis::core::system {
     });
   }
 
-  fn GetKernelVersion(CacheManager& cache) -> Result<String> {
+  auto GetKernelVersion(CacheManager& cache) -> Result<String> {
     return cache.getOrSet<String>("bsd_kernel_version", []() -> Result<String> {
       return os::unix_shared::GetKernelRelease();
     });
   }
 
-  fn GetDiskUsage(CacheManager& /*cache*/) -> Result<ResourceUsage> {
+  auto GetDiskUsage(CacheManager& /*cache*/) -> Result<ResourceUsage> {
     return os::unix_shared::GetRootDiskUsage();
   }
 } // namespace draconis::core::system

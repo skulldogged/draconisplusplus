@@ -11,19 +11,11 @@
   #undef DELETE
 #endif
 
-#ifdef fn
-  #undef fn
-#endif
-
 #include <glaze/core/context.hpp>    // glz::error_ctx
 #include <glaze/core/meta.hpp>       // glz::{meta, detail::Object}
 #include <glaze/net/http_server.hpp> // glz::http_server
 #include <matchit.hpp>               // matchit::impl::Overload
 #include <utility>                   // std::move
-
-#ifndef fn
-  #define fn auto
-#endif
 
 #include <Drac++/Core/System.hpp>
 
@@ -41,7 +33,7 @@ namespace {
   constexpr PCStr indexFile   = "examples/glaze_http/web/index.mustache";
   constexpr PCStr stylingFile = "examples/glaze_http/web/style.css";
 
-  fn readFile(const std::filesystem::path& path) -> Result<String> {
+  auto readFile(const std::filesystem::path& path) -> Result<String> {
     if (!std::filesystem::exists(path))
       ERR_FMT(NotFound, "File not found: {}", path.string());
 
@@ -100,7 +92,7 @@ namespace glz {
   };
 } // namespace glz
 
-fn main() -> i32 {
+auto main() -> i32 {
   glz::http_server server;
 
   server.on_error([](const std::error_code errc, const std::source_location& loc) {
@@ -137,20 +129,20 @@ fn main() -> i32 {
       using matchit::impl::Overload;
       using enum draconis::utils::error::DracErrorCode;
 
-      fn addProperty = Overload {
-        [&](const String& name, const Result<String>& result) -> Unit {
+      auto addProperty = Overload {
+        [&](const String& name, const Result<String>& result) {
           if (result)
             sysInfo.properties.emplace_back(name, *result);
           else if (result.error().code != NotSupported)
             sysInfo.properties.emplace_back(name, result.error());
         },
-        [&](const String& name, const Result<OSInfo>& result) -> Unit {
+        [&](const String& name, const Result<OSInfo>& result) {
           if (result)
             sysInfo.properties.emplace_back(name, std::format("{} {}", result->name, result->version));
           else
             sysInfo.properties.emplace_back(name, result.error());
         },
-        [&](const String& name, const Result<ResourceUsage>& result) -> Unit {
+        [&](const String& name, const Result<ResourceUsage>& result) {
           if (result)
             sysInfo.properties.emplace_back(name, std::format("{} / {}", BytesToGiB(result->usedBytes), BytesToGiB(result->totalBytes)));
           else

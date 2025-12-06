@@ -52,13 +52,13 @@ namespace fs = std::filesystem;
 
 // clang-format off
 #ifdef __GLIBC__
-extern "C" fn issetugid() -> usize { return 0; } // NOLINT(readability-identifier-naming) - glibc function stub
+extern "C" auto issetugid() -> usize { return 0; } // NOLINT(readability-identifier-naming) - glibc function stub
 #endif
 // clang-format on
 
 namespace {
   template <std::integral T>
-  constexpr fn TryParse(StringView sview) -> Option<T> {
+  constexpr auto TryParse(StringView sview) -> Option<T> {
     T value;
 
     auto [ptr, ec] = std::from_chars(sview.begin(), sview.end(), value);
@@ -69,7 +69,7 @@ namespace {
     return None;
   }
 
-  fn ReadSysFile(const fs::path& path) -> Result<String> {
+  auto ReadSysFile(const fs::path& path) -> Result<String> {
     std::ifstream file(path);
     if (!file.is_open())
       ERR_FMT(NotFound, "Failed to open sysfs file: {}", path.string());
@@ -86,7 +86,7 @@ namespace {
     ERR_FMT(IoError, "Failed to read from sysfs file: {}", path.string());
   }
 
-  fn LookupPciNamesFromBuffer(StringView buffer, const StringView vendorId, const StringView deviceId) -> Result<Pair<String, String>> {
+  auto LookupPciNamesFromBuffer(StringView buffer, const StringView vendorId, const StringView deviceId) -> Result<Pair<String, String>> {
     using std::views::common;
     using std::views::split;
 
@@ -128,13 +128,13 @@ namespace {
     extern const char _binary_pci_ids_end[];
   }
 
-  fn LookupPciNames(const StringView vendorId, const StringView deviceId) -> Result<Pair<String, String>> {
+  auto LookupPciNames(const StringView vendorId, const StringView deviceId) -> Result<Pair<String, String>> {
     const usize pciIdsLen = _binary_pci_ids_end - _binary_pci_ids_start;
 
     return LookupPciNamesFromBuffer(StringView(_binary_pci_ids_start, pciIdsLen), vendorId, deviceId);
   }
   #else
-  fn FindPciIDsPath() -> fs::path {
+  auto FindPciIDsPath() -> fs::path {
     const Array<fs::path, 3> knownPaths = {
       "/usr/share/hwdata/pci.ids",
       "/usr/share/misc/pci.ids",
@@ -148,7 +148,7 @@ namespace {
     return {};
   }
 
-  fn LookupPciNames(const StringView vendorId, const StringView deviceId) -> Result<Pair<String, String>> {
+  auto LookupPciNames(const StringView vendorId, const StringView deviceId) -> Result<Pair<String, String>> {
     const fs::path& pciIdsPath = FindPciIDsPath();
 
     if (pciIdsPath.empty())
@@ -190,7 +190,7 @@ namespace {
   }
   #endif
 
-  constexpr fn CleanGpuModelName(String vendor, String device) -> String {
+  constexpr auto CleanGpuModelName(String vendor, String device) -> String {
     if (vendor.find("[AMD/ATI]") != String::npos)
       vendor = "AMD";
     else if (const usize pos = vendor.find(' '); pos != String::npos)
@@ -200,7 +200,7 @@ namespace {
       if (const usize closePos = device.find(']', openPos); closePos != String::npos)
         device = device.substr(openPos + 1, closePos - openPos - 1);
 
-    constexpr fn trim = [](String& str) {
+    constexpr auto trim = [](String& str) {
       if (const usize pos = str.find_last_not_of(" \t\n\r"); pos != String::npos)
         str.erase(pos + 1);
       if (const usize pos = str.find_first_not_of(" \t\n\r"); pos != String::npos)
@@ -214,7 +214,7 @@ namespace {
   }
 
   #if DRAC_USE_XCB
-  fn GetX11WindowManager() -> Result<String> {
+  auto GetX11WindowManager() -> Result<String> {
     using namespace xcb;
     using namespace matchit;
     using enum ConnError;
@@ -237,7 +237,7 @@ namespace {
           )
         );
 
-    const fn internAtom = [&conn](const StringView name) -> Result<Atom> {
+    const auto internAtom = [&conn](const StringView name) -> Result<Atom> {
       const ReplyGuard<IntAtomReply> reply(InternAtomReply(conn.get(), InternAtom(conn.get(), 0, static_cast<u16>(name.size()), name.data()), nullptr));
 
       if (!reply)
@@ -298,7 +298,7 @@ namespace {
     return String(nameData, length);
   }
 
-  fn GetX11Displays() -> Result<Vec<DisplayInfo>> {
+  auto GetX11Displays() -> Result<Vec<DisplayInfo>> {
     using namespace xcb;
 
     DisplayGuard conn;
@@ -396,7 +396,7 @@ namespace {
     return displays;
   }
 
-  fn GetX11PrimaryDisplay() -> Result<DisplayInfo> {
+  auto GetX11PrimaryDisplay() -> Result<DisplayInfo> {
     using namespace xcb;
 
     DisplayGuard conn;
@@ -460,21 +460,21 @@ namespace {
     );
   }
   #else
-  fn GetX11WindowManager() -> Result<String> {
+  auto GetX11WindowManager() -> Result<String> {
     ERR(NotSupported, "XCB (X11) support not available");
   }
 
-  fn GetX11Displays() -> Result<Vec<DisplayInfo>> {
+  auto GetX11Displays() -> Result<Vec<DisplayInfo>> {
     ERR(NotSupported, "XCB (X11) support not available");
   }
 
-  fn GetX11PrimaryDisplay() -> Result<DisplayInfo> {
+  auto GetX11PrimaryDisplay() -> Result<DisplayInfo> {
     ERR(NotSupported, "XCB (X11) support not available");
   }
   #endif
 
   #if DRAC_USE_WAYLAND
-  fn GetWaylandCompositor() -> Result<String> {
+  auto GetWaylandCompositor() -> Result<String> {
     const wl::DisplayGuard display;
 
     if (!display)
@@ -545,7 +545,7 @@ namespace {
     return String(compositorNameView);
   }
 
-  fn GetWaylandDisplays() -> Result<Vec<DisplayInfo>> {
+  auto GetWaylandDisplays() -> Result<Vec<DisplayInfo>> {
     const wl::DisplayGuard display;
     if (!display)
       ERR(ApiUnavailable, "Failed to connect to Wayland display");
@@ -554,7 +554,7 @@ namespace {
     return manager.getOutputs();
   }
 
-  fn GetWaylandPrimaryDisplay() -> Result<DisplayInfo> {
+  auto GetWaylandPrimaryDisplay() -> Result<DisplayInfo> {
     const wl::DisplayGuard display;
 
     if (!display)
@@ -569,20 +569,20 @@ namespace {
     return primaryDisplay;
   }
   #else
-  fn GetWaylandCompositor() -> Result<String> {
+  auto GetWaylandCompositor() -> Result<String> {
     ERR(NotSupported, "Wayland support not available");
   }
 
-  fn GetWaylandDisplays() -> Result<Vec<DisplayInfo>> {
+  auto GetWaylandDisplays() -> Result<Vec<DisplayInfo>> {
     ERR(NotSupported, "Wayland support not available");
   }
 
-  fn GetWaylandPrimaryDisplay() -> Result<DisplayInfo> {
+  auto GetWaylandPrimaryDisplay() -> Result<DisplayInfo> {
     ERR(NotSupported, "Wayland support not available");
   }
   #endif
 
-  fn CollectNetworkInterfaces() -> Result<Map<String, NetworkInterface>> {
+  auto CollectNetworkInterfaces() -> Result<Map<String, NetworkInterface>> {
     ifaddrs* ifaddrList = nullptr;
     if (getifaddrs(&ifaddrList) == -1)
       ERR_FMT(InternalError, "getifaddrs failed: {}", strerror(errno));
@@ -646,7 +646,7 @@ namespace draconis::core::system {
   using draconis::utils::env::GetEnv;
 
   namespace linux {
-    fn GetDistroID(CacheManager& cache) -> Result<String> {
+    auto GetDistroID(CacheManager& cache) -> Result<String> {
       return cache.getOrSet<String>("linux_distro_id", []() -> Result<String> {
         std::ifstream file("/etc/os-release");
 
@@ -675,7 +675,7 @@ namespace draconis::core::system {
     }
   } // namespace linux
 
-  fn GetOperatingSystem(CacheManager& cache) -> Result<OSInfo> {
+  auto GetOperatingSystem(CacheManager& cache) -> Result<OSInfo> {
     return cache.getOrSet<OSInfo>("linux_os_version", []() -> Result<OSInfo> {
       std::ifstream file("/etc/os-release");
 
@@ -686,7 +686,7 @@ namespace draconis::core::system {
 
       String line;
 
-      const fn parseValue = [&](String& val) {
+      const auto parseValue = [&](String& val) {
         if (val.length() >= 2 && ((val.front() == '"' && val.back() == '"') || (val.front() == '\'' && val.back() == '\'')))
           val = val.substr(1, val.length() - 2);
       };
@@ -725,7 +725,7 @@ namespace draconis::core::system {
     });
   }
 
-  fn GetMemInfo(CacheManager& /*cache*/) -> Result<ResourceUsage> {
+  auto GetMemInfo(CacheManager& /*cache*/) -> Result<ResourceUsage> {
     struct sysinfo info;
 
     if (sysinfo(&info) != 0)
@@ -737,7 +737,7 @@ namespace draconis::core::system {
     return ResourceUsage((info.totalram - info.freeram - info.bufferram) * info.mem_unit, info.totalram * info.mem_unit);
   }
 
-  fn GetWindowManager(CacheManager& cache) -> Result<String> {
+  auto GetWindowManager(CacheManager& cache) -> Result<String> {
     // NOLINTNEXTLINE(misc-redundant-expression) - compile-time values are not always redundant
     if constexpr (!DRAC_USE_WAYLAND && !DRAC_USE_XCB)
       ERR(NotSupported, "Wayland or XCB support not available");
@@ -753,7 +753,7 @@ namespace draconis::core::system {
     });
   }
 
-  fn GetDesktopEnvironment(CacheManager& cache) -> Result<String> {
+  auto GetDesktopEnvironment(CacheManager& cache) -> Result<String> {
     return cache.getOrSet<String>("linux_desktop_environment", []() -> Result<String> {
       Result<String> xdgEnvResult = GetEnv("XDG_CURRENT_DESKTOP");
 
@@ -775,7 +775,7 @@ namespace draconis::core::system {
     });
   }
 
-  fn GetShell(CacheManager& cache) -> Result<String> {
+  auto GetShell(CacheManager& cache) -> Result<String> {
     return cache.getOrSet<String>("linux_shell", []() -> Result<String> {
       return GetEnv("SHELL")
         .transform([](String shellPath) -> String {
@@ -804,12 +804,12 @@ namespace draconis::core::system {
     });
   }
 
-  fn GetHost(CacheManager& cache) -> Result<String> {
+  auto GetHost(CacheManager& cache) -> Result<String> {
     return cache.getOrSet<String>("linux_host", []() -> Result<String> {
       constexpr PCStr primaryPath  = "/sys/class/dmi/id/product_family";
       constexpr PCStr fallbackPath = "/sys/class/dmi/id/product_name";
 
-      fn readFirstLine = [&](const String& path) -> Result<String> {
+      auto readFirstLine = [&](const String& path) -> Result<String> {
         std::ifstream file(path);
         String        line;
 
@@ -851,7 +851,7 @@ namespace draconis::core::system {
     });
   }
 
-  fn GetCPUModel(CacheManager& /*cache*/) -> Result<String> {
+  auto GetCPUModel(CacheManager& /*cache*/) -> Result<String> {
     Array<u32, 4>   cpuInfo;
     Array<char, 49> brandString = { 0 };
 
@@ -876,7 +876,7 @@ namespace draconis::core::system {
     return result;
   }
 
-  fn GetCPUCores(CacheManager& /*cache*/) -> Result<CPUCores> {
+  auto GetCPUCores(CacheManager& /*cache*/) -> Result<CPUCores> {
     u32 eax = 0, ebx = 0, ecx = 0, edx = 0;
 
     __get_cpuid(0x0, &eax, &ebx, &ecx, &edx);
@@ -940,7 +940,7 @@ namespace draconis::core::system {
     return CPUCores(physicalCores, logicalCores);
   }
 
-  fn GetGPUModel(CacheManager& cache) -> Result<String> {
+  auto GetGPUModel(CacheManager& cache) -> Result<String> {
     return cache.getOrSet<String>("linux_gpu_model", []() -> Result<String> {
       const fs::path pciPath = "/sys/bus/pci/devices";
 
@@ -980,21 +980,21 @@ namespace draconis::core::system {
     });
   }
 
-  fn GetUptime() -> Result<std::chrono::seconds> {
+  auto GetUptime() -> Result<std::chrono::seconds> {
     return os::unix_shared::GetUptimeLinux();
   }
 
-  fn GetKernelVersion(CacheManager& cache) -> Result<String> {
+  auto GetKernelVersion(CacheManager& cache) -> Result<String> {
     return cache.getOrSet<String>("linux_kernel_version", []() -> Result<String> {
       return os::unix_shared::GetKernelRelease();
     });
   }
 
-  fn GetDiskUsage(CacheManager& /*cache*/) -> Result<ResourceUsage> {
+  auto GetDiskUsage(CacheManager& /*cache*/) -> Result<ResourceUsage> {
     return os::unix_shared::GetRootDiskUsage();
   }
 
-  fn GetOutputs(CacheManager& /*cache*/) -> Result<Vec<DisplayInfo>> {
+  auto GetOutputs(CacheManager& /*cache*/) -> Result<Vec<DisplayInfo>> {
     if (GetEnv("WAYLAND_DISPLAY")) {
       Result<Vec<DisplayInfo>> displays = GetWaylandDisplays();
 
@@ -1016,7 +1016,7 @@ namespace draconis::core::system {
     ERR(NotFound, "No display server detected");
   }
 
-  fn GetPrimaryOutput(CacheManager& /*cache*/) -> Result<DisplayInfo> {
+  auto GetPrimaryOutput(CacheManager& /*cache*/) -> Result<DisplayInfo> {
     if (GetEnv("WAYLAND_DISPLAY")) {
       Result<DisplayInfo> display = GetWaylandPrimaryDisplay();
 
@@ -1038,7 +1038,7 @@ namespace draconis::core::system {
     ERR(NotFound, "No display server detected");
   }
 
-  fn GetNetworkInterfaces(CacheManager& cache) -> Result<Vec<NetworkInterface>> {
+  auto GetNetworkInterfaces(CacheManager& cache) -> Result<Vec<NetworkInterface>> {
     return cache.getOrSet<Vec<NetworkInterface>>("linux_network_interfaces", []() -> Result<Vec<NetworkInterface>> {
       Map<String, NetworkInterface> interfaceMap = TRY(CollectNetworkInterfaces());
 
@@ -1051,7 +1051,7 @@ namespace draconis::core::system {
     });
   }
 
-  fn GetPrimaryNetworkInterface(CacheManager& cache) -> Result<NetworkInterface> {
+  auto GetPrimaryNetworkInterface(CacheManager& cache) -> Result<NetworkInterface> {
     return cache.getOrSet<NetworkInterface>("linux_primary_network_interface", []() -> Result<NetworkInterface> {
       // Gather full interface list first
       Map<String, NetworkInterface> interfaces = TRY(CollectNetworkInterfaces());
@@ -1099,7 +1099,7 @@ namespace draconis::core::system {
     });
   }
 
-  fn GetBatteryInfo(CacheManager& /*cache*/) -> Result<Battery> {
+  auto GetBatteryInfo(CacheManager& /*cache*/) -> Result<Battery> {
     using matchit::match, matchit::is, matchit::_;
     using enum Battery::Status;
 
@@ -1166,7 +1166,7 @@ namespace draconis::core::system {
 namespace draconis::services::packages {
   using draconis::utils::cache::CacheManager;
 
-  fn CountApk(CacheManager& cache) -> Result<u64> {
+  auto CountApk(CacheManager& cache) -> Result<u64> {
     const String   pmID      = "apk";
     const fs::path apkDbPath = "/lib/apk/db/installed";
 
@@ -1203,11 +1203,11 @@ namespace draconis::services::packages {
     });
   }
 
-  fn CountDpkg(CacheManager& cache) -> Result<u64> {
+  auto CountDpkg(CacheManager& cache) -> Result<u64> {
     return GetCountFromDirectory(cache, "dpkg", fs::current_path().root_path() / "var" / "lib" / "dpkg" / "info", String(".list"));
   }
 
-  fn CountMoss(CacheManager& cache) -> Result<u64> {
+  auto CountMoss(CacheManager& cache) -> Result<u64> {
     Result<u64> countResult = GetCountFromDb(cache, "moss", "/.moss/db/install", "SELECT COUNT(*) FROM meta");
 
     if (countResult && *countResult > 0)
@@ -1216,16 +1216,16 @@ namespace draconis::services::packages {
     return countResult;
   }
 
-  fn CountPacman(CacheManager& cache) -> Result<u64> {
+  auto CountPacman(CacheManager& cache) -> Result<u64> {
     return GetCountFromDirectory(cache, "pacman", fs::current_path().root_path() / "var" / "lib" / "pacman" / "local", true);
   }
 
-  fn CountRpm(CacheManager& cache) -> Result<u64> {
+  auto CountRpm(CacheManager& cache) -> Result<u64> {
     return GetCountFromDb(cache, "rpm", "/var/lib/rpm/rpmdb.sqlite", "SELECT COUNT(*) FROM Installtid");
   }
 
     #ifdef HAVE_PUGIXML
-  fn CountXbps(CacheManager& cache) -> Result<u64> {
+  auto CountXbps(CacheManager& cache) -> Result<u64> {
     const CStr xbpsDbPath = "/var/db/xbps";
 
     if (!fs::exists(xbpsDbPath))

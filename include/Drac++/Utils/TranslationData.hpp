@@ -24,7 +24,7 @@ namespace draconis::utils::localization::data {
       : key(key), value(value) {}
 
     // Compile-time hash for key
-    static constexpr fn hash(types::StringView str) -> types::u64 {
+    static constexpr auto hash(types::StringView str) -> types::u64 {
       types::u64 hash = 0;
 
       for (char character : str)
@@ -33,7 +33,7 @@ namespace draconis::utils::localization::data {
       return hash;
     }
 
-    [[nodiscard]] constexpr fn keyHash() const -> types::u64 {
+    [[nodiscard]] constexpr auto keyHash() const -> types::u64 {
       return hash(key);
     }
   };
@@ -141,7 +141,7 @@ namespace draconis::utils::localization::data {
   struct TranslationMap {
     types::Array<types::Pair<types::u64, types::StringView>, n> entries;
 
-    [[nodiscard]] constexpr fn find(types::u64 hash) const -> types::StringView {
+    [[nodiscard]] constexpr auto find(types::u64 hash) const -> types::StringView {
       for (const auto& entry : entries)
         if (entry.first == hash)
           return entry.second;
@@ -154,7 +154,7 @@ namespace draconis::utils::localization::data {
    * @brief Helper to create translation map from array.
    */
   template <types::usize n>
-  constexpr fn CreateTranslationMap(const types::Array<TranslationEntry, n>& translations) -> TranslationMap<n> {
+  constexpr auto CreateTranslationMap(const types::Array<TranslationEntry, n>& translations) -> TranslationMap<n> {
     TranslationMap<n> map {};
 
     for (types::usize i = 0; i < n; ++i)

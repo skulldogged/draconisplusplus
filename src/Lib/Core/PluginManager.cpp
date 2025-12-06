@@ -5,20 +5,18 @@
  * @version 1.0.0
  */
 
-#include <Drac++/Core/PluginManager.hpp>
-
 #if DRAC_ENABLE_PLUGINS
 
   #include <format>   // std::format
   #include <optional> // std::optional
   #include <string>   // std::string
 
+  #include <Drac++/Core/PluginManager.hpp>
+
   #include <Drac++/Utils/CacheManager.hpp>
   #include <Drac++/Utils/Env.hpp>
   #include <Drac++/Utils/Error.hpp>
   #include <Drac++/Utils/Logging.hpp>
-
-  #include "../../CLI/Config/Config.hpp"
 
   // Include static plugins header when using precompiled config
   #if DRAC_PRECOMPILED_CONFIG
@@ -40,15 +38,15 @@ namespace draconis::core::plugin {
     // Platform-specific plugin file extension
   #ifdef _WIN32
     constexpr StringView PLUGIN_EXTENSION = ".dll";
-  #elif defined(__APPLE__)
+  #elifdef __APPLE__
     constexpr StringView PLUGIN_EXTENSION = ".dylib";
   #else
     constexpr StringView PLUGIN_EXTENSION = ".so";
   #endif
 
     // Default search paths for plugins
-    fn GetDefaultPluginPaths() -> const Vec<fs::path>& {
-      static const Vec<fs::path> DEFAULT_PLUGIN_PATHS = []() {
+    auto GetDefaultPluginPaths() -> const Vec<fs::path>& {
+      static const Vec<fs::path> DEFAULT_PLUGIN_PATHS = []() -> Vec<fs::path> {
         Vec<fs::path> paths;
   #ifdef _WIN32
         using draconis::utils::env::GetEnv;
@@ -76,7 +74,7 @@ namespace draconis::core::plugin {
     }
 
     // Get the base config directory for draconis++
-    fn GetConfigDir() -> fs::path {
+    auto GetConfigDir() -> fs::path {
   #ifdef _WIN32
       using draconis::utils::env::GetEnv;
       if (auto result = GetEnv("LOCALAPPDATA"))
@@ -94,7 +92,7 @@ namespace draconis::core::plugin {
     }
 
     // Get the cache directory for draconis++
-    fn GetCacheDir() -> fs::path {
+    auto GetCacheDir() -> fs::path {
   #ifdef _WIN32
       using draconis::utils::env::GetEnv;
       if (auto result = GetEnv("LOCALAPPDATA"))
@@ -110,7 +108,7 @@ namespace draconis::core::plugin {
     }
 
     // Get the data directory for draconis++
-    fn GetDataDir() -> fs::path {
+    auto GetDataDir() -> fs::path {
   #ifdef _WIN32
       using draconis::utils::env::GetEnv;
       if (auto result = GetEnv("LOCALAPPDATA"))
@@ -126,7 +124,7 @@ namespace draconis::core::plugin {
     }
   } // namespace
 
-  fn GetPluginContext() -> PluginContext {
+  auto GetPluginContext() -> PluginContext {
     return PluginContext {
       .configDir = GetConfigDir() / "plugins",
       .cacheDir  = GetCacheDir() / "plugins",
@@ -138,29 +136,23 @@ namespace draconis::core::plugin {
     shutdown();
   }
 
-  fn PluginManager::getInstance() -> PluginManager& {
+  auto PluginManager::getInstance() -> PluginManager& {
     static PluginManager Instance;
     return Instance;
   }
 
-  fn PluginManager::initialize(const draconis::config::Config* config) -> Result<Unit> {
+  auto PluginManager::initialize(const PluginConfig& config) -> Result<Unit> {
     if (m_initialized)
       return {};
 
     debug_log("Initializing PluginManager...");
 
-    // Use the provided config or get from singleton
-    std::optional<draconis::config::Config> singletonConfig;
-    const draconis::config::Config&         effectiveConfig = config ? *config : (singletonConfig = draconis::config::Config::getInstance(), *singletonConfig);
-
     // Check if plugins are enabled in config
-  #if DRAC_ENABLE_PLUGINS
-    if (!effectiveConfig.plugins.enabled) {
+    if (!config.enabled) {
       debug_log("Plugin system disabled in configuration");
       m_initialized = true;
       return {};
     }
-  #endif
 
     // Add default search paths
     for (const fs::path& path : GetDefaultPluginPaths())
@@ -176,21 +168,19 @@ namespace draconis::core::plugin {
     }
 
     // Auto-load plugins from config
-  #if DRAC_ENABLE_PLUGINS
     CacheManager cache;
-    for (const auto& pluginName : effectiveConfig.plugins.autoLoad) {
+    for (const auto& pluginName : config.autoLoad) {
       debug_log("Auto-loading plugin '{}' from config", pluginName);
       if (auto loadResult = loadPlugin(pluginName, cache); !loadResult)
         warn_log("Failed to auto-load plugin '{}': {}", pluginName, loadResult.error().message);
     }
-  #endif
 
     m_initialized = true;
     debug_log("PluginManager initialized. Found {} discovered plugins.", listDiscoveredPlugins().size());
     return {};
   }
 
-  fn PluginManager::shutdown() -> Unit {
+  auto PluginManager::shutdown() -> Unit {
     if (!m_initialized)
       return;
 
@@ -215,7 +205,7 @@ namespace draconis::core::plugin {
     debug_log("PluginManager shut down.");
   }
 
-  fn PluginManager::addSearchPath(const fs::path& path) -> Unit {
+  auto PluginManager::addSearchPath(const fs::path& path) -> Unit {
     std::unique_lock<std::shared_mutex> lock(m_mutex);
 
     // Add only if not already present
@@ -225,12 +215,12 @@ namespace draconis::core::plugin {
     }
   }
 
-  fn PluginManager::getSearchPaths() const -> Vec<fs::path> {
+  auto PluginManager::getSearchPaths() const -> Vec<fs::path> {
     std::shared_lock<std::shared_mutex> lock(m_mutex);
     return m_pluginSearchPaths;
   }
 
-  fn PluginManager::scanForPlugins() -> Result<Unit> {
+  auto PluginManager::scanForPlugins() -> Result<Unit> {
     m_discoveredPlugins.clear();
 
     for (const auto& searchPath : m_pluginSearchPaths) {
@@ -249,7 +239,7 @@ namespace draconis::core::plugin {
     return {};
   }
 
-  fn PluginManager::loadPlugin(const String& pluginName, CacheManager& cache) -> Result<Unit> {
+  auto PluginManager::loadPlugin(const String& pluginName, CacheManager& cache) -> Result<Unit> {
     std::unique_lock<std::shared_mutex> lock(m_mutex);
 
     if (m_plugins.contains(pluginName) && m_plugins.at(pluginName).isLoaded) {
@@ -380,7 +370,7 @@ namespace draconis::core::plugin {
     return {};
   }
 
-  fn PluginManager::unloadPlugin(const String& pluginName) -> Result<Unit> {
+  auto PluginManager::unloadPlugin(const String& pluginName) -> Result<Unit> {
     std::unique_lock<std::shared_mutex> lock(m_mutex);
 
     if (!m_plugins.contains(pluginName))
@@ -436,7 +426,7 @@ namespace draconis::core::plugin {
     return {};
   }
 
-  fn PluginManager::getPlugin(const String& pluginName) const -> Option<IPlugin*> {
+  auto PluginManager::getPlugin(const String& pluginName) const -> Option<IPlugin*> {
     std::shared_lock<std::shared_mutex> lock(m_mutex);
     if (m_plugins.contains(pluginName))
       return m_plugins.at(pluginName).instance.get();
@@ -444,12 +434,12 @@ namespace draconis::core::plugin {
     return std::nullopt;
   }
 
-  fn PluginManager::getInfoProviderPlugins() const -> Vec<IInfoProviderPlugin*> {
+  auto PluginManager::getInfoProviderPlugins() const -> Vec<IInfoProviderPlugin*> {
     std::shared_lock<std::shared_mutex> lock(m_mutex);
     return m_infoProviderPlugins;
   }
 
-  fn PluginManager::getInfoProviderByName(const String& providerId) const -> Option<IInfoProviderPlugin*> {
+  auto PluginManager::getInfoProviderByName(const String& providerId) const -> Option<IInfoProviderPlugin*> {
     std::shared_lock<std::shared_mutex> lock(m_mutex);
     for (auto* plugin : m_infoProviderPlugins) {
       if (plugin->getProviderId() == providerId)
@@ -458,12 +448,12 @@ namespace draconis::core::plugin {
     return std::nullopt;
   }
 
-  fn PluginManager::getOutputFormatPlugins() const -> Vec<IOutputFormatPlugin*> {
+  auto PluginManager::getOutputFormatPlugins() const -> Vec<IOutputFormatPlugin*> {
     std::shared_lock<std::shared_mutex> lock(m_mutex);
     return m_outputFormatPlugins;
   }
 
-  fn PluginManager::listLoadedPlugins() const -> Vec<PluginMetadata> {
+  auto PluginManager::listLoadedPlugins() const -> Vec<PluginMetadata> {
     std::shared_lock<std::shared_mutex> lock(m_mutex);
     Vec<PluginMetadata>                 loadedMetadata;
 
@@ -478,7 +468,7 @@ namespace draconis::core::plugin {
     return loadedMetadata;
   }
 
-  fn PluginManager::listDiscoveredPlugins() const -> Vec<String> {
+  auto PluginManager::listDiscoveredPlugins() const -> Vec<String> {
     std::shared_lock<std::shared_mutex> lock(m_mutex);
     Vec<String>                         discoveredNames;
 
@@ -489,12 +479,12 @@ namespace draconis::core::plugin {
     return discoveredNames;
   }
 
-  fn PluginManager::isPluginLoaded(const String& pluginName) const -> bool {
+  auto PluginManager::isPluginLoaded(const String& pluginName) const -> bool {
     std::shared_lock<std::shared_mutex> lock(m_mutex);
     return m_plugins.contains(pluginName) && m_plugins.at(pluginName).isLoaded;
   }
 
-  fn PluginManager::loadDynamicLibrary(const fs::path& path) -> Result<DynamicLibraryHandle> {
+  auto PluginManager::loadDynamicLibrary(const fs::path& path) -> Result<DynamicLibraryHandle> {
   #ifdef _WIN32
     HMODULE handle = LoadLibraryA(path.string().c_str());
     if (!handle)
@@ -508,7 +498,7 @@ namespace draconis::core::plugin {
     return handle;
   }
 
-  fn PluginManager::unloadDynamicLibrary(DynamicLibraryHandle handle) -> Unit {
+  auto PluginManager::unloadDynamicLibrary(DynamicLibraryHandle handle) -> Unit {
     if (handle)
   #ifdef _WIN32
       FreeLibrary(handle);
@@ -517,7 +507,7 @@ namespace draconis::core::plugin {
   #endif
   }
 
-  fn PluginManager::getCreatePluginFunc(DynamicLibraryHandle handle) -> Result<IPlugin* (*)()> {
+  auto PluginManager::getCreatePluginFunc(DynamicLibraryHandle handle) -> Result<IPlugin* (*)()> {
   #ifdef _WIN32
     FARPROC func = GetProcAddress(handle, "CreatePlugin");
   #else
@@ -530,7 +520,7 @@ namespace draconis::core::plugin {
     return reinterpret_cast<IPlugin* (*)()>(func);
   }
 
-  fn PluginManager::getDestroyPluginFunc(DynamicLibraryHandle handle) -> Result<void (*)(IPlugin*)> {
+  auto PluginManager::getDestroyPluginFunc(DynamicLibraryHandle handle) -> Result<void (*)(IPlugin*)> {
   #ifdef _WIN32
     FARPROC func = GetProcAddress(handle, "DestroyPlugin");
   #else
@@ -543,7 +533,7 @@ namespace draconis::core::plugin {
     return reinterpret_cast<void (*)(IPlugin*)>(func);
   }
 
-  fn PluginManager::syncPluginLogLevel(DynamicLibraryHandle handle) -> void {
+  auto PluginManager::syncPluginLogLevel(DynamicLibraryHandle handle) -> void {
     using utils::logging::GetLogLevelPtr;
     using utils::logging::LogLevel;
 
@@ -564,7 +554,7 @@ namespace draconis::core::plugin {
     }
   }
 
-  fn PluginManager::initializePluginInstance(LoadedPlugin& loadedPlugin, CacheManager& /*cache*/) -> Result<Unit> {
+  auto PluginManager::initializePluginInstance(LoadedPlugin& loadedPlugin, CacheManager& /*cache*/) -> Result<Unit> {
     if (loadedPlugin.isInitialized) {
       debug_log("Plugin '{}' is already initialized", loadedPlugin.metadata.name);
       return {};

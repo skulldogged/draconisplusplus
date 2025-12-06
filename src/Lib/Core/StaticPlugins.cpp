@@ -14,50 +14,32 @@
 
 #if DRAC_ENABLE_PLUGINS && DRAC_PRECOMPILED_CONFIG
 
-  #include <algorithm>
-
 namespace draconis::core::plugin {
-  fn GetStaticPluginRegistry() -> utils::types::Vec<StaticPluginEntry>& {
-    static utils::types::Vec<StaticPluginEntry> Registry;
+  using namespace utils::types;
+
+  auto GetStaticPluginRegistry() -> UnorderedMap<String, StaticPluginEntry>& {
+    static UnorderedMap<String, StaticPluginEntry> Registry;
     return Registry;
   }
 
-  fn GetStaticPlugins() -> const utils::types::Vec<StaticPluginEntry>& {
-    return GetStaticPluginRegistry();
+  auto IsStaticPlugin(const String& name) -> bool {
+    return GetStaticPluginRegistry().contains(name);
   }
 
-  fn IsStaticPlugin(const utils::types::String& name) -> bool {
-    const auto& plugins = GetStaticPlugins();
-
-    return std::ranges::any_of(
-      plugins,
-      [&name](const auto& entry) -> auto {
-        return name == entry.name;
-      }
-    );
-  }
-
-  fn CreateStaticPlugin(const utils::types::String& name) -> IPlugin* {
-    const auto& plugins = GetStaticPlugins();
-
-    for (const auto& entry : plugins)
-      if (name == entry.name)
-        return entry.createFunc();
-
+  auto CreateStaticPlugin(const String& name) -> IPlugin* {
+    const auto& registry = GetStaticPluginRegistry();
+    if (auto iter = registry.find(name); iter != registry.end())
+      return iter->second.createFunc();
     return nullptr;
   }
 
-  fn DestroyStaticPlugin(const utils::types::String& name, IPlugin* plugin) -> void {
+  auto DestroyStaticPlugin(const String& name, IPlugin* plugin) -> void {
     if (!plugin)
       return;
 
-    const auto& plugins = GetStaticPlugins();
-
-    for (const auto& entry : plugins)
-      if (name == entry.name) {
-        entry.destroyFunc(plugin);
-        return;
-      }
+    const auto& registry = GetStaticPluginRegistry();
+    if (auto iter = registry.find(name); iter != registry.end())
+      iter->second.destroyFunc(plugin);
   }
 } // namespace draconis::core::plugin
 

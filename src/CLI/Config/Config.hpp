@@ -22,6 +22,10 @@
 
 #include <Drac++/Utils/Types.hpp>
 
+#if DRAC_ENABLE_PLUGINS
+  #include <Drac++/Core/PluginConfig.hpp>
+#endif
+
 namespace draconis::config {
   enum class LogoProtocol : draconis::utils::types::u8 {
     Kitty,
@@ -35,7 +39,7 @@ namespace draconis::config {
     draconis::utils::types::Option<draconis::utils::types::u32>    width;
     draconis::utils::types::Option<draconis::utils::types::u32>    height;
 
-    [[nodiscard]] fn getProtocol() const -> LogoProtocol {
+    [[nodiscard]] auto getProtocol() const -> LogoProtocol {
       if (!protocol)
         return LogoProtocol::Kitty;
       draconis::utils::types::String protoLower = *protocol;
@@ -65,7 +69,7 @@ namespace draconis::config {
      * On POSIX systems, it first tries to get the username using getpwuid,
      * then checks the USER and LOGNAME environment variables.
      */
-    static fn getDefaultName() -> draconis::utils::types::String {
+    static auto getDefaultName() -> draconis::utils::types::String {
 #ifdef _WIN32
       using draconis::utils::types::Array;
 
@@ -92,7 +96,7 @@ namespace draconis::config {
 #endif // _WIN32
     }
 
-    fn getName() const -> const draconis::utils::types::String& {
+    auto getName() const -> const draconis::utils::types::String& {
       if (!name)
         name = getDefaultName();
       return *name;
@@ -127,14 +131,9 @@ namespace draconis::config {
 
 #if DRAC_ENABLE_PLUGINS
   /**
-   * @struct Plugins
-   * @brief Holds configuration settings for plugins.
+   * @brief Alias to the library's PluginConfig for backward compatibility
    */
-  struct Plugins {
-    draconis::utils::types::Vec<draconis::utils::types::String> autoLoad; ///< List of plugin names to auto-load during initialization.
-
-    bool enabled = true; ///< Flag to enable or disable the plugin system.
-  };
+  using Plugins = draconis::core::plugin::PluginConfig;
 #endif // DRAC_ENABLE_PLUGINS
 
   /**
@@ -165,14 +164,14 @@ namespace draconis::config {
      * the operating system and user directory. It returns a std::filesystem::path
      * object representing the configuration file path.
      */
-    static fn getInstance() -> Config;
+    static auto getInstance() -> Config;
 
 #if !DRAC_PRECOMPILED_CONFIG
     /**
      * @brief Gets the path to the configuration file without loading it.
      * @return The path to the configuration file.
      */
-    static fn getConfigPath() -> std::filesystem::path;
+    static auto getConfigPath() -> std::filesystem::path;
 #endif
   };
 } // namespace draconis::config

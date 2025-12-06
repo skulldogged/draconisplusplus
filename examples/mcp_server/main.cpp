@@ -256,13 +256,13 @@ namespace {
   using ToolHandler        = Fn<ToolResponse(const Map<String, String>&)>;
   using NoParamToolHandler = Fn<ToolResponse()>;
 
-  fn GetCacheManager() -> CacheManager& {
+  auto GetCacheManager() -> CacheManager& {
     static CacheManager SCacheManager;
     return SCacheManager;
   }
 
   template <typename T>
-  fn resultToJson(const Result<T>& result) -> GlzJson {
+  auto resultToJson(const Result<T>& result) -> GlzJson {
     if (result)
       return *result;
 
@@ -272,7 +272,7 @@ namespace {
   }
 
   template <typename T>
-  fn serializeToJson(const T& obj) -> GlzJson {
+  auto serializeToJson(const T& obj) -> GlzJson {
     String jsonStr;
 
     if (glz::error_ctx errc = glz::write_json(obj, jsonStr); !errc) {
@@ -287,20 +287,20 @@ namespace {
     };
   }
 
-  fn makeErrorResult(StringView message, i32 code = -1) -> GlzJson {
+  auto makeErrorResult(StringView message, i32 code = -1) -> GlzJson {
     return {
       { "error", { { "message", String(message) }, { "code", code } } }
     };
   }
 
   template <typename T>
-  fn makeSuccessResult(const T& data) -> GlzJson {
+  auto makeSuccessResult(const T& data) -> GlzJson {
     return {
       { "data", serializeToJson(data) }
     };
   }
 
-  fn SystemInfoHandler() -> ToolResponse {
+  auto SystemInfoHandler() -> ToolResponse {
     CacheManager& cacheManager = GetCacheManager();
 
     SystemInfoResponse info;
@@ -325,7 +325,7 @@ namespace {
     return { makeSuccessResult(info) };
   }
 
-  fn HardwareInfoHandler() -> ToolResponse {
+  auto HardwareInfoHandler() -> ToolResponse {
     CacheManager& cacheManager = GetCacheManager();
 
     HardwareInfoResponse info;
@@ -344,7 +344,7 @@ namespace {
     return { makeSuccessResult(info) };
   }
 
-  fn PackageCountHandler(const Map<String, String>& params) -> ToolResponse {
+  auto PackageCountHandler(const Map<String, String>& params) -> ToolResponse {
     if constexpr (DRAC_ENABLE_PACKAGECOUNT) {
       using enum Manager;
 
@@ -418,7 +418,7 @@ namespace {
     }
   }
 
-  fn NetworkInfoHandler() -> ToolResponse {
+  auto NetworkInfoHandler() -> ToolResponse {
     CacheManager& cacheManager = GetCacheManager();
 
     NetworkInfoResponse info;
@@ -430,7 +430,7 @@ namespace {
     return { makeSuccessResult(info) };
   }
 
-  fn DisplayInfoHandler() -> ToolResponse {
+  auto DisplayInfoHandler() -> ToolResponse {
     CacheManager& cacheManager = GetCacheManager();
 
     DisplayInfoResponse info;
@@ -445,7 +445,7 @@ namespace {
     return { makeSuccessResult(info) };
   }
 
-  fn UptimeHandler() -> ToolResponse {
+  auto UptimeHandler() -> ToolResponse {
     Result<std::chrono::seconds> uptimeResult = GetUptime();
     if (!uptimeResult)
       return { makeErrorResult("Failed to get uptime: " + uptimeResult.error().message), true };
@@ -459,7 +459,7 @@ namespace {
     return { makeSuccessResult(info) };
   }
 
-  fn ComprehensiveInfoHandler([[maybe_unused]] const Map<String, String>& params) -> ToolResponse {
+  auto ComprehensiveInfoHandler([[maybe_unused]] const Map<String, String>& params) -> ToolResponse {
     CacheManager& cacheManager = GetCacheManager();
 
     ComprehensiveInfo info;
@@ -525,7 +525,7 @@ namespace {
     return { makeSuccessResult(info) };
   }
 
-  fn CacheClearHandler() -> ToolResponse {
+  auto CacheClearHandler() -> ToolResponse {
     return { makeSuccessResult(std::format("Removed {} files.", GetCacheManager().invalidateAll(false))) };
   }
 } // namespace
@@ -535,19 +535,19 @@ class DracStdioServer {
   DracStdioServer(String name, String version)
     : m_name(std::move(name)), m_version(std::move(version)) {}
 
-  fn setCapabilities(const GlzObject& capabilities) -> void {
+  auto setCapabilities(const GlzObject& capabilities) -> void {
     m_capabilities = capabilities;
   }
 
-  fn registerTool(const Tool& tool, const ToolHandler& handler) -> void {
+  auto registerTool(const Tool& tool, const ToolHandler& handler) -> void {
     m_tools[tool.name] = { tool, handler };
   }
 
-  fn registerTool(const Tool& tool, const NoParamToolHandler& handler) -> void {
+  auto registerTool(const Tool& tool, const NoParamToolHandler& handler) -> void {
     m_tools[tool.name] = { tool, [handler](const Map<String, String>&) -> ToolResponse { return handler(); } };
   }
 
-  fn run() -> Result<> {
+  auto run() -> Result<> {
     String line;
 
     while (std::getline(std::cin, line)) {
@@ -629,7 +629,7 @@ class DracStdioServer {
   GlzObject m_capabilities;
   Tools     m_tools;
 
-  fn processRequest(const String& method, const GlzJson& params) -> Result<GlzJson> {
+  auto processRequest(const String& method, const GlzJson& params) -> Result<GlzJson> {
     if (method == "initialize") {
       return GlzObject {
         { "protocolVersion",                                               "2025-06-18" },
@@ -750,7 +750,7 @@ class DracStdioServer {
   }
 };
 
-fn main() -> i32 {
+auto main() -> i32 {
   DracStdioServer server("Draconis++ MCP Server", DRAC_VERSION);
 
   server.setCapabilities({

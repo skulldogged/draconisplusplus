@@ -22,15 +22,11 @@
   #include "../Utils/CacheManager.hpp"
   #include "../Utils/Types.hpp"
   #include "Plugin.hpp"
+  #include "PluginConfig.hpp"
 
   #ifdef _WIN32
     #include <windows.h>
   #endif
-
-// Forward declaration to avoid circular includes
-namespace draconis::config {
-  struct Config;
-}
 
 namespace draconis::core::plugin {
   namespace fs = std::filesystem;
@@ -76,15 +72,15 @@ namespace draconis::core::plugin {
     LoadedPlugin(const LoadedPlugin&) = delete;
     LoadedPlugin(LoadedPlugin&&)      = default;
 
-    fn operator=(const LoadedPlugin&)->LoadedPlugin& = delete;
-    fn operator=(LoadedPlugin&&)->LoadedPlugin&      = default;
+    auto operator=(const LoadedPlugin&) -> LoadedPlugin& = delete;
+    auto operator=(LoadedPlugin&&) -> LoadedPlugin&      = default;
   };
 
   /**
    * @brief Get the plugin context with standard paths
    * @return PluginContext with config, cache, and data directories
    */
-  fn GetPluginContext() -> PluginContext;
+  auto GetPluginContext() -> PluginContext;
 
   class PluginManager {
    private:
@@ -104,58 +100,58 @@ namespace draconis::core::plugin {
 
     PluginManager() = default;
 
-    static fn loadDynamicLibrary(const fs::path& path) -> Result<DynamicLibraryHandle>;
-    static fn unloadDynamicLibrary(DynamicLibraryHandle handle) -> Unit;
+    static auto loadDynamicLibrary(const fs::path& path) -> Result<DynamicLibraryHandle>;
+    static auto unloadDynamicLibrary(DynamicLibraryHandle handle) -> Unit;
 
-    fn scanForPlugins() -> Result<Unit>;
+    auto scanForPlugins() -> Result<Unit>;
 
-    static fn getCreatePluginFunc(DynamicLibraryHandle handle) -> Result<IPlugin* (*)()>;
-    static fn getDestroyPluginFunc(DynamicLibraryHandle handle) -> Result<void (*)(IPlugin*)>;
-    static fn syncPluginLogLevel(DynamicLibraryHandle handle) -> void;
+    static auto getCreatePluginFunc(DynamicLibraryHandle handle) -> Result<IPlugin* (*)()>;
+    static auto getDestroyPluginFunc(DynamicLibraryHandle handle) -> Result<void (*)(IPlugin*)>;
+    static auto syncPluginLogLevel(DynamicLibraryHandle handle) -> void;
 
-    static fn initializePluginInstance(LoadedPlugin& loadedPlugin, CacheManager& cache) -> Result<Unit>;
+    static auto initializePluginInstance(LoadedPlugin& loadedPlugin, CacheManager& cache) -> Result<Unit>;
 
    public:
-    PluginManager(const PluginManager&)                = delete;
-    PluginManager(PluginManager&&)                     = delete;
-    fn operator=(const PluginManager&)->PluginManager& = delete;
-    fn operator=(PluginManager&&)->PluginManager&      = delete;
+    PluginManager(const PluginManager&)                    = delete;
+    PluginManager(PluginManager&&)                         = delete;
+    auto operator=(const PluginManager&) -> PluginManager& = delete;
+    auto operator=(PluginManager&&) -> PluginManager&      = delete;
 
     ~PluginManager(); // Destructor to unload all plugins
 
-    static fn getInstance() -> PluginManager&;
+    static auto getInstance() -> PluginManager&;
 
     // Initialization and shutdown
-    fn initialize(const draconis::config::Config* config) -> Result<Unit>;
-    fn shutdown() -> Unit;
-    fn isInitialized() const -> bool {
+    auto initialize(const PluginConfig& config = {}) -> Result<Unit>;
+    auto shutdown() -> Unit;
+    auto isInitialized() const -> bool {
       return m_initialized;
     }
 
     // Plugin discovery and loading
-    fn addSearchPath(const fs::path& path) -> Unit;
-    fn getSearchPaths() const -> Vec<fs::path>;
-    fn loadPlugin(const String& pluginName, CacheManager& cache) -> Result<Unit>;
-    fn unloadPlugin(const String& pluginName) -> Result<Unit>;
+    auto addSearchPath(const fs::path& path) -> Unit;
+    auto getSearchPaths() const -> Vec<fs::path>;
+    auto loadPlugin(const String& pluginName, CacheManager& cache) -> Result<Unit>;
+    auto unloadPlugin(const String& pluginName) -> Result<Unit>;
 
     // Plugin access (read-only, thread-safe)
-    fn getPlugin(const String& pluginName) const -> Option<IPlugin*>;
-    fn getInfoProviderPlugins() const -> Vec<IInfoProviderPlugin*>;
-    fn getOutputFormatPlugins() const -> Vec<IOutputFormatPlugin*>;
-    fn getInfoProviderByName(const String& providerId) const -> Option<IInfoProviderPlugin*>;
+    auto getPlugin(const String& pluginName) const -> Option<IPlugin*>;
+    auto getInfoProviderPlugins() const -> Vec<IInfoProviderPlugin*>;
+    auto getOutputFormatPlugins() const -> Vec<IOutputFormatPlugin*>;
+    auto getInfoProviderByName(const String& providerId) const -> Option<IInfoProviderPlugin*>;
 
     // Legacy alias
-    fn getSystemInfoPlugins() const -> Vec<IInfoProviderPlugin*> {
+    auto getSystemInfoPlugins() const -> Vec<IInfoProviderPlugin*> {
       return getInfoProviderPlugins();
     }
 
     // Plugin metadata
-    fn listLoadedPlugins() const -> Vec<PluginMetadata>;
-    fn listDiscoveredPlugins() const -> Vec<String>; // Lists all .so/.dll files found
-    fn isPluginLoaded(const String& pluginName) const -> bool;
+    auto listLoadedPlugins() const -> Vec<PluginMetadata>;
+    auto listDiscoveredPlugins() const -> Vec<String>; // Lists all .so/.dll files found
+    auto isPluginLoaded(const String& pluginName) const -> bool;
   };
 
-  inline fn GetPluginManager() -> PluginManager& {
+  inline auto GetPluginManager() -> PluginManager& {
     return PluginManager::getInstance();
   }
 } // namespace draconis::core::plugin
@@ -165,65 +161,65 @@ namespace draconis::core::plugin {
 namespace draconis::core::plugin {
   class PluginManager {
    public:
-    static fn getInstance() -> PluginManager& {
+    static auto getInstance() -> PluginManager& {
       static PluginManager instance;
       return instance;
     }
 
-    fn initialize() -> Result<Unit> {
+    auto initialize() -> Result<Unit> {
       return Ok({});
     }
 
-    fn shutdown() -> Unit {}
+    auto shutdown() {}
 
-    fn isInitialized() const -> bool {
+    auto isInitialized() const -> bool {
       return false;
     }
 
-    fn addSearchPath(const std::filesystem::path&) -> Unit {}
+    auto addSearchPath(const std::filesystem::path&) {}
 
-    fn getSearchPaths() const -> Vec<fs::path> {
+    auto getSearchPaths() const -> Vec<fs::path> {
       return {};
     }
 
-    fn scanForPlugins() -> Result<Vec<String> > {
+    auto scanForPlugins() -> Result<Vec<String> > {
       return Ok({});
     }
 
-    fn loadPlugin(const String&, CacheManager&) -> Result<Unit> {
+    auto loadPlugin(const String&, CacheManager&) -> Result<Unit> {
       return Ok({});
     }
 
-    fn unloadPlugin(const String&) -> Result<Unit> {
+    auto unloadPlugin(const String&) -> Result<Unit> {
       return Ok({});
     }
 
-    fn getPlugin(const String&) const -> Option<IPlugin*> {
+    auto getPlugin(const String&) const -> Option<IPlugin*> {
       return None;
     }
 
-    fn getSystemInfoPlugins() const -> Vec<ISystemInfoPlugin*> {
+    auto getSystemInfoPlugins() const -> Vec<ISystemInfoPlugin*> {
       return {};
     }
 
-    fn getOutputFormatPlugins() const -> Vec<IOutputFormatPlugin*> {
+    auto getOutputFormatPlugins() const -> Vec<IOutputFormatPlugin*> {
       return {};
     }
 
-    fn listLoadedPlugins() const -> Vec<PluginMetadata> {
+    auto listLoadedPlugins() const -> Vec<PluginMetadata> {
       return {};
     }
 
-    fn listDiscoveredPlugins() const -> Vec<String> {
+    auto listDiscoveredPlugins() const -> Vec<String> {
       return {};
     }
 
-    fn isPluginLoaded(const String&) const -> bool {
+    auto isPluginLoaded(const String&) const -> bool {
       return false;
     }
   };
 
-  inline fn getPluginManager() -> PluginManager& {
+  inline auto getPluginManager() -> PluginManager& {
     return PluginManager::getInstance();
   }
 } // namespace draconis::core::plugin

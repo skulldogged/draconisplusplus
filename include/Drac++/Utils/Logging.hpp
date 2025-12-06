@@ -31,7 +31,7 @@
 namespace draconis::utils::logging {
   namespace types = ::draconis::utils::types;
 
-  inline fn GetLogMutex() -> types::Mutex& {
+  inline auto GetLogMutex() -> types::Mutex& {
     static types::Mutex LogMutexInstance;
     return LogMutexInstance;
   }
@@ -41,7 +41,7 @@ namespace draconis::utils::logging {
    * @param text The text to write
    * @param useStderr Whether to write to stderr instead of stdout
    */
-  inline fn WriteToConsole(const types::StringView text, bool useStderr = false) -> void {
+  inline auto WriteToConsole(const types::StringView text, bool useStderr = false) -> void {
 #ifdef _WIN32
     HANDLE hOutput = GetStdHandle(useStderr ? STD_ERROR_HANDLE : STD_OUTPUT_HANDLE);
     if (hOutput != INVALID_HANDLE_VALUE) {
@@ -141,7 +141,7 @@ namespace draconis::utils::logging {
    * @details Using a function with static local avoids global variable warnings
    *          while maintaining the same semantics for cross-DLL log level sharing.
    */
-  inline fn GetLogLevelPtrStorage() -> LogLevel*& {
+  inline auto GetLogLevelPtrStorage() -> LogLevel*& {
     static LogLevel* Ptr = nullptr;
     return Ptr;
   }
@@ -150,7 +150,7 @@ namespace draconis::utils::logging {
    * @brief Gets a reference to the local log level storage.
    * @details Used as fallback when no shared pointer is set.
    */
-  inline fn GetLocalLogLevel() -> LogLevel& {
+  inline auto GetLocalLogLevel() -> LogLevel& {
     static LogLevel Level = LogLevel::Info;
     return Level;
   }
@@ -160,7 +160,7 @@ namespace draconis::utils::logging {
    * @details Called by the plugin manager to share the main executable's log level with plugins.
    * @param ptr Pointer to the main executable's log level storage.
    */
-  inline fn SetLogLevelPtr(LogLevel* ptr) -> void {
+  inline auto SetLogLevelPtr(LogLevel* ptr) -> void {
     GetLogLevelPtrStorage() = ptr;
   }
 
@@ -169,7 +169,7 @@ namespace draconis::utils::logging {
    * @details Used by the main executable to get its log level address to share with plugins.
    * @return Pointer to the local log level storage.
    */
-  inline fn GetLogLevelPtr() -> LogLevel* {
+  inline auto GetLogLevelPtr() -> LogLevel* {
     return &GetLocalLogLevel();
   }
 
@@ -177,7 +177,7 @@ namespace draconis::utils::logging {
    * @brief Gets the current runtime log level.
    * @return Reference to the current log level.
    */
-  inline fn GetRuntimeLogLevel() -> LogLevel& {
+  inline auto GetRuntimeLogLevel() -> LogLevel& {
     if (LogLevel* ptr = GetLogLevelPtrStorage())
       return *ptr;
 
@@ -188,7 +188,7 @@ namespace draconis::utils::logging {
    * @brief Sets the runtime log level.
    * @param level The new log level to set.
    */
-  inline fn SetRuntimeLogLevel(const LogLevel level) {
+  inline auto SetRuntimeLogLevel(const LogLevel level) {
     if (LogLevel* ptr = GetLogLevelPtrStorage())
       *ptr = level;
     else
@@ -211,7 +211,7 @@ namespace draconis::utils::logging {
    * @param style The style options (color, bold, italic)
    * @return Styled string with ANSI codes
    */
-  inline fn Stylize(const types::StringView text, const Style& style) -> types::String {
+  inline auto Stylize(const types::StringView text, const Style& style) -> types::String {
     const bool hasStyle = style.bold || style.italic || style.color != LogColor::White;
 
     if (!hasStyle)
@@ -239,7 +239,7 @@ namespace draconis::utils::logging {
    *       static storage duration and are never destroyed - safe for use
    *       during static destruction.
    */
-  constexpr fn GetLevelInfo() -> const types::Array<types::StringView, 4>& {
+  constexpr auto GetLevelInfo() -> const types::Array<types::StringView, 4>& {
     static constexpr types::Array<types::StringView, 4> LEVEL_INFO_INSTANCE = {
       LogLevelConst::DEBUG_STYLED,
       LogLevelConst::INFO_STYLED,
@@ -255,7 +255,7 @@ namespace draconis::utils::logging {
    * @param level The log level
    * @return true if the level should use stderr, false for stdout
    */
-  constexpr fn ShouldUseStderr(const LogLevel level) -> bool {
+  constexpr auto ShouldUseStderr(const LogLevel level) -> bool {
     return level == LogLevel::Warn || level == LogLevel::Error;
   }
 
@@ -267,7 +267,7 @@ namespace draconis::utils::logging {
    * @param args The arguments for the format string
    */
   template <typename... Args>
-  inline fn Print(const LogLevel level, std::format_string<Args...> fmt, Args&&... args) {
+  inline auto Print(const LogLevel level, std::format_string<Args...> fmt, Args&&... args) {
     WriteToConsole(std::format(fmt, std::forward<Args>(args)...), ShouldUseStderr(level));
   }
 
@@ -276,7 +276,7 @@ namespace draconis::utils::logging {
    * @param level The log level to determine output stream
    * @param text The pre-formatted text to print
    */
-  inline fn Print(const LogLevel level, const types::StringView text) {
+  inline auto Print(const LogLevel level, const types::StringView text) {
     WriteToConsole(text, ShouldUseStderr(level));
   }
 
@@ -288,7 +288,7 @@ namespace draconis::utils::logging {
    * @param args The arguments for the format string
    */
   template <typename... Args>
-  inline fn Println(const LogLevel level, std::format_string<Args...> fmt, Args&&... args) {
+  inline auto Println(const LogLevel level, std::format_string<Args...> fmt, Args&&... args) {
     WriteToConsole(std::format(fmt, std::forward<Args>(args)...) + '\n', ShouldUseStderr(level));
   }
 
@@ -297,7 +297,7 @@ namespace draconis::utils::logging {
    * @param level The log level to determine output stream
    * @param text The text to print
    */
-  inline fn Println(const LogLevel level, const types::StringView text) {
+  inline auto Println(const LogLevel level, const types::StringView text) {
     // We need to construct a string with newline because WriteToConsole doesn't add it
     // and we want a single atomic write if possible (though WriteToConsole isn't atomic across calls)
     types::String textWithNewline(text);
@@ -309,7 +309,7 @@ namespace draconis::utils::logging {
    * @brief Helper function to print just a newline with automatic std::print/std::cout selection
    * @param level The log level to determine output stream
    */
-  inline fn Println(const LogLevel level) {
+  inline auto Println(const LogLevel level) {
     WriteToConsole("\n", ShouldUseStderr(level));
   }
 
@@ -324,7 +324,7 @@ namespace draconis::utils::logging {
    * @param args Format arguments
    */
   template <typename... Args>
-  inline fn Print(std::format_string<Args...> fmt, Args&&... args) {
+  inline auto Print(std::format_string<Args...> fmt, Args&&... args) {
     WriteToConsole(std::format(fmt, std::forward<Args>(args)...));
   }
 
@@ -332,7 +332,7 @@ namespace draconis::utils::logging {
    * @brief Print a string to stdout (user-facing output, not logging)
    * @param text The text to print
    */
-  inline fn Print(const types::StringView text) {
+  inline auto Print(const types::StringView text) {
     WriteToConsole(text);
   }
 
@@ -343,7 +343,7 @@ namespace draconis::utils::logging {
    * @param args Format arguments
    */
   template <typename... Args>
-  inline fn Println(std::format_string<Args...> fmt, Args&&... args) {
+  inline auto Println(std::format_string<Args...> fmt, Args&&... args) {
     WriteToConsole(std::format(fmt, std::forward<Args>(args)...) + '\n');
   }
 
@@ -351,7 +351,7 @@ namespace draconis::utils::logging {
    * @brief Print a string with newline to stdout (user-facing output, not logging)
    * @param text The text to print
    */
-  inline fn Println(const types::StringView text) {
+  inline auto Println(const types::StringView text) {
     types::String textWithNewline(text);
     textWithNewline += '\n';
     WriteToConsole(textWithNewline);
@@ -360,7 +360,7 @@ namespace draconis::utils::logging {
   /**
    * @brief Print just a newline to stdout (user-facing output, not logging)
    */
-  inline fn Println() {
+  inline auto Println() {
     WriteToConsole("\n");
   }
 
@@ -372,7 +372,7 @@ namespace draconis::utils::logging {
    * @param tt The epoch time (seconds since epoch).
    * @return StringView pointing to a thread-local null-terminated buffer.
    */
-  inline fn GetCachedTimestamp(const std::time_t timeT) -> types::StringView {
+  inline auto GetCachedTimestamp(const std::time_t timeT) -> types::StringView {
     thread_local auto                  LastTt   = static_cast<std::time_t>(-1);
     thread_local types::Array<char, 9> TsBuffer = { '\0' };
 
@@ -406,7 +406,7 @@ namespace draconis::utils::logging {
    * @param args The arguments for the format string.
    */
   template <typename... Args>
-  fn LogImpl(
+  auto LogImpl(
     const LogLevel level,
 #ifndef NDEBUG
     const std::source_location& loc,
@@ -454,7 +454,7 @@ namespace draconis::utils::logging {
   }
 
   template <typename ErrorType>
-  fn LogError(const LogLevel level, const ErrorType& error_obj) {
+  auto LogError(const LogLevel level, const ErrorType& error_obj) {
     using DecayedErrorType = std::decay_t<ErrorType>;
 
 #ifndef NDEBUG

@@ -54,7 +54,7 @@ namespace {
     // NOLINTEND(readability-identifier-naming)
   };
 
-  fn CountUniquePackages(const String& dbPath) -> Result<u64> {
+  auto CountUniquePackages(const String& dbPath) -> Result<u64> {
     std::ifstream dbFile(dbPath);
 
     if (!dbFile.is_open())
@@ -72,7 +72,7 @@ namespace {
 } // namespace
 
 namespace draconis::core::system {
-  fn GetOperatingSystem(CacheManager& cache) -> Result<OSInfo> {
+  auto GetOperatingSystem(CacheManager& cache) -> Result<OSInfo> {
     return cache.getOrSet<OSInfo>("serenity_os_info", []() -> Result<OSInfo> {
       Result<os::unix_shared::UnameInfo> unameInfo = os::unix_shared::GetUnameInfo();
 
@@ -83,7 +83,7 @@ namespace draconis::core::system {
     });
   }
 
-  fn GetMemInfo(CacheManager& /*cache*/) -> Result<ResourceUsage> {
+  auto GetMemInfo(CacheManager& /*cache*/) -> Result<ResourceUsage> {
     constexpr PCStr path = "/sys/kernel/memstat";
     std::ifstream   file(path);
 
@@ -115,19 +115,19 @@ namespace draconis::core::system {
     return ResourceUsage(usedMem, totalMem);
   }
 
-  fn GetWindowManager(CacheManager& cache) -> Result<String> {
+  auto GetWindowManager(CacheManager& cache) -> Result<String> {
     return cache.getOrSet<String>("serenity_wm", []() -> Result<String> {
       return "WindowManager";
     });
   }
 
-  fn GetDesktopEnvironment(CacheManager& cache) -> Result<String> {
+  auto GetDesktopEnvironment(CacheManager& cache) -> Result<String> {
     return cache.getOrSet<String>("serenity_desktop_environment", []() -> Result<String> {
       return "SerenityOS Desktop";
     });
   }
 
-  fn GetShell(CacheManager& cache) -> Result<String> {
+  auto GetShell(CacheManager& cache) -> Result<String> {
     return cache.getOrSet<String>("serenity_shell", []() -> Result<String> {
       uid_t   userId = getuid();
       passwd* pw     = getpwuid(userId);
@@ -149,7 +149,7 @@ namespace draconis::core::system {
     });
   }
 
-  fn GetHost(CacheManager& cache) -> Result<String> {
+  auto GetHost(CacheManager& cache) -> Result<String> {
     return cache.getOrSet<String>("serenity_host", []() -> Result<String> {
       Array<char, HOST_NAME_MAX> hostname_buffer {};
 
@@ -160,13 +160,13 @@ namespace draconis::core::system {
     });
   }
 
-  fn GetKernelVersion(CacheManager& cache) -> Result<String> {
+  auto GetKernelVersion(CacheManager& cache) -> Result<String> {
     return cache.getOrSet<String>("serenity_kernel_version", []() -> Result<String> {
       return os::unix_shared::GetKernelRelease();
     });
   }
 
-  fn GetDiskUsage(CacheManager& /*cache*/) -> Result<ResourceUsage> {
+  auto GetDiskUsage(CacheManager& /*cache*/) -> Result<ResourceUsage> {
     return os::unix_shared::GetRootDiskUsage();
   }
 } // namespace draconis::core::system

@@ -214,7 +214,7 @@ namespace draconis::ui {
       '\0'
     };
 
-    fn Base64Encode(Span<const u8> data) -> String {
+    auto Base64Encode(Span<const u8> data) -> String {
       String out;
       out.reserve(((data.size() + 2) / 3) * 4);
 
@@ -253,12 +253,12 @@ namespace draconis::ui {
       return out;
     }
 
-    fn Base64Encode(const String& str) -> String {
+    auto Base64Encode(const String& str) -> String {
       const auto bytes = std::as_bytes(Span<const char>(str.data(), str.size()));
       return Base64Encode(Span<const u8>(reinterpret_cast<const u8*>(bytes.data()), bytes.size())); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
     }
 
-    fn ReadFileBytes(const String& path) -> Option<Vec<u8>> {
+    auto ReadFileBytes(const String& path) -> Option<Vec<u8>> {
       std::ifstream file(path, std::ios::binary);
 
       if (!file)
@@ -287,7 +287,7 @@ namespace draconis::ui {
     };
 
     // Query terminal cell pixel dimensions (stdout). Returns None if unavailable.
-    fn GetCellMetricsPx() -> Option<Pair<double, double>> {
+    auto GetCellMetricsPx() -> Option<Pair<double, double>> {
 #ifndef _WIN32
       winsize ws {};
       if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == 0) {
@@ -302,32 +302,32 @@ namespace draconis::ui {
     }
 
     // Best-effort probe for PNG and JPEG dimensions to estimate cell footprint.
-    fn ProbeImageSize(const String& path) -> Option<ImageSize> {
+    auto ProbeImageSize(const String& path) -> Option<ImageSize> {
       std::ifstream file(path, std::ios::binary);
       if (!file)
         return None;
 
       // Read enough bytes for signatures/header parsing
-      Array<unsigned char, 64> header {};
+      Array<u8, 64> header {};
       file.read(reinterpret_cast<char*>(header.data()), static_cast<std::streamsize>(header.size())); // NOLINT
       const auto readCount = static_cast<usize>(file.gcount());
       if (readCount < 24)
         return None;
 
       // PNG signature
-      const unsigned char pngSig[8] { 137, 80, 78, 71, 13, 10, 26, 10 };
-      if (std::equal(std::begin(pngSig), std::end(pngSig), header.begin())) {
+      const Array<u8, 8> pngSig { 137, 80, 78, 71, 13, 10, 26, 10 };
+      if (std::equal(pngSig.begin(), pngSig.end(), header.begin())) {
         // IHDR starts at byte 16
-        const auto be32 = [](const unsigned char* p) -> usize {
-          return (static_cast<usize>(p[0]) << 24) |
-            (static_cast<usize>(p[1]) << 16) |
-            (static_cast<usize>(p[2]) << 8) |
-            static_cast<usize>(p[3]);
+        const auto be32 = [](Span<const u8> data, usize offset) -> usize {
+          return (static_cast<usize>(data[offset]) << 24) |
+            (static_cast<usize>(data[offset + 1]) << 16) |
+            (static_cast<usize>(data[offset + 2]) << 8) |
+            static_cast<usize>(data[offset + 3]);
         };
 
         return ImageSize {
-          .width  = be32(&header[16]),
-          .height = be32(&header[20]),
+          .width  = be32(header, 16),
+          .height = be32(header, 20),
         };
       }
 
@@ -348,8 +348,8 @@ namespace draconis::ui {
             break;
 
           // Read segment length
-          unsigned char lenBytes[2] {};
-          file.read(reinterpret_cast<char*>(lenBytes), 2); // NOLINT
+          Array<u8, 2> lenBytes {};
+          file.read(reinterpret_cast<char*>(lenBytes.data()), 2); // NOLINT
           if (!file)
             break;
           const usize segLen = (static_cast<usize>(lenBytes[0]) << 8) | static_cast<usize>(lenBytes[1]);
@@ -358,8 +358,8 @@ namespace draconis::ui {
 
           // SOF0/1/2/3/5/6/7/9/A/B/C/D/E/F markers carry dimensions
           if ((marker >= 0xC0 && marker <= 0xC3) || (marker >= 0xC5 && marker <= 0xC7) || (marker >= 0xC9 && marker <= 0xCB) || (marker >= 0xCD && marker <= 0xCF)) {
-            unsigned char sof[5] {};
-            file.read(reinterpret_cast<char*>(sof), 5); // NOLINT
+            Array<u8, 5> sof {};
+            file.read(reinterpret_cast<char*>(sof.data()), 5); // NOLINT
             if (!file)
               break;
             const usize height = (static_cast<usize>(sof[1]) << 8) | static_cast<usize>(sof[2]);
@@ -367,16 +367,16 @@ namespace draconis::ui {
             if (height > 0 && width > 0)
               return ImageSize { .width = width, .height = height };
             break;
-          } else {
-            file.seekg(static_cast<std::streamoff>(segLen) - 2, std::ios::cur);
           }
+
+          file.seekg(static_cast<std::streamoff>(segLen) - 2, std::ios::cur);
         }
       }
 
       return None;
     }
 
-    fn BuildInlineSequence(const config::Logo& logoCfg, usize widthCells, usize heightCells, usize widthPx, usize heightPx) -> Option<String> {
+    auto BuildInlineSequence(const config::Logo& logoCfg, usize widthCells, usize heightCells, usize widthPx, usize heightPx) -> Option<String> {
       if (!logoCfg.imagePath)
         return None;
 
@@ -411,11 +411,11 @@ namespace draconis::ui {
       if (!bytes || bytes->empty())
         return None;
 
-      const auto formatDimension = [](usize cells, usize px) -> Option<String> {
+      const auto formatDimension = [](usize cells, usize pixels) -> Option<String> {
         if (cells > 0)
           return std::make_optional<String>(std::to_string(cells));
-        if (px > 0)
-          return std::make_optional<String>(std::format("{}px", px));
+        if (pixels > 0)
+          return std::make_optional<String>(std::format("{}px", pixels));
         return None;
       };
 
@@ -465,7 +465,7 @@ namespace draconis::ui {
       return sequence;
     }
 
-    fn BuildInlineLogo(const config::Logo& logoCfg, [[maybe_unused]] usize suggestedHeight) -> Option<LogoRender> {
+    auto BuildInlineLogo(const config::Logo& logoCfg, [[maybe_unused]] usize suggestedHeight) -> Option<LogoRender> {
       if (!logoCfg.imagePath)
         return None;
 
@@ -480,11 +480,11 @@ namespace draconis::ui {
       if (const Option<ImageSize> imgSize = ProbeImageSize(*logoCfg.imagePath)) {
         const double aspect = imgSize->height == 0 ? 1.0 : static_cast<double>(imgSize->width) / static_cast<double>(imgSize->height);
 
-        if (logoWidthPx == 0 && logoHeightPx > 0) {
+        if (logoWidthPx == 0 && logoHeightPx > 0)
           logoWidthPx = std::max<usize>(1, static_cast<usize>(std::llround(aspect * static_cast<double>(logoHeightPx))));
-        } else if (logoHeightPx == 0 && logoWidthPx > 0) {
+        else if (logoHeightPx == 0 && logoWidthPx > 0)
           logoHeightPx = std::max<usize>(1, static_cast<usize>(std::llround(static_cast<double>(logoWidthPx) / aspect)));
-        } else if (logoWidthPx == 0 && logoHeightPx == 0) {
+        else if (logoWidthPx == 0 && logoHeightPx == 0) {
           logoWidthPx  = imgSize->width;
           logoHeightPx = imgSize->height;
         }
@@ -497,12 +497,13 @@ namespace draconis::ui {
 
       // Determine how many terminal columns/rows the image will occupy to shift the text,
       // and prefer to send cell sizing when possible (kitty scales to fit).
-      usize       shiftWidthCells = 0;
-      usize       logoHeightCells = 0;
-      usize       sendWidthCells  = 0;
-      usize       sendHeightCells = 0;
-      const usize renderWidthPx   = logoWidthPx;
-      const usize renderHeightPx  = logoHeightPx;
+      usize shiftWidthCells = 0,
+            logoHeightCells = 0,
+            sendWidthCells  = 0,
+            sendHeightCells = 0;
+
+      const usize renderWidthPx  = logoWidthPx,
+                  renderHeightPx = logoHeightPx;
 
       if (const Option<Pair<double, double>> cellMetrics = GetCellMetricsPx()) {
         const double cellW = cellMetrics->first;
@@ -522,12 +523,11 @@ namespace draconis::ui {
 
       // Fallback to a conservative estimate when the terminal doesn't report pixel metrics,
       // so explicit pixel sizing still has an effect on display size.
-      if (shiftWidthCells == 0 && renderWidthPx > 0) {
+      if (shiftWidthCells == 0 && renderWidthPx > 0)
         shiftWidthCells = std::max<usize>(1, renderWidthPx / 10);
-      }
-      if (logoHeightCells == 0 && renderHeightPx > 0) {
+      if (logoHeightCells == 0 && renderHeightPx > 0)
         logoHeightCells = std::max<usize>(1, renderHeightPx / 10);
-      }
+
       if (hasExplicitSize) {
         if (sendWidthCells == 0 && sendWidthPx > 0)
           sendWidthCells = std::max<usize>(1, sendWidthPx / 10);
@@ -546,10 +546,19 @@ namespace draconis::ui {
       LogoRender render;
       // width/height reported back are used for shifting/padding the text box; ensure
       // height reflects any sizing we applied (cells or derived pixels).
+
       render.width    = shiftWidthCells;
-      render.height   = logoHeightCells > 0 ? logoHeightCells
-                                            : (sendHeightCells > 0 ? sendHeightCells
-                                                                   : (renderHeightPx > 0 ? std::max<usize>(1, renderHeightPx / 10) : 0));
+      render.height   = logoHeightCells > 0
+          ? logoHeightCells
+          : (
+            sendHeightCells > 0
+                ? sendHeightCells
+                : (
+                  renderHeightPx > 0
+                      ? std::max<usize>(1, renderHeightPx / 10)
+                      : 0
+                )
+          );
       render.isInline = true;
       render.sequence = *sequence;
 
@@ -574,7 +583,7 @@ namespace draconis::ui {
     }};
     // clang-format on
 
-    constexpr fn GetDistroIcon(StringView distro) -> Option<StringView> {
+    constexpr auto GetDistroIcon(StringView distro) -> Option<StringView> {
       for (const auto& [distroName, distroIcon] : distro_icons)
         if (distro.contains(distroName))
           return distroIcon;
@@ -602,7 +611,7 @@ namespace draconis::ui {
       "\033[38;5;15m◯\033[0m"
     };
 
-    constexpr fn IsWideCharacter(char32_t codepoint) -> bool {
+    constexpr auto IsWideCharacter(char32_t codepoint) -> bool {
       return (codepoint >= 0x1100 && codepoint <= 0x115F) || // Hangul Jamo
         (codepoint >= 0x2329 && codepoint <= 0x232A) ||      // Angle brackets
         (codepoint >= 0x2E80 && codepoint <= 0x2EFF) ||      // CJK Radicals Supplement
@@ -632,11 +641,11 @@ namespace draconis::ui {
         (codepoint >= 0x30000 && codepoint <= 0x3FFFD);      // CJK Unified Ideographs Extension F
     }
 
-    constexpr fn DecodeUTF8(const StringView& str, usize& pos) -> char32_t {
+    constexpr auto DecodeUTF8(const StringView& str, usize& pos) -> char32_t {
       if (pos >= str.length())
         return 0;
 
-      const fn getByte = [&](usize index) -> u8 {
+      const auto getByte = [&](usize index) -> u8 {
         return static_cast<u8>(str[index]);
       };
 
@@ -681,7 +690,7 @@ namespace draconis::ui {
       return 0; // Invalid UTF-8
     }
 
-    constexpr fn GetVisualWidth(const StringView& str) -> usize {
+    constexpr auto GetVisualWidth(const StringView& str) -> usize {
       usize width    = 0;
       bool  inEscape = false;
       usize pos      = 0;
@@ -713,7 +722,7 @@ namespace draconis::ui {
      * @param wrapWidth Maximum visual width per line (0 = no wrap)
      * @return Vector of wrapped lines
      */
-    fn WordWrap(const StringView& text, const usize wrapWidth) -> Vec<String> {
+    auto WordWrap(const StringView& text, const usize wrapWidth) -> Vec<String> {
       Vec<String> lines;
 
       if (wrapWidth == 0) {
@@ -737,9 +746,8 @@ namespace draconis::ui {
       // Calculate prefix sums for efficient width calculation
       // prefixWidth[i] = total width of words 0..i-1 including spaces between them
       Vec<usize> prefixWidth(words.size() + 1, 0);
-      for (usize idx = 0; idx < words.size(); ++idx) {
+      for (usize idx = 0; idx < words.size(); ++idx)
         prefixWidth[idx + 1] = prefixWidth[idx] + wordWidths[idx] + (idx > 0 ? 1 : 0);
-      }
 
       // Helper to get width of words[start..end) with spaces
       auto getLineWidth = [&](usize start, usize end) -> usize {
@@ -861,26 +869,27 @@ namespace draconis::ui {
       return lines;
     }
 
-    constexpr fn CreateDistributedColorCircles(usize availableWidth) -> String {
+    constexpr auto CreateDistributedColorCircles(usize availableWidth) -> String {
       if (COLOR_CIRCLES.empty() || availableWidth == 0)
         return "";
 
-      const usize circleWidth = GetVisualWidth(COLOR_CIRCLES.at(0));
-      const usize numCircles  = COLOR_CIRCLES.size();
-
-      const usize minSpacingPerGap  = 1;
-      const usize totalMinSpacing   = (numCircles - 1) * minSpacingPerGap;
-      const usize totalCirclesWidth = numCircles * circleWidth;
-      const usize requiredWidth     = totalCirclesWidth + totalMinSpacing;
-      const usize effectiveWidth    = std::max(availableWidth, requiredWidth);
+      const usize
+        circleWidth       = GetVisualWidth(COLOR_CIRCLES.at(0)),
+        numCircles        = COLOR_CIRCLES.size(),
+        minSpacingPerGap  = 1,
+        totalMinSpacing   = (numCircles - 1) * minSpacingPerGap,
+        totalCirclesWidth = numCircles * circleWidth,
+        requiredWidth     = totalCirclesWidth + totalMinSpacing,
+        effectiveWidth    = std::max(availableWidth, requiredWidth);
 
       if (numCircles == 1) {
         const usize padding = effectiveWidth / 2;
         return String(padding, ' ') + String(COLOR_CIRCLES.at(0));
       }
 
-      const usize totalSpacing   = effectiveWidth - totalCirclesWidth;
-      const usize spacingBetween = totalSpacing / (numCircles - 1);
+      const usize
+        totalSpacing   = effectiveWidth - totalCirclesWidth,
+        spacingBetween = totalSpacing / (numCircles - 1);
 
       String result;
       result.reserve(effectiveWidth);
@@ -896,7 +905,7 @@ namespace draconis::ui {
       return result;
     }
 
-    constexpr fn ProcessGroup(UIGroup& group) -> usize {
+    constexpr auto ProcessGroup(UIGroup& group) -> usize {
       if (group.rows.empty())
         return 0;
 
@@ -936,9 +945,9 @@ namespace draconis::ui {
           debug_log(
             "Width mismatch! Icon: {} vs {}, Label: {} vs {}, Value: {} vs {}",
             // clang-format off
-            iconW, coloredIconW,
+            iconW,      coloredIconW,
             labelWidth, coloredLabelW,
-            valueW, coloredValueW
+            valueW,     coloredValueW
             // clang-format on
           );
 
@@ -956,7 +965,7 @@ namespace draconis::ui {
       return groupMaxWidth;
     }
 
-    constexpr fn RenderGroup(String& out, const UIGroup& group, const usize maxContentWidth, const String& hBorder, bool& hasRenderedContent) {
+    constexpr auto RenderGroup(String& out, const UIGroup& group, const usize maxContentWidth, const String& hBorder, bool& hasRenderedContent) {
       if (group.rows.empty())
         return;
 
@@ -979,10 +988,12 @@ namespace draconis::ui {
           if (!wrappedLines.empty()) {
             // First line: icon + label + first wrapped segment
             const String coloredFirstLine = Stylize(wrappedLines[0], { .color = valueColor });
-            const usize  firstLineWidth   = GetVisualWidth(wrappedLines[0]);
-            const usize  firstPadding     = (maxContentWidth >= leftWidth + firstLineWidth + 1)
-                   ? maxContentWidth - (leftWidth + firstLineWidth)
-                   : 1;
+
+            const usize
+              firstLineWidth = GetVisualWidth(wrappedLines[0]),
+              firstPadding   = (maxContentWidth >= leftWidth + firstLineWidth + 1)
+                ? maxContentWidth - (leftWidth + firstLineWidth)
+                : 1;
 
             out += "│";
             out += group.coloredIcons[i];
@@ -995,10 +1006,12 @@ namespace draconis::ui {
             // Subsequent lines: indent + wrapped segment (right-aligned)
             for (usize j = 1; j < wrappedLines.size(); ++j) {
               const String coloredLine = Stylize(wrappedLines[j], { .color = valueColor });
-              const usize  lineWidth   = GetVisualWidth(wrappedLines[j]);
-              const usize  linePadding = (maxContentWidth > lineWidth)
-                 ? maxContentWidth - lineWidth
-                 : 0;
+
+              const usize
+                lineWidth   = GetVisualWidth(wrappedLines[j]),
+                linePadding = (maxContentWidth > lineWidth)
+                ? maxContentWidth - lineWidth
+                : 0;
 
               out += "│";
               out.append(linePadding, ' ');
@@ -1008,8 +1021,9 @@ namespace draconis::ui {
           }
         } else {
           // Normal rendering without word wrap
-          const usize rightWidth = group.valueWidths[i];
-          const usize padding    = (maxContentWidth >= leftWidth + rightWidth)
+          const usize
+            rightWidth = group.valueWidths[i],
+            padding    = (maxContentWidth >= leftWidth + rightWidth)
                ? maxContentWidth - (leftWidth + rightWidth)
                : 0;
 
@@ -1026,43 +1040,39 @@ namespace draconis::ui {
       hasRenderedContent = true;
     }
 
-    constexpr fn ToLowerCopy(String str) -> String {
+    constexpr auto ToLowerCopy(String str) -> String {
       std::ranges::transform(
         str,
         str.begin(),
-        [](unsigned char chr) -> char {
-          return static_cast<char>(std::tolower(chr));
-        }
+        [](unsigned char chr) -> char { return static_cast<char>(std::tolower(chr)); }
       );
       return str;
     }
 
-    constexpr fn ParsePluginKey(const String& key) -> Option<Pair<String, Option<String>>> {
-      const StringView prefixDot        = "plugin.";
-      const StringView prefixUnderscore = "plugin_";
+    constexpr auto ParsePluginKey(const String& key) -> Option<Pair<String, Option<String>>> {
+      const StringView prefix = "plugin.";
 
-      if (!key.starts_with(prefixDot) && !key.starts_with(prefixUnderscore))
+      if (!key.starts_with(prefix))
         return None;
 
-      const usize prefixLen = key.starts_with(prefixDot) ? prefixDot.size() : prefixUnderscore.size();
-      const char  separator = key.starts_with(prefixDot) ? '.' : '_';
+      const usize prefixLen = prefix.size();
 
       if (key.size() <= prefixLen)
         return None;
 
       const String remainder = key.substr(prefixLen);
-      const usize  sepPos    = remainder.find(separator);
+      const usize  sepPos    = remainder.find('.');
 
       if (sepPos == String::npos)
         return Pair<String, Option<String>> { remainder, None };
 
-      String pluginId = remainder.substr(0, sepPos);
-      String field    = remainder.substr(sepPos + 1);
+      String pluginId = remainder.substr(0, sepPos),
+             field    = remainder.substr(sepPos + 1);
 
       return Pair<String, Option<String>> { std::move(pluginId), Option<String>(std::move(field)) };
     }
 
-    fn BuildDefaultLayout(const SystemInfo& data) -> Vec<UILayoutGroup> {
+    auto BuildDefaultLayout(const SystemInfo& data) -> Vec<UILayoutGroup> {
       Vec<UILayoutGroup> layout;
 
       UILayoutGroup introGroup;
@@ -1070,10 +1080,8 @@ namespace draconis::ui {
       introGroup.rows.push_back(UILayoutRow { .key = "date" });
 
 #if DRAC_ENABLE_PLUGINS
-      for (const auto& [pluginId, displayInfo] : data.pluginDisplay) {
-        (void)displayInfo;
+      for (const auto& [pluginId, _] : data.pluginDisplay)
         introGroup.rows.push_back(UILayoutRow { .key = std::format("plugin.{}", pluginId) });
-      }
 #endif
 
       layout.push_back(std::move(introGroup));
@@ -1111,7 +1119,7 @@ namespace draconis::ui {
       return layout;
     }
 
-    fn BuildRowFromLayout(
+    auto BuildRowFromLayout(
       const UILayoutRow& layoutRow,
       const Icons&       iconType,
       const SystemInfo&  data,
@@ -1130,10 +1138,9 @@ namespace draconis::ui {
         const bool            hasDisplayInfo = displayIt != data.pluginDisplay.end();
 
         if (fieldName) {
-          if (const auto pluginDataIt = data.pluginData.find(pluginId); pluginDataIt != data.pluginData.end()) {
+          if (const auto pluginDataIt = data.pluginData.find(pluginId); pluginDataIt != data.pluginData.end())
             if (const auto valueIt = pluginDataIt->second.find(*fieldName); valueIt != pluginDataIt->second.end())
               value = valueIt->second;
-          }
 
           if (!value)
             return None;
@@ -1181,94 +1188,96 @@ namespace draconis::ui {
 #endif
       }
 
-      RowInfo row;
-
-      if (keyLower == "date") {
-        if (!data.date)
-          return None;
-        row.icon  = iconType.calendar;
-        row.label = _("date");
-        row.value = *data.date;
-      } else if (keyLower == "host") {
-        if (!data.host || data.host->empty())
-          return None;
-        row.icon  = iconType.host;
-        row.label = _("host");
-        row.value = *data.host;
-      } else if (keyLower == "os") {
-        if (!data.operatingSystem)
-          return None;
-        row.icon  = distroIcon ? String(*distroIcon) : String(iconType.os);
-        row.label = _("os");
-        row.value = std::format("{} {}", data.operatingSystem->name, data.operatingSystem->version);
-      } else if (keyLower == "kernel") {
-        if (!data.kernelVersion)
-          return None;
-        row.icon  = iconType.kernel;
-        row.label = _("kernel");
-        row.value = *data.kernelVersion;
-      } else if (keyLower == "ram") {
-        if (!data.memInfo)
-          return None;
-        row.icon  = iconType.memory;
-        row.label = _("ram");
-        row.value = std::format("{}/{}", BytesToGiB(data.memInfo->usedBytes), BytesToGiB(data.memInfo->totalBytes));
-      } else if (keyLower == "disk") {
-        if (!data.diskUsage)
-          return None;
-        row.icon  = iconType.disk;
-        row.label = _("disk");
-        row.value = std::format("{}/{}", BytesToGiB(data.diskUsage->usedBytes), BytesToGiB(data.diskUsage->totalBytes));
-      } else if (keyLower == "cpu") {
-        if (!data.cpuModel)
-          return None;
-        row.icon  = iconType.cpu;
-        row.label = _("cpu");
-        row.value = *data.cpuModel;
-      } else if (keyLower == "gpu") {
-        if (!data.gpuModel)
-          return None;
-        row.icon  = iconType.gpu;
-        row.label = _("gpu");
-        row.value = *data.gpuModel;
-      } else if (keyLower == "uptime") {
-        if (!data.uptime)
-          return None;
-        row.icon  = iconType.uptime;
-        row.label = _("uptime");
-        row.value = std::format("{}", SecondsToFormattedDuration { *data.uptime });
-      } else if (keyLower == "shell") {
-        if (!data.shell)
-          return None;
-        row.icon  = iconType.shell;
-        row.label = _("shell");
-        row.value = *data.shell;
-      }
+      // clang-format off
+      using RowBuilder = std::function<Option<RowInfo>(const Icons&, const SystemInfo&, Option<StringView>)>;
+      static const std::unordered_map<String, RowBuilder> K_ROW_BUILDERS = {
+        { "date", [](const Icons& icons, const SystemInfo& info, Option<StringView>) -> Option<RowInfo> {
+          if (!info.date) return None;
+          return RowInfo { .icon = String(icons.calendar), .label = String(_("date")), .value = *info.date };
+        }},
+        { "host", [](const Icons& icons, const SystemInfo& info, Option<StringView>) -> Option<RowInfo> {
+          if (!info.host || info.host->empty()) return None;
+          return RowInfo { .icon = String(icons.host), .label = String(_("host")), .value = *info.host };
+        }},
+        { "os", [](const Icons& icons, const SystemInfo& info, Option<StringView> distro) -> Option<RowInfo> {
+          if (!info.operatingSystem) return None;
+          return RowInfo {
+            .icon  = distro ? String(*distro) : String(icons.os),
+            .label = String(_("os")),
+            .value = std::format("{} {}", info.operatingSystem->name, info.operatingSystem->version)
+          };
+        }},
+        { "kernel", [](const Icons& icons, const SystemInfo& info, Option<StringView>) -> Option<RowInfo> {
+          if (!info.kernelVersion) return None;
+          return RowInfo { .icon = String(icons.kernel), .label = String(_("kernel")), .value = *info.kernelVersion };
+        }},
+        { "ram", [](const Icons& icons, const SystemInfo& info, Option<StringView>) -> Option<RowInfo> {
+          if (!info.memInfo) return None;
+          return RowInfo {
+            .icon  = String(icons.memory),
+            .label = String(_("ram")),
+            .value = std::format("{}/{}", BytesToGiB(info.memInfo->usedBytes), BytesToGiB(info.memInfo->totalBytes))
+          };
+        }},
+        { "disk", [](const Icons& icons, const SystemInfo& info, Option<StringView>) -> Option<RowInfo> {
+          if (!info.diskUsage) return None;
+          return RowInfo {
+            .icon  = String(icons.disk),
+            .label = String(_("disk")),
+            .value = std::format("{}/{}", BytesToGiB(info.diskUsage->usedBytes), BytesToGiB(info.diskUsage->totalBytes))
+          };
+        }},
+        { "cpu", [](const Icons& icons, const SystemInfo& info, Option<StringView>) -> Option<RowInfo> {
+          if (!info.cpuModel) return None;
+          return RowInfo { .icon = String(icons.cpu), .label = String(_("cpu")), .value = *info.cpuModel };
+        }},
+        { "gpu", [](const Icons& icons, const SystemInfo& info, Option<StringView>) -> Option<RowInfo> {
+          if (!info.gpuModel) return None;
+          return RowInfo { .icon = String(icons.gpu), .label = String(_("gpu")), .value = *info.gpuModel };
+        }},
+        { "uptime", [](const Icons& icons, const SystemInfo& info, Option<StringView>) -> Option<RowInfo> {
+          if (!info.uptime) return None;
+          return RowInfo {
+            .icon  = String(icons.uptime),
+            .label = String(_("uptime")),
+            .value = std::format("{}", SecondsToFormattedDuration { *info.uptime })
+          };
+        }},
+        { "shell", [](const Icons& icons, const SystemInfo& info, Option<StringView>) -> Option<RowInfo> {
+          if (!info.shell) return None;
+          return RowInfo { .icon = String(icons.shell), .label = String(_("shell")), .value = *info.shell };
+        }},
 #if DRAC_ENABLE_PACKAGECOUNT
-      else if (keyLower == "packages" || keyLower == "package") {
-        if (!data.packageCount || *data.packageCount == 0)
-          return None;
-        row.icon  = iconType.package;
-        row.label = _("packages");
-        row.value = std::format("{}", *data.packageCount);
-      }
+        { "packages", [](const Icons& icons, const SystemInfo& info, Option<StringView>) -> Option<RowInfo> {
+          if (!info.packageCount || *info.packageCount == 0) return None;
+          return RowInfo { .icon = String(icons.package), .label = String(_("packages")), .value = std::format("{}", *info.packageCount) };
+        }},
+        { "package", [](const Icons& icons, const SystemInfo& info, Option<StringView>) -> Option<RowInfo> {
+          if (!info.packageCount || *info.packageCount == 0) return None;
+          return RowInfo { .icon = String(icons.package), .label = String(_("packages")), .value = std::format("{}", *info.packageCount) };
+        }},
 #endif
-      else if (keyLower == "de") {
-        if (!data.desktopEnv)
-          return None;
-        if (data.windowMgr && *data.desktopEnv == *data.windowMgr)
-          return None;
-        row.icon  = iconType.desktopEnvironment;
-        row.label = _("de");
-        row.value = *data.desktopEnv;
-      } else if (keyLower == "wm") {
-        if (!data.windowMgr)
-          return None;
-        row.icon  = iconType.windowManager;
-        row.label = _("wm");
-        row.value = *data.windowMgr;
-      } else
+        { "de", [](const Icons& icons, const SystemInfo& info, Option<StringView>) -> Option<RowInfo> {
+          if (!info.desktopEnv) return None;
+          if (info.windowMgr && *info.desktopEnv == *info.windowMgr) return None;
+          return RowInfo { .icon = String(icons.desktopEnvironment), .label = String(_("de")), .value = *info.desktopEnv };
+        }},
+        { "wm", [](const Icons& icons, const SystemInfo& info, Option<StringView>) -> Option<RowInfo> {
+          if (!info.windowMgr) return None;
+          return RowInfo { .icon = String(icons.windowManager), .label = String(_("wm")), .value = *info.windowMgr };
+        }},
+      };
+      // clang-format on
+
+      const auto builderIt = K_ROW_BUILDERS.find(keyLower);
+      if (builderIt == K_ROW_BUILDERS.end())
         return None;
+
+      Option<RowInfo> rowOpt = builderIt->second(iconType, data, distroIcon);
+      if (!rowOpt)
+        return None;
+
+      RowInfo row = std::move(*rowOpt);
 
       if (layoutRow.icon)
         row.icon = *layoutRow.icon;
@@ -1282,7 +1291,7 @@ namespace draconis::ui {
 
   } // namespace
 
-  fn CreateUI(const Config& config, const SystemInfo& data, bool noAscii) -> String {
+  auto CreateUI(const Config& config, const SystemInfo& data, bool noAscii) -> String {
     const String& name     = config.general.getName();
     const Icons&  iconType = ICON_TYPE;
 
@@ -1307,10 +1316,9 @@ namespace draconis::ui {
       UIGroup group;
       group.rows.reserve(groupCfg.rows.size());
 
-      for (const auto& rowCfg : groupCfg.rows) {
+      for (const auto& rowCfg : groupCfg.rows)
         if (auto row = BuildRowFromLayout(rowCfg, iconType, data, distroIcon))
           group.rows.push_back(std::move(*row));
-      }
 
       groups.push_back(std::move(group));
     }
@@ -1350,7 +1358,7 @@ namespace draconis::ui {
     hBorder.reserve(innerWidth * 3);
     for (usize i = 0; i < innerWidth; ++i) hBorder += "─";
 
-    const fn createLine = [&](const String& left, const String& right = "") {
+    const auto createLine = [&](const String& left, const String& right = "") -> void {
       const usize leftWidth  = GetVisualWidth(left);
       const usize rightWidth = GetVisualWidth(right);
       const usize padding    = (maxContentWidth >= leftWidth + rightWidth) ? maxContentWidth - (leftWidth + rightWidth) : 0;
@@ -1362,7 +1370,8 @@ namespace draconis::ui {
       out += " │\n";
     };
 
-    const fn createLeftAlignedLine = [&](const String& content) { createLine(content, ""); };
+    const auto createLeftAlignedLine =
+      [&](const String& content) -> void { createLine(content, ""); };
 
     // Top border and greeting
     out += "╭";
@@ -1417,14 +1426,12 @@ namespace draconis::ui {
         inlineSequence = inlineLogo->sequence;
       }
 
-      if (!isInlineLogo) {
-        if (logoLines.empty()) {
-          const Vec<StringView> asciiLines = ascii::GetAsciiArt(data.operatingSystem->id);
+      if (!isInlineLogo && logoLines.empty()) {
+        const Vec<StringView> asciiLines = ascii::GetAsciiArt(data.operatingSystem->id);
 
-          for (const auto& aLine : asciiLines) {
-            logoLines.emplace_back(aLine);
-            maxLogoW = std::max(maxLogoW, GetVisualWidth(aLine));
-          }
+        for (const auto& aLine : asciiLines) {
+          logoLines.emplace_back(aLine);
+          maxLogoW = std::max(maxLogoW, GetVisualWidth(aLine));
         }
       }
     }
@@ -1437,10 +1444,10 @@ namespace draconis::ui {
 
     // Inline logo: emit the image to stdout once, then print the box shifted right by logo width.
     if (isInlineLogo) {
-      const usize shift       = maxLogoW + 2; // logo width plus gap
-      const usize totalHeight = std::max(logoHeight, boxLines.size());
-      const usize logoPadTop  = (totalHeight > logoHeight) ? (totalHeight - logoHeight) / 2 : 0;
-      const usize boxPadTop   = (totalHeight > boxLines.size()) ? (totalHeight - boxLines.size()) / 2 : 0;
+      const usize shift       = maxLogoW + 2 /* logo width plus gap */,
+                  totalHeight = std::max(logoHeight, boxLines.size()),
+                  logoPadTop  = (totalHeight > logoHeight) ? (totalHeight - logoHeight) / 2 : 0,
+                  boxPadTop   = (totalHeight > boxLines.size()) ? (totalHeight - boxLines.size()) / 2 : 0;
 
       if (!inlineSequence.empty()) {
         std::cout << "\033[s"; // save cursor
@@ -1453,6 +1460,7 @@ namespace draconis::ui {
       }
 
       String newOut;
+
       for (usize i = 0; i < totalHeight; ++i) {
         const bool    isBoxLine = i >= boxPadTop && i < boxPadTop + boxLines.size();
         const String& line      = isBoxLine ? boxLines[i - boxPadTop] : emptyBox;
@@ -1467,9 +1475,9 @@ namespace draconis::ui {
     }
 
     // ASCII logo: center relative to box height
-    const usize totalHeight = std::max(logoHeight, boxLines.size());
-    const usize logoPadTop  = (totalHeight > logoHeight) ? (totalHeight - logoHeight) / 2 : 0;
-    const usize boxPadTop   = (totalHeight > boxLines.size()) ? (totalHeight - boxLines.size()) / 2 : 0;
+    const usize totalHeight = std::max(logoHeight, boxLines.size()),
+                logoPadTop  = (totalHeight > logoHeight) ? (totalHeight - logoHeight) / 2 : 0,
+                boxPadTop   = (totalHeight > boxLines.size()) ? (totalHeight - boxLines.size()) / 2 : 0;
 
     String newOut;
 
@@ -1479,9 +1487,13 @@ namespace draconis::ui {
       if (i < logoPadTop || i >= logoPadTop + logoHeight) {
         outputLine += emptyLogo;
       } else {
-        const auto& logoLine      = logoLines[i - logoPadTop];
+        const String& logoLine = logoLines[i - logoPadTop];
+
         const usize logoLineWidth = GetVisualWidth(logoLine);
-        const usize logoPadding   = maxLogoW > logoLineWidth ? maxLogoW - logoLineWidth : 0;
+        const usize logoPadding =
+          maxLogoW > logoLineWidth
+          ? maxLogoW - logoLineWidth
+          : 0;
 
         outputLine.append(logoLine.data(), logoLine.size());
         outputLine.append(logoPadding, ' ');

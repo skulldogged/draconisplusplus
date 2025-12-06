@@ -70,7 +70,6 @@
     curlMinimal
     dbus
     glaze
-    (mkOverridden "cmake" gtest)
     llvmPackages_20.libcxx
     magic-enum
     openssl

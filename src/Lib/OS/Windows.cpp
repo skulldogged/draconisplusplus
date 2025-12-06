@@ -105,7 +105,7 @@ namespace {
      * @param wstr The wide string to convert.
      * @return Result containing the UTF-8 string on success, or an error on failure.
      */
-    fn ConvertWStringToUTF8(const WString& wstr) -> Result<String> {
+    auto ConvertWStringToUTF8(const WString& wstr) -> Result<String> {
       // Return early for empty strings to avoid unnecessary work.
       if (wstr.empty())
         return String {};
@@ -138,7 +138,7 @@ namespace {
       return String(TlsBuffer.data(), static_cast<usize>(bytesConverted));
     }
 
-    fn GetDirCount(const WString& path) -> Result<u64> {
+    auto GetDirCount(const WString& path) -> Result<u64> {
       // Create mutable copy and append wildcard.
       WString searchPath(path);
       searchPath.append(L"\\*");
@@ -178,7 +178,7 @@ namespace {
     }
 
     // Reads a registry value into a WString.
-    fn GetRegistryValue(const HKEY& hKey, const WString& valueName) -> Result<WString> {
+    auto GetRegistryValue(const HKEY& hKey, const WString& valueName) -> Result<WString> {
       // Buffer for storing the registry value. Should be large enough to hold most values.
       Array<WCStr, 1024> registryBuffer {};
 
@@ -228,7 +228,7 @@ namespace {
           RegCloseKey(m_key);
       }
 
-      fn operator=(RegistryKey&& other) noexcept -> RegistryKey& {
+      auto operator=(RegistryKey&& other) noexcept -> RegistryKey& {
         if (this != &other) {
           if (m_key)
             RegCloseKey(m_key);
@@ -238,7 +238,7 @@ namespace {
         return *this;
       }
 
-      [[nodiscard]] fn get() const -> HKEY {
+      [[nodiscard]] auto get() const -> HKEY {
         return m_key;
       }
 
@@ -246,9 +246,9 @@ namespace {
         return m_key != nullptr;
       }
 
-      RegistryKey(const RegistryKey&)                = delete;
-      RegistryKey(RegistryKey&&)                     = delete;
-      fn operator=(const RegistryKey&)->RegistryKey& = delete;
+      RegistryKey(const RegistryKey&)                    = delete;
+      RegistryKey(RegistryKey&&)                         = delete;
+      auto operator=(const RegistryKey&) -> RegistryKey& = delete;
 
      private:
       HKEY m_key = nullptr;
@@ -269,23 +269,23 @@ namespace {
           m_hardwareConfigKey = RegistryKey(hardwareConfigKey);
       }
 
-      static fn getInstance() -> const RegistryCache& {
+      static auto getInstance() -> const RegistryCache& {
         static RegistryCache Instance;
         return Instance;
       }
 
-      [[nodiscard]] fn getCurrentVersionKey() const -> HKEY {
+      [[nodiscard]] auto getCurrentVersionKey() const -> HKEY {
         return m_currentVersionKey.get();
       }
-      [[nodiscard]] fn getHardwareConfigKey() const -> HKEY {
+      [[nodiscard]] auto getHardwareConfigKey() const -> HKEY {
         return m_hardwareConfigKey.get();
       }
 
-      ~RegistryCache()                                   = default;
-      RegistryCache(const RegistryCache&)                = delete;
-      RegistryCache(RegistryCache&&)                     = delete;
-      fn operator=(const RegistryCache&)->RegistryCache& = delete;
-      fn operator=(RegistryCache&&)->RegistryCache&      = delete;
+      ~RegistryCache()                                       = default;
+      RegistryCache(const RegistryCache&)                    = delete;
+      RegistryCache(RegistryCache&&)                         = delete;
+      auto operator=(const RegistryCache&) -> RegistryCache& = delete;
+      auto operator=(RegistryCache&&) -> RegistryCache&      = delete;
 
      private:
       RegistryKey m_currentVersionKey;
@@ -301,24 +301,24 @@ namespace {
         u32 buildNumber;
       };
 
-      static fn getInstance() -> const OsVersionCache& {
+      static auto getInstance() -> const OsVersionCache& {
         static OsVersionCache Instance;
         return Instance;
       }
 
-      [[nodiscard]] fn getVersionData() const -> const Result<VersionData>&;
+      [[nodiscard]] auto getVersionData() const -> const Result<VersionData>&;
 
-      [[nodiscard]] fn getBuildNumber() const -> Result<u64> {
+      [[nodiscard]] auto getBuildNumber() const -> Result<u64> {
         if (!m_versionData)
           ERR_FROM(m_versionData.error());
 
         return static_cast<u64>(m_versionData->buildNumber);
       }
 
-      OsVersionCache(const OsVersionCache&)                = delete;
-      OsVersionCache(OsVersionCache&&)                     = delete;
-      fn operator=(const OsVersionCache&)->OsVersionCache& = delete;
-      fn operator=(OsVersionCache&&)->OsVersionCache&      = delete;
+      OsVersionCache(const OsVersionCache&)                    = delete;
+      OsVersionCache(OsVersionCache&&)                         = delete;
+      auto operator=(const OsVersionCache&) -> OsVersionCache& = delete;
+      auto operator=(OsVersionCache&&) -> OsVersionCache&      = delete;
 
      private:
       Result<VersionData> m_versionData;
@@ -334,7 +334,7 @@ namespace {
       // SEH helper function - must not use any C++ objects that require unwinding
       // This is separated because MSVC's __try/__except cannot be used in functions
       // with objects that have destructors.
-      static fn readVersionDataSEH() -> VersionReadResult {
+      static auto readVersionDataSEH() -> VersionReadResult {
         // KUSER_SHARED_DATA is a block of memory shared between the kernel and user-mode
         // processes. This address has not changed since its inception. It SHOULD always
         // contain data for the running Windows version.
@@ -402,7 +402,7 @@ namespace {
 
       ~OsVersionCache() = default;
     };
-    fn OsVersionCache::getVersionData() const -> const Result<VersionData>& {
+    auto OsVersionCache::getVersionData() const -> const Result<VersionData>& {
       return m_versionData;
     }
 
@@ -417,7 +417,7 @@ namespace {
           CloseHandle(m_handle);
       }
 
-      fn operator=(HandleWrapper&& other) noexcept -> HandleWrapper& {
+      auto operator=(HandleWrapper&& other) noexcept -> HandleWrapper& {
         if (this != &other) {
           if (m_handle && m_handle != INVALID_HANDLE_VALUE)
             CloseHandle(m_handle);
@@ -429,7 +429,7 @@ namespace {
         return *this;
       }
 
-      [[nodiscard]] fn get() const -> HandleType {
+      [[nodiscard]] auto get() const -> HandleType {
         return m_handle;
       }
 
@@ -437,9 +437,9 @@ namespace {
         return m_handle != nullptr && m_handle != INVALID_HANDLE_VALUE;
       }
 
-      HandleWrapper(const HandleWrapper&)                = delete;
-      HandleWrapper(HandleWrapper&&)                     = delete;
-      fn operator=(const HandleWrapper&)->HandleWrapper& = delete;
+      HandleWrapper(const HandleWrapper&)                    = delete;
+      HandleWrapper(HandleWrapper&&)                         = delete;
+      auto operator=(const HandleWrapper&) -> HandleWrapper& = delete;
 
      private:
       HandleType m_handle = nullptr;
@@ -453,12 +453,12 @@ namespace {
         String baseExeNameLower;
       };
 
-      static fn getInstance() -> ProcessTreeCache& {
+      static auto getInstance() -> ProcessTreeCache& {
         static ProcessTreeCache Instance;
         return Instance;
       }
 
-      fn initialize() -> Result<> {
+      auto initialize() -> Result<> {
         bool initSuccess = false;
 
         // Use std::call_once for thread-safe initialization
@@ -527,15 +527,15 @@ namespace {
         return {};
       }
 
-      fn getProcessMap() const -> const UnorderedMap<DWORD, Data>& {
+      auto getProcessMap() const -> const UnorderedMap<DWORD, Data>& {
         LockGuard lock(m_processMutex);
         return m_processMap;
       }
 
-      ProcessTreeCache(const ProcessTreeCache&)                = delete;
-      ProcessTreeCache(ProcessTreeCache&&)                     = delete;
-      fn operator=(const ProcessTreeCache&)->ProcessTreeCache& = delete;
-      fn operator=(ProcessTreeCache&&)->ProcessTreeCache&      = delete;
+      ProcessTreeCache(const ProcessTreeCache&)                    = delete;
+      ProcessTreeCache(ProcessTreeCache&&)                         = delete;
+      auto operator=(const ProcessTreeCache&) -> ProcessTreeCache& = delete;
+      auto operator=(ProcessTreeCache&&) -> ProcessTreeCache&      = delete;
 
      private:
       UnorderedMap<DWORD, Data> m_processMap;
@@ -549,7 +549,7 @@ namespace {
 
   namespace shell {
     template <usize sz>
-    fn FindShellInProcessTree(const DWORD startPid, const Array<Pair<StringView, StringView>, sz>& shellMap) -> Result<String> {
+    auto FindShellInProcessTree(const DWORD startPid, const Array<Pair<StringView, StringView>, sz>& shellMap) -> Result<String> {
       using cache::ProcessTreeCache;
 
       debug_log("FindShellInProcessTree: Starting with PID {}", startPid);
@@ -602,7 +602,7 @@ namespace {
     }
   } // namespace shell
 
-  fn GetDiskInfoForDrive(const String& driveRoot, CacheManager& /*cache*/) -> Result<DiskInfo> {
+  auto GetDiskInfoForDrive(const String& driveRoot, CacheManager& /*cache*/) -> Result<DiskInfo> {
     DiskInfo disk;
 
     // Set name and mount point (same for Windows drives)
@@ -669,7 +669,7 @@ namespace draconis::core::system {
   using namespace constants;
   using namespace helpers;
 
-  fn GetMemInfo(CacheManager& /*cache*/) -> Result<ResourceUsage> {
+  auto GetMemInfo(CacheManager& /*cache*/) -> Result<ResourceUsage> {
     // Passed to GlobalMemoryStatusEx to retrieve memory information.
     // dwLength is required to be set as per WinAPI.
     MEMORYSTATUSEX memInfo;
@@ -681,7 +681,7 @@ namespace draconis::core::system {
     ERR_FMT(ApiUnavailable, "GlobalMemoryStatusEx failed with error code {}", GetLastError());
   }
 
-  fn GetOperatingSystem(CacheManager& cache) -> Result<OSInfo> {
+  auto GetOperatingSystem(CacheManager& cache) -> Result<OSInfo> {
     return cache.getOrSet<OSInfo>("windows_os_version", []() -> Result<OSInfo> {
       // Windows is weird about its versioning scheme, and Windows 11 is still
       // considered Windows 10 in the registry. We have to manually check if
@@ -728,7 +728,7 @@ namespace draconis::core::system {
     });
   }
 
-  fn GetHost(CacheManager& cache) -> Result<String> {
+  auto GetHost(CacheManager& cache) -> Result<String> {
     return cache.getOrSet<String>("windows_host", draconis::utils::cache::CachePolicy::neverExpire(), []() -> Result<String> {
       // Read from BIOS registry key which contains system product information
       HKEY biosKey = nullptr;
@@ -749,7 +749,7 @@ namespace draconis::core::system {
     });
   }
 
-  fn GetKernelVersion(CacheManager& cache) -> Result<String> {
+  auto GetKernelVersion(CacheManager& cache) -> Result<String> {
     return cache.getOrSet<String>("windows_kernel_version", draconis::utils::cache::CachePolicy::neverExpire(), []() -> Result<String> {
       // See the OsVersionCache class for how the version data is retrieved.
       const auto& [majorVersion, minorVersion, buildNumber] = TRY(OsVersionCache::getInstance().getVersionData());
@@ -758,7 +758,7 @@ namespace draconis::core::system {
     });
   }
 
-  fn GetWindowManager(CacheManager& cache) -> Result<String> {
+  auto GetWindowManager(CacheManager& cache) -> Result<String> {
     return cache.getOrSet<String>("windows_wm", draconis::utils::cache::CachePolicy::neverExpire(), []() -> Result<String> {
       if (!cache::ProcessTreeCache::getInstance().initialize())
         ERR(PlatformSpecific, "Failed to initialize process tree cache");
@@ -780,7 +780,7 @@ namespace draconis::core::system {
     });
   }
 
-  fn GetDesktopEnvironment(CacheManager& cache) -> Result<String> {
+  auto GetDesktopEnvironment(CacheManager& cache) -> Result<String> {
     return cache.getOrSet<String>("windows_desktop_environment", draconis::utils::cache::CachePolicy::neverExpire(), []() -> Result<String> {
       // Windows doesn't really have the concept of a desktop environment,
       // so our next best bet is just displaying the UI design based on the build number.
@@ -800,7 +800,7 @@ namespace draconis::core::system {
     });
   }
 
-  fn GetShell(CacheManager& cache) -> Result<String> {
+  auto GetShell(CacheManager& cache) -> Result<String> {
     return cache.getOrSet<String>("windows_shell", draconis::utils::cache::CachePolicy::tempDirectory(), []() -> Result<String> {
       using draconis::utils::env::GetEnv;
       using shell::FindShellInProcessTree;
@@ -857,7 +857,7 @@ namespace draconis::core::system {
     });
   }
 
-  fn GetDiskUsage(CacheManager& /*cache*/) -> Result<ResourceUsage> {
+  auto GetDiskUsage(CacheManager& /*cache*/) -> Result<ResourceUsage> {
     // GetDiskFreeSpaceExW is a pretty old function and doesn't use native 64-bit integers,
     // so we have to use ULARGE_INTEGER instead. It's basically a union that holds either a
     // 64-bit integer or two 32-bit integers.
@@ -872,7 +872,7 @@ namespace draconis::core::system {
     return ResourceUsage(totalBytes.QuadPart - freeBytes.QuadPart, totalBytes.QuadPart);
   }
 
-  fn GetDisks(CacheManager& cache) -> Result<Vec<DiskInfo>> {
+  auto GetDisks(CacheManager& cache) -> Result<Vec<DiskInfo>> {
     Array<char, MAX_PATH> drives = {};
 
     DWORD size = GetLogicalDriveStringsA(MAX_PATH, drives.data());
@@ -897,7 +897,7 @@ namespace draconis::core::system {
     return disks;
   }
 
-  fn GetSystemDisk(CacheManager& cache) -> Result<DiskInfo> {
+  auto GetSystemDisk(CacheManager& cache) -> Result<DiskInfo> {
     // Get the system drive letter directly
     Array<char, MAX_PATH> systemDir = {};
     if (GetSystemDirectoryA(systemDir.data(), MAX_PATH) == 0)
@@ -909,7 +909,7 @@ namespace draconis::core::system {
     return GetDiskInfoForDrive(driveStr, cache);
   }
 
-  fn GetDiskByPath(const String& path, CacheManager& cache) -> Result<DiskInfo> {
+  auto GetDiskByPath(const String& path, CacheManager& cache) -> Result<DiskInfo> {
     if (path.empty())
       ERR(InvalidArgument, "Path cannot be empty");
 
@@ -934,7 +934,7 @@ namespace draconis::core::system {
     return GetDiskInfoForDrive(driveRoot, cache);
   }
 
-  fn GetCPUModel(CacheManager& cache) -> Result<String> {
+  auto GetCPUModel(CacheManager& cache) -> Result<String> {
     return cache.getOrSet<String>("windows_cpu_model", draconis::utils::cache::CachePolicy::neverExpire(), []() -> Result<String> {
       /*
        * This function attempts to get the CPU model name on Windows in two ways:
@@ -1023,7 +1023,7 @@ namespace draconis::core::system {
     });
   }
 
-  fn GetCPUCores(CacheManager& cache) -> Result<CPUCores> {
+  auto GetCPUCores(CacheManager& cache) -> Result<CPUCores> {
     return cache.getOrSet<CPUCores>("windows_cpu_cores", draconis::utils::cache::CachePolicy::neverExpire(), []() -> Result<CPUCores> {
       const DWORD logicalProcessors = GetActiveProcessorCount(ALL_PROCESSOR_GROUPS);
       if (logicalProcessors == 0)
@@ -1056,7 +1056,7 @@ namespace draconis::core::system {
     });
   }
 
-  fn GetGPUModel(CacheManager& cache) -> Result<String> {
+  auto GetGPUModel(CacheManager& cache) -> Result<String> {
     return cache.getOrSet<String>("windows_gpu_model", draconis::utils::cache::CachePolicy::neverExpire(), []() -> Result<String> {
       struct ComInitializer {
         ComInitializer() {
@@ -1067,10 +1067,10 @@ namespace draconis::core::system {
           CoUninitialize();
         }
 
-        ComInitializer(ComInitializer&&)                     = delete;
-        ComInitializer(const ComInitializer&)                = delete;
-        fn operator=(ComInitializer&&)->ComInitializer&      = delete;
-        fn operator=(const ComInitializer&)->ComInitializer& = delete;
+        ComInitializer(ComInitializer&&)                         = delete;
+        ComInitializer(const ComInitializer&)                    = delete;
+        auto operator=(ComInitializer&&) -> ComInitializer&      = delete;
+        auto operator=(const ComInitializer&) -> ComInitializer& = delete;
       };
 
       static thread_local ComInitializer ComInit;
@@ -1113,11 +1113,11 @@ namespace draconis::core::system {
     });
   }
 
-  fn GetUptime() -> Result<std::chrono::seconds> {
+  auto GetUptime() -> Result<std::chrono::seconds> {
     return std::chrono::seconds(GetTickCount64() / 1000);
   }
 
-  fn GetOutputs(CacheManager& /*cache*/) -> Result<Vec<DisplayInfo>> {
+  auto GetOutputs(CacheManager& /*cache*/) -> Result<Vec<DisplayInfo>> {
     UINT32 pathCount = 0;
     UINT32 modeCount = 0;
 
@@ -1159,7 +1159,7 @@ namespace draconis::core::system {
     return outputs;
   }
 
-  fn GetPrimaryOutput(CacheManager& /*cache*/) -> Result<DisplayInfo> {
+  auto GetPrimaryOutput(CacheManager& /*cache*/) -> Result<DisplayInfo> {
     UINT32 pathCount = 0;
     UINT32 modeCount = 0;
 
@@ -1202,7 +1202,7 @@ namespace draconis::core::system {
     ERR(NotFound, "No primary display found with QueryDisplayConfig");
   }
 
-  fn GetNetworkInterfaces(CacheManager& /*cache*/) -> Result<Vec<NetworkInterface>> {
+  auto GetNetworkInterfaces(CacheManager& /*cache*/) -> Result<Vec<NetworkInterface>> {
     Vec<NetworkInterface> interfaces;
     ULONG                 bufferSize = 15000; // A reasonable starting buffer size
     Vec<BYTE>             buffer(bufferSize);
@@ -1260,7 +1260,7 @@ namespace draconis::core::system {
     return interfaces;
   }
 
-  fn GetPrimaryNetworkInterface(CacheManager& cache) -> Result<NetworkInterface> {
+  auto GetPrimaryNetworkInterface(CacheManager& cache) -> Result<NetworkInterface> {
     return cache.getOrSet<NetworkInterface>("windows_primary_network_interface", []() -> Result<NetworkInterface> {
       MIB_IPFORWARDROW routeRow;
       sockaddr_in      destAddr {};
@@ -1310,7 +1310,7 @@ namespace draconis::core::system {
               pCurrAddresses->PhysicalAddress[5]
             );
 
-          for (IP_ADAPTER_UNICAST_ADDRESS* pUnicast = pCurrAddresses->FirstUnicastAddress; pUnicast != nullptr; pUnicast = pUnicast->Next) {
+          for (IP_ADAPTER_UNICAST_ADDRESS* pUnicast = pCurrAddresses->FirstUnicastAddress; pUnicast != nullptr; pUnicast = pUnicast->Next)
             if (pUnicast->Address.lpSockaddr->sa_family == AF_INET) {
               // NOLINTNEXTLINE(*-pro-type-reinterpret-cast)
               auto* saIn = reinterpret_cast<sockaddr_in*>(pUnicast->Address.lpSockaddr);
@@ -1320,7 +1320,7 @@ namespace draconis::core::system {
               if (inet_ntop(AF_INET, &(saIn->sin_addr), strBuffer.data(), INET_ADDRSTRLEN))
                 iface.ipv4Address = strBuffer.data();
             }
-          }
+
           return iface;
         }
       }
@@ -1329,7 +1329,7 @@ namespace draconis::core::system {
     });
   }
 
-  fn GetBatteryInfo(CacheManager& /*cache*/) -> Result<Battery> {
+  auto GetBatteryInfo(CacheManager& /*cache*/) -> Result<Battery> {
     using matchit::match, matchit::is, matchit::_;
     using enum Battery::Status;
 
@@ -1372,7 +1372,7 @@ namespace draconis::services::packages {
   using draconis::utils::env::GetEnv;
   using helpers::GetDirCount;
 
-  fn CountChocolatey(CacheManager& cache) -> Result<u64> {
+  auto CountChocolatey(CacheManager& cache) -> Result<u64> {
     return cache.getOrSet<u64>("windows_chocolatey_count", []() -> Result<u64> {
       // C:\ProgramData\chocolatey is the default installation directory.
       WString chocoPath = L"C:\\ProgramData\\chocolatey";
@@ -1391,7 +1391,7 @@ namespace draconis::services::packages {
     });
   }
 
-  fn CountScoop(CacheManager& cache) -> Result<u64> {
+  auto CountScoop(CacheManager& cache) -> Result<u64> {
     return cache.getOrSet<u64>("windows_scoop_count", []() -> Result<u64> {
       WString scoopAppsPath;
 
@@ -1414,7 +1414,7 @@ namespace draconis::services::packages {
     });
   }
 
-  fn CountWinGet(CacheManager& cache) -> Result<u64> {
+  auto CountWinGet(CacheManager& cache) -> Result<u64> {
     return cache.getOrSet<u64>("windows_winget_count", []() -> Result<u64> {
       HKEY packagesKey = nullptr;
 

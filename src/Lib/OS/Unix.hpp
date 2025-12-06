@@ -61,7 +61,7 @@ namespace draconis::os::unix_shared {
    *
    * @note This is a common implementation used by Linux, macOS, BSD, Haiku, and SerenityOS.
    */
-  [[nodiscard]] inline fn GetDiskUsageAt(const char* path) -> types::Result<types::ResourceUsage> {
+  [[nodiscard]] inline auto GetDiskUsageAt(const char* path) -> types::Result<types::ResourceUsage> {
     struct statvfs stat;
 
     if (statvfs(path, &stat) == -1)
@@ -79,7 +79,7 @@ namespace draconis::os::unix_shared {
    * @brief Gets disk usage statistics for the root filesystem.
    * @return ResourceUsage containing used and total bytes, or an error.
    */
-  [[nodiscard]] inline fn GetRootDiskUsage() -> types::Result<types::ResourceUsage> {
+  [[nodiscard]] inline auto GetRootDiskUsage() -> types::Result<types::ResourceUsage> {
     return GetDiskUsageAt("/");
   }
 
@@ -89,7 +89,7 @@ namespace draconis::os::unix_shared {
    * @param name Optional display name for the disk (defaults to path).
    * @return DiskInfo struct with filesystem details, or an error.
    */
-  [[nodiscard]] inline fn GetDiskInfoAt(const char* path, const char* name = nullptr)
+  [[nodiscard]] inline auto GetDiskInfoAt(const char* path, const char* name = nullptr)
     -> types::Result<types::DiskInfo> {
     struct statvfs stat;
 
@@ -122,7 +122,7 @@ namespace draconis::os::unix_shared {
    * @note Returns uts.release, which is the kernel version on Linux/BSD,
    * and the Darwin kernel version on macOS.
    */
-  [[nodiscard]] inline fn GetKernelRelease() -> types::Result<types::String> {
+  [[nodiscard]] inline auto GetKernelRelease() -> types::Result<types::String> {
     struct utsname uts;
 
     if (uname(&uts) == -1)
@@ -138,7 +138,7 @@ namespace draconis::os::unix_shared {
    * @brief Gets the system name via uname.
    * @return System name (e.g., "Linux", "Darwin", "FreeBSD"), or an error.
    */
-  [[nodiscard]] inline fn GetSystemName() -> types::Result<types::String> {
+  [[nodiscard]] inline auto GetSystemName() -> types::Result<types::String> {
     struct utsname uts;
 
     if (uname(&uts) == -1)
@@ -154,7 +154,7 @@ namespace draconis::os::unix_shared {
    * @brief Gets the machine hardware name via uname.
    * @return Machine name (e.g., "x86_64", "aarch64"), or an error.
    */
-  [[nodiscard]] inline fn GetMachineName() -> types::Result<types::String> {
+  [[nodiscard]] inline auto GetMachineName() -> types::Result<types::String> {
     struct utsname uts;
 
     if (uname(&uts) == -1)
@@ -178,7 +178,7 @@ namespace draconis::os::unix_shared {
     types::String machine;  // Hardware identifier
   };
 
-  [[nodiscard]] inline fn GetUnameInfo() -> types::Result<UnameInfo> {
+  [[nodiscard]] inline auto GetUnameInfo() -> types::Result<UnameInfo> {
     struct utsname uts;
 
     if (uname(&uts) == -1)
@@ -216,14 +216,14 @@ namespace draconis::os::unix_shared {
     }
 
     // Non-copyable
-    IfAddrsGuard(const IfAddrsGuard&)                = delete;
-    fn operator=(const IfAddrsGuard&)->IfAddrsGuard& = delete;
+    IfAddrsGuard(const IfAddrsGuard&)                    = delete;
+    auto operator=(const IfAddrsGuard&) -> IfAddrsGuard& = delete;
 
     // Movable
     IfAddrsGuard(IfAddrsGuard&& other) noexcept
       : m_list(std::exchange(other.m_list, nullptr)) {}
 
-    fn operator=(IfAddrsGuard&& other) noexcept -> IfAddrsGuard& {
+    auto operator=(IfAddrsGuard&& other) noexcept -> IfAddrsGuard& {
       if (this != &other) {
         if (m_list != nullptr)
           freeifaddrs(m_list);
@@ -236,14 +236,14 @@ namespace draconis::os::unix_shared {
      * @brief Initializes by calling getifaddrs.
      * @return true on success, false on failure (check errno).
      */
-    [[nodiscard]] fn init() -> bool {
+    [[nodiscard]] auto init() -> bool {
       return getifaddrs(&m_list) == 0;
     }
 
-    [[nodiscard]] fn get() const noexcept -> ifaddrs* {
+    [[nodiscard]] auto get() const noexcept -> ifaddrs* {
       return m_list;
     }
-    [[nodiscard]] fn operator*() const noexcept -> ifaddrs& {
+    [[nodiscard]] auto operator*() const noexcept -> ifaddrs& {
       return *m_list;
     }
     [[nodiscard]] explicit operator bool() const noexcept {
@@ -258,7 +258,7 @@ namespace draconis::os::unix_shared {
    * @param bufSize Size of the buffer.
    * @return Option containing the IP string, or None on failure.
    */
-  [[nodiscard]] inline fn FormatIPv4(const sockaddr_in* addr, char* buf, types::usize bufSize)
+  [[nodiscard]] inline auto FormatIPv4(const sockaddr_in* addr, char* buf, types::usize bufSize)
     -> types::Option<types::String> {
     if (getnameinfo(
           reinterpret_cast<const sockaddr*>(addr), // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
@@ -281,7 +281,7 @@ namespace draconis::os::unix_shared {
    * @param bufSize Size of the buffer.
    * @return Option containing the IP string, or None on failure.
    */
-  [[nodiscard]] inline fn FormatIPv6(const sockaddr_in6* addr, char* buf, types::usize bufSize)
+  [[nodiscard]] inline auto FormatIPv6(const sockaddr_in6* addr, char* buf, types::usize bufSize)
     -> types::Option<types::String> {
     if (getnameinfo(
           reinterpret_cast<const sockaddr*>(addr), // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
@@ -302,7 +302,7 @@ namespace draconis::os::unix_shared {
    * @param flags The ifa_flags from ifaddrs.
    * @return true if IFF_UP is set.
    */
-  [[nodiscard]] constexpr fn IsInterfaceUp(types::u32 flags) noexcept -> bool {
+  [[nodiscard]] constexpr auto IsInterfaceUp(types::u32 flags) noexcept -> bool {
     return (flags & IFF_UP) != 0;
   }
 
@@ -311,7 +311,7 @@ namespace draconis::os::unix_shared {
    * @param flags The ifa_flags from ifaddrs.
    * @return true if IFF_LOOPBACK is set.
    */
-  [[nodiscard]] constexpr fn IsLoopback(types::u32 flags) noexcept -> bool {
+  [[nodiscard]] constexpr auto IsLoopback(types::u32 flags) noexcept -> bool {
     return (flags & IFF_LOOPBACK) != 0;
   }
 
@@ -328,7 +328,7 @@ namespace draconis::os::unix_shared {
    *
    * @note Linux-specific. macOS and BSD use different mechanisms.
    */
-  [[nodiscard]] inline fn GetUptimeLinux() -> types::Result<std::chrono::seconds> {
+  [[nodiscard]] inline auto GetUptimeLinux() -> types::Result<std::chrono::seconds> {
     struct sysinfo info;
 
     if (sysinfo(&info) == -1)

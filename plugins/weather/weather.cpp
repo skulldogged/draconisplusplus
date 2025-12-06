@@ -382,7 +382,7 @@ namespace weather::curl {
     CURL*             m_curl      = nullptr;
     Option<DracError> m_initError = None;
 
-    static fn writeCallback(RawPointer contents, const usize size, const usize nmemb, String* str) -> usize {
+    static auto writeCallback(RawPointer contents, const usize size, const usize nmemb, String* str) -> usize {
       const usize totalSize = size * nmemb;
       str->append(static_cast<char*>(contents), totalSize);
       return totalSize;
@@ -436,13 +436,13 @@ namespace weather::curl {
         curl_easy_cleanup(m_curl);
     }
 
-    Easy(const Easy&)                = delete;
-    fn operator=(const Easy&)->Easy& = delete;
+    Easy(const Easy&)                    = delete;
+    auto operator=(const Easy&) -> Easy& = delete;
 
     Easy(Easy&& other) noexcept
       : m_curl(std::exchange(other.m_curl, nullptr)), m_initError(std::move(other.m_initError)) {}
 
-    fn operator=(Easy&& other) noexcept -> Easy& {
+    auto operator=(Easy&& other) noexcept -> Easy& {
       if (this != &other) {
         if (m_curl)
           curl_easy_cleanup(m_curl);
@@ -456,16 +456,16 @@ namespace weather::curl {
       return m_curl != nullptr && !m_initError;
     }
 
-    [[nodiscard]] fn getInitializationError() const -> const Option<DracError>& {
+    [[nodiscard]] auto getInitializationError() const -> const Option<DracError>& {
       return m_initError;
     }
 
-    [[nodiscard]] fn get() const -> CURL* {
+    [[nodiscard]] auto get() const -> CURL* {
       return m_curl;
     }
 
     template <typename T>
-    fn setOpt(const CURLoption option, T value) -> Result<> {
+    auto setOpt(const CURLoption option, T value) -> Result<> {
       if (!m_curl)
         ERR(InternalError, "CURL handle is not initialized");
       if (m_initError)
@@ -475,7 +475,7 @@ namespace weather::curl {
       return {};
     }
 
-    fn perform() -> Result<> {
+    auto perform() -> Result<> {
       if (!m_curl)
         ERR(InternalError, "CURL handle is not initialized");
       if (m_initError)
@@ -485,7 +485,7 @@ namespace weather::curl {
       return {};
     }
 
-    static fn escape(const String& url) -> Result<String> {
+    static auto escape(const String& url) -> Result<String> {
       char* escapedUrl = curl_easy_escape(nullptr, url.c_str(), static_cast<i32>(url.length()));
       if (!escapedUrl)
         ERR(OutOfMemory, "curl_easy_escape failed");
@@ -494,11 +494,11 @@ namespace weather::curl {
       return result;
     }
 
-    fn setUrl(const String& url) -> Result<> {
+    auto setUrl(const String& url) -> Result<> {
       return setOpt(CURLOPT_URL, url.c_str());
     }
 
-    fn setWriteFunction(String* buffer) -> Result<> {
+    auto setWriteFunction(String* buffer) -> Result<> {
       if (!buffer)
         ERR(InvalidArgument, "Write buffer cannot be null");
       if (Result<> res = setOpt(CURLOPT_WRITEFUNCTION, writeCallback); !res)
@@ -506,13 +506,13 @@ namespace weather::curl {
       return setOpt(CURLOPT_WRITEDATA, buffer);
     }
 
-    fn setTimeout(const i64 timeout) -> Result<> {
+    auto setTimeout(const i64 timeout) -> Result<> {
       return setOpt(CURLOPT_TIMEOUT, timeout);
     }
-    fn setConnectTimeout(const i64 timeout) -> Result<> {
+    auto setConnectTimeout(const i64 timeout) -> Result<> {
       return setOpt(CURLOPT_CONNECTTIMEOUT, timeout);
     }
-    fn setUserAgent(const String& userAgent) -> Result<> {
+    auto setUserAgent(const String& userAgent) -> Result<> {
       return setOpt(CURLOPT_USERAGENT, userAgent.c_str());
     }
   };
@@ -528,18 +528,18 @@ namespace weather::providers {
    */
   class IWeatherProvider {
    public:
-    IWeatherProvider()                                       = default;
-    virtual ~IWeatherProvider()                              = default;
-    IWeatherProvider(const IWeatherProvider&)                = delete;
-    fn operator=(const IWeatherProvider&)->IWeatherProvider& = delete;
-    IWeatherProvider(IWeatherProvider&&)                     = default;
-    fn operator=(IWeatherProvider&&)->IWeatherProvider&      = default;
+    IWeatherProvider()                                           = default;
+    virtual ~IWeatherProvider()                                  = default;
+    IWeatherProvider(const IWeatherProvider&)                    = delete;
+    auto operator=(const IWeatherProvider&) -> IWeatherProvider& = delete;
+    IWeatherProvider(IWeatherProvider&&)                         = default;
+    auto operator=(IWeatherProvider&&) -> IWeatherProvider&      = default;
 
-    virtual fn fetch() -> Result<WeatherData> = 0;
+    virtual auto fetch() -> Result<WeatherData> = 0;
   };
 
   namespace {
-    fn GetMetnoSymbolDescriptions() -> const std::unordered_map<StringView, StringView>& {
+    auto GetMetnoSymbolDescriptions() -> const std::unordered_map<StringView, StringView>& {
       static const std::unordered_map<StringView, StringView> MAP = {
         {             "clearsky",               "clear sky" },
         {                 "fair",                    "fair" },
@@ -577,7 +577,7 @@ namespace weather::providers {
       return MAP;
     }
 
-    fn StripTimeOfDayFromSymbol(StringView symbol) -> String {
+    auto StripTimeOfDayFromSymbol(StringView symbol) -> String {
       static constexpr Array<StringView, 3> SUFFIXES = { "_day", "_night", "_polartwilight" };
       for (const StringView& suffix : SUFFIXES)
         if (symbol.size() > suffix.size() && symbol.ends_with(suffix))
@@ -594,7 +594,7 @@ namespace weather::providers {
       MetNoProvider(f64 lat, f64 lon, UnitSystem units)
         : m_lat(lat), m_lon(lon), m_units(units) {}
 
-      fn fetch() -> Result<WeatherData> override {
+      auto fetch() -> Result<WeatherData> override {
         String responseBuffer;
 
         curl::Easy curlHandle({
@@ -646,7 +646,7 @@ namespace weather::providers {
   } // namespace
 
   namespace {
-    fn GetOpenmeteoWeatherDescription(i32 code) -> String {
+    auto GetOpenmeteoWeatherDescription(i32 code) -> String {
       if (code == 0)
         return "clear sky";
       if (code == 1)
@@ -689,7 +689,7 @@ namespace weather::providers {
       OpenMeteoProvider(f64 lat, f64 lon, UnitSystem units)
         : m_lat(lat), m_lon(lon), m_units(units) {}
 
-      fn fetch() -> Result<WeatherData> override {
+      auto fetch() -> Result<WeatherData> override {
         String url = std::format(
           "https://api.open-meteo.com/v1/forecast?latitude={:.4f}&longitude={:.4f}&current_weather=true&temperature_unit={}",
           m_lat,
@@ -729,7 +729,7 @@ namespace weather::providers {
   } // namespace
 
   namespace {
-    fn MakeOWMApiRequest(const String& url) -> Result<WeatherData> {
+    auto MakeOWMApiRequest(const String& url) -> Result<WeatherData> {
       String responseBuffer;
 
       curl::Easy curlHandle({
@@ -784,7 +784,7 @@ namespace weather::providers {
       OpenWeatherMapProvider(const Option<Coords>& coords, const Option<String>& city, String apiKey, UnitSystem units)
         : m_coords(coords), m_city(city), m_apiKey(std::move(apiKey)), m_units(units) {}
 
-      fn fetch() -> Result<WeatherData> override {
+      auto fetch() -> Result<WeatherData> override {
         String unitsParam = m_units == UnitSystem::Imperial ? "imperial" : "metric";
 
         if (m_city) {
@@ -819,15 +819,15 @@ namespace weather::providers {
   } // namespace
 
   namespace {
-    fn CreateMetNoProvider(f64 lat, f64 lon, UnitSystem units) -> UniquePointer<IWeatherProvider> {
+    auto CreateMetNoProvider(f64 lat, f64 lon, UnitSystem units) -> UniquePointer<IWeatherProvider> {
       return std::make_unique<MetNoProvider>(lat, lon, units);
     }
 
-    fn CreateOpenMeteoProvider(f64 lat, f64 lon, UnitSystem units) -> UniquePointer<IWeatherProvider> {
+    auto CreateOpenMeteoProvider(f64 lat, f64 lon, UnitSystem units) -> UniquePointer<IWeatherProvider> {
       return std::make_unique<OpenMeteoProvider>(lat, lon, units);
     }
 
-    fn CreateOpenWeatherMapProvider(
+    auto CreateOpenWeatherMapProvider(
       const Option<Coords>& coords,
       const Option<String>& city,
       const String&         apiKey,
@@ -850,7 +850,7 @@ namespace {
 
 #if DRAC_PRECOMPILED_CONFIG
     // Load configuration from typed config
-    static fn loadConfigFromPrecompiled(const weather::config::Config& precompiledCfg) -> weather::WeatherConfig {
+    static auto loadConfigFromPrecompiled(const weather::config::Config& precompiledCfg) -> weather::WeatherConfig {
       using namespace weather::config;
 
       weather::WeatherConfig cfg;
@@ -877,7 +877,7 @@ namespace {
     }
 #else
     // Helper to convert TomlWeatherConfig to weather::WeatherConfig
-    static fn parseTomlConfig(const TomlWeatherConfig& tomlCfg) -> weather::WeatherConfig {
+    static auto parseTomlConfig(const TomlWeatherConfig& tomlCfg) -> weather::WeatherConfig {
       weather::WeatherConfig cfg;
       cfg.enabled = tomlCfg.enabled;
 
@@ -927,7 +927,7 @@ namespace {
     // Checks two locations:
     // 1. Separate file: <configDir>/weather.toml (plugin-specific config dir)
     // 2. Main config: <configDir>/../config.toml under [plugins.weather] (main app config)
-    static fn loadConfig(const fs::path& configDir) -> Result<weather::WeatherConfig> {
+    static auto loadConfig(const fs::path& configDir) -> Result<weather::WeatherConfig> {
       // First, try separate weather.toml file in plugin config directory
       fs::path weatherConfigPath = configDir / "weather.toml";
       if (fs::exists(weatherConfigPath)) {
@@ -972,7 +972,7 @@ namespace {
 #endif // DRAC_PRECOMPILED_CONFIG
 
 #if !DRAC_PRECOMPILED_CONFIG
-    static fn createDefaultConfig(const fs::path& configPath) -> void {
+    static auto createDefaultConfig(const fs::path& configPath) -> void {
       std::error_code errc;
       fs::create_directories(configPath.parent_path(), errc);
 
@@ -1009,7 +1009,7 @@ units = "metric"
     }
 #endif // !DRAC_PRECOMPILED_CONFIG
 
-    fn createProvider() -> Result<Unit> {
+    auto createProvider() -> Result<Unit> {
       if (!m_config.enabled) {
         m_provider = nullptr;
         return {};
@@ -1058,15 +1058,15 @@ units = "metric"
       };
     }
 
-    [[nodiscard]] fn getMetadata() const -> const PluginMetadata& override {
+    [[nodiscard]] auto getMetadata() const -> const PluginMetadata& override {
       return m_metadata;
     }
 
-    [[nodiscard]] fn getProviderId() const -> String override {
+    [[nodiscard]] auto getProviderId() const -> String override {
       return "weather";
     }
 
-    fn initialize(const PluginContext& ctx, PluginCache& /*cache*/) -> Result<Unit> override {
+    auto initialize(const PluginContext& ctx, PluginCache& /*cache*/) -> Result<Unit> override {
       debug_log("Weather plugin initializing...");
       debug_log("Weather plugin config dir: {}", ctx.configDir.string());
 
@@ -1105,20 +1105,20 @@ units = "metric"
       return {};
     }
 
-    fn shutdown() -> Unit override {
+    auto shutdown() -> Unit override {
       m_provider = nullptr;
       m_ready    = false;
     }
 
-    [[nodiscard]] fn isReady() const -> bool override {
+    [[nodiscard]] auto isReady() const -> bool override {
       return m_ready;
     }
 
-    [[nodiscard]] fn isEnabled() const -> bool override {
+    [[nodiscard]] auto isEnabled() const -> bool override {
       return m_config.enabled;
     }
 
-    fn collectData(PluginCache& cache) -> Result<Unit> override {
+    auto collectData(PluginCache& cache) -> Result<Unit> override {
       if (!m_ready)
         ERR(NotSupported, "Weather plugin is not ready");
 
@@ -1159,14 +1159,14 @@ units = "metric"
       return {};
     }
 
-    [[nodiscard]] fn toJson() const -> Result<String> override {
+    [[nodiscard]] auto toJson() const -> Result<String> override {
       String jsonStr;
       if (glz::error_ctx errc = glz::write<glz::opts { .skip_null_members = true, .prettify = true }>(m_data, jsonStr); errc)
         ERR_FMT(ParseError, "Failed to serialize weather data: {}", glz::format_error(errc, jsonStr));
       return jsonStr;
     }
 
-    [[nodiscard]] fn getFields() const -> Map<String, String> override {
+    [[nodiscard]] auto getFields() const -> Map<String, String> override {
       Map<String, String> fields;
 
       if (m_data.temperature)
@@ -1183,7 +1183,7 @@ units = "metric"
       return fields;
     }
 
-    [[nodiscard]] fn getDisplayValue() const -> Result<String> override {
+    [[nodiscard]] auto getDisplayValue() const -> Result<String> override {
       if (!m_data.temperature)
         ERR(NotFound, "No weather data available");
 
@@ -1195,15 +1195,15 @@ units = "metric"
       return result;
     }
 
-    [[nodiscard]] fn getDisplayIcon() const -> String override {
+    [[nodiscard]] auto getDisplayIcon() const -> String override {
       return "   "; // Nerd Font weather icon
     }
 
-    [[nodiscard]] fn getDisplayLabel() const -> String override {
+    [[nodiscard]] auto getDisplayLabel() const -> String override {
       return "Weather";
     }
 
-    [[nodiscard]] fn getLastError() const -> Option<String> override {
+    [[nodiscard]] auto getLastError() const -> Option<String> override {
       return m_lastError;
     }
   };

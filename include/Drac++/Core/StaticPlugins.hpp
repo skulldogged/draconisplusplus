@@ -27,53 +27,47 @@ namespace draconis::core::plugin {
    * @brief Entry for a statically compiled plugin
    */
   struct StaticPluginEntry {
-    const char* name;
     IPlugin* (*createFunc)();
     void (*destroyFunc)(IPlugin*);
   };
 
   /**
    * @brief Get the mutable registry of static plugins (for registration)
-   * @return Reference to the vector of static plugin entries
+   * @return Reference to the map of plugin name -> entry
    */
-  fn GetStaticPluginRegistry() -> utils::types::Vec<StaticPluginEntry>&;
+  auto GetStaticPluginRegistry() -> utils::types::UnorderedMap<utils::types::String, StaticPluginEntry>&;
 
   /**
    * @brief Register a static plugin (called automatically by DRAC_PLUGIN macro)
+   * @param name The plugin name
    * @param entry The plugin entry to register
    * @return true (used to enable static initialization)
    */
-  inline fn RegisterStaticPlugin(StaticPluginEntry entry) -> bool {
-    GetStaticPluginRegistry().push_back(entry);
+  inline auto RegisterStaticPlugin(const char* name, StaticPluginEntry entry) -> bool {
+    GetStaticPluginRegistry().emplace(name, entry);
     return true;
   }
-
-  /**
-   * @brief Get the list of statically compiled plugins
-   * @return Vector of static plugin entries
-   */
-  fn GetStaticPlugins() -> const utils::types::Vec<StaticPluginEntry>&;
 
   /**
    * @brief Check if a plugin is available as a static plugin
    * @param name The plugin name to check
    * @return true if the plugin is statically compiled, false otherwise
    */
-  fn IsStaticPlugin(const utils::types::String& name) -> bool;
+  auto IsStaticPlugin(const utils::types::String& name) -> bool;
 
   /**
    * @brief Create an instance of a static plugin
    * @param name The plugin name
    * @return Pointer to the created plugin instance, or nullptr if not found
    */
-  fn CreateStaticPlugin(const utils::types::String& name) -> IPlugin*;
+  auto CreateStaticPlugin(const utils::types::String& name) -> IPlugin*;
 
   /**
    * @brief Destroy an instance of a static plugin
    * @param name The plugin name
    * @param plugin The plugin instance to destroy
    */
-  fn DestroyStaticPlugin(const utils::types::String& name, IPlugin* plugin) -> void;
+  auto DestroyStaticPlugin(const utils::types::String& name, IPlugin* plugin) -> void;
 
 } // namespace draconis::core::plugin
 

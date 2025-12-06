@@ -46,7 +46,7 @@ namespace {
      *
      * Won't be written to the main doc until commit() or a new section starts
      */
-    fn section(std::string_view title) -> void {
+    auto section(std::string_view title) -> void {
       commit();
       m_currentHeader = std::format("## {}\n\n", title);
     }
@@ -56,7 +56,7 @@ namespace {
      * @param label The label text
      * @param value The value text (skipped if empty)
      */
-    fn line(std::string_view label, std::string_view value) -> void {
+    auto line(std::string_view label, std::string_view value) -> void {
       if (!value.empty())
         std::format_to(std::back_inserter(m_currentSectionBuffer), "- **{}**: {}\n", label, value);
     }
@@ -67,7 +67,7 @@ namespace {
      * @param key The key to look up
      * @param label The display label for the line
      */
-    fn mapEntry(const Map<String, String>& data, const String& key, std::string_view label) -> void {
+    auto mapEntry(const Map<String, String>& data, const String& key, std::string_view label) -> void {
       if (auto iter = data.find(key); iter != data.end() && !iter->second.empty())
         line(label, iter->second);
     }
@@ -76,7 +76,7 @@ namespace {
      * @brief Finalize and return the document
      * @return The complete markdown string
      */
-    fn build() -> String {
+    auto build() -> String {
       commit();
       return std::move(m_fullDoc);
     }
@@ -85,7 +85,7 @@ namespace {
      * @brief Add raw markdown directly (for titles, etc)
      * @param text Raw markdown text to append
      */
-    fn raw(std::string_view text) -> void {
+    auto raw(std::string_view text) -> void {
       commit();
       m_fullDoc += text;
     }
@@ -94,7 +94,7 @@ namespace {
     /**
      * @brief Only appends header + section if section has content
      */
-    fn commit() -> void {
+    auto commit() -> void {
       if (!m_currentSectionBuffer.empty()) {
         m_fullDoc += m_currentHeader;
         m_fullDoc += m_currentSectionBuffer;
@@ -123,24 +123,24 @@ namespace {
       };
     }
 
-    [[nodiscard]] fn getMetadata() const -> const draconis::core::plugin::PluginMetadata& override {
+    [[nodiscard]] auto getMetadata() const -> const draconis::core::plugin::PluginMetadata& override {
       return m_metadata;
     }
 
-    fn initialize(const draconis::core::plugin::PluginContext& /*ctx*/, ::PluginCache& /*cache*/) -> Result<Unit> override {
+    auto initialize(const draconis::core::plugin::PluginContext& /*ctx*/, ::PluginCache& /*cache*/) -> Result<Unit> override {
       m_ready = true;
       return {};
     }
 
-    fn shutdown() -> Unit override {
+    auto shutdown() -> Unit override {
       m_ready = false;
     }
 
-    [[nodiscard]] fn isReady() const -> bool override {
+    [[nodiscard]] auto isReady() const -> bool override {
       return m_ready;
     }
 
-    fn formatOutput(
+    auto formatOutput(
       const String& /*formatName*/,
       const Map<String, String>&              data,
       const Map<String, Map<String, String>>& pluginData
@@ -223,11 +223,11 @@ namespace {
       return builder.build();
     }
 
-    [[nodiscard]] fn getFormatNames() const -> Vec<String> override {
+    [[nodiscard]] auto getFormatNames() const -> Vec<String> override {
       return { FORMAT_MARKDOWN };
     }
 
-    [[nodiscard]] fn getFileExtension(const String& /*formatName*/) const -> String override {
+    [[nodiscard]] auto getFileExtension(const String& /*formatName*/) const -> String override {
       return "md";
     }
   };

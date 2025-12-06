@@ -64,7 +64,7 @@ struct CliOptions {
   String generateCompletions;
 };
 
-fn main(const i32 argc, CStr* argv[]) -> i32 try {
+auto main(const i32 argc, CStr* argv[]) -> i32 try {
 #ifdef _WIN32
   CoInitializeEx(nullptr, COINIT_MULTITHREADED);
 #endif
@@ -297,7 +297,7 @@ fn main(const i32 argc, CStr* argv[]) -> i32 try {
     // Initialize plugin system early for maximum performance
     auto& pluginManager = draconis::core::plugin::GetPluginManager();
 
-    if (auto initResult = pluginManager.initialize(&config); !initResult)
+    if (auto initResult = pluginManager.initialize(config.plugins); !initResult)
       warn_log("Plugin system initialization failed: {}", initResult.error().message);
     else
       debug_log("Plugin system initialized successfully");

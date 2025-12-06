@@ -35,7 +35,7 @@ using draconis::utils::cache::CacheManager, draconis::utils::cache::CachePolicy;
 using enum draconis::utils::error::DracErrorCode;
 
 namespace {
-  fn getDisplayInfoById(CGDirectDisplayID displayID) -> Result<DisplayInfo> {
+  auto getDisplayInfoById(CGDirectDisplayID displayID) -> Result<DisplayInfo> {
     // Get display resolution
     const usize width  = CGDisplayPixelsWide(displayID);
     const usize height = CGDisplayPixelsHigh(displayID);
@@ -65,7 +65,7 @@ namespace {
   }
 
   template <typename T>
-  fn getNumericValue(const CFDictionaryRef dict, const CFStringRef key) -> Option<T> {
+  auto getNumericValue(const CFDictionaryRef dict, const CFStringRef key) -> Option<T> {
     const auto* value = static_cast<const CFNumberRef>(CFDictionaryGetValue(dict, key));
 
     if (value == nullptr)
@@ -82,7 +82,7 @@ namespace {
 } // namespace
 
 namespace draconis::core::system {
-  fn GetMemInfo(CacheManager& /*cache*/) -> Result<ResourceUsage> {
+  auto GetMemInfo(CacheManager& /*cache*/) -> Result<ResourceUsage> {
     // Mach ports are used for communicating with the kernel. mach_host_self
     // provides a port to the host kernel, which is needed for host-level queries.
     static mach_port_t HostPort = mach_host_self();
@@ -120,15 +120,15 @@ namespace draconis::core::system {
     return ResourceUsage(usedMem, totalMem);
   }
 
-  fn GetOperatingSystem(CacheManager& cache) -> Result<OSInfo> {
+  auto GetOperatingSystem(CacheManager& cache) -> Result<OSInfo> {
     return cache.getOrSet<OSInfo>("macos_os_info", macOS::GetOSVersion);
   }
 
-  fn GetDesktopEnvironment(CacheManager& /*cache*/) -> Result<String> {
+  auto GetDesktopEnvironment(CacheManager& /*cache*/) -> Result<String> {
     return "Aqua";
   }
 
-  fn GetWindowManager(CacheManager& cache) -> Result<String> {
+  auto GetWindowManager(CacheManager& cache) -> Result<String> {
     return cache.getOrSet<String>("macos_wm", []() -> Result<String> {
       // Store names in lowercase to allow cheap case-insensitive compare via `strncasecmp`.
       constexpr Array<StringView, 5> knownWms = {
@@ -175,7 +175,7 @@ namespace draconis::core::system {
     });
   }
 
-  fn GetKernelVersion(CacheManager& cache) -> Result<String> {
+  auto GetKernelVersion(CacheManager& cache) -> Result<String> {
     return cache.getOrSet<String>("macos_kernel", CachePolicy::neverExpire(), []() -> Result<String> {
       Array<char, 256> kernelVersion {};
       usize            kernelVersionLen = kernelVersion.size();
@@ -187,7 +187,7 @@ namespace draconis::core::system {
     });
   }
 
-  fn GetHost(CacheManager& cache) -> Result<String> {
+  auto GetHost(CacheManager& cache) -> Result<String> {
     return cache.getOrSet<String>("macos_host", CachePolicy::neverExpire(), []() -> Result<String> {
       Array<char, 256> hwModel {};
       usize            hwModelLen = hwModel.size();
@@ -355,7 +355,7 @@ namespace draconis::core::system {
     });
   }
 
-  fn GetCPUModel(CacheManager& cache) -> Result<String> {
+  auto GetCPUModel(CacheManager& cache) -> Result<String> {
     return cache.getOrSet<String>("macos_cpu_model", CachePolicy::neverExpire(), []() -> Result<String> {
       Array<char, 256> cpuModel {};
       usize            cpuModelLen = cpuModel.size();
@@ -367,7 +367,7 @@ namespace draconis::core::system {
     });
   }
 
-  fn GetCPUCores(CacheManager& cache) -> Result<CPUCores> {
+  auto GetCPUCores(CacheManager& cache) -> Result<CPUCores> {
     return cache.getOrSet<CPUCores>("macos_cpu_cores", CachePolicy::neverExpire(), []() -> Result<CPUCores> {
       u32   physicalCores = 0;
       u32   logicalCores  = 0;
@@ -385,7 +385,7 @@ namespace draconis::core::system {
     });
   }
 
-  fn GetGPUModel(CacheManager& cache) -> Result<String> {
+  auto GetGPUModel(CacheManager& cache) -> Result<String> {
     return cache.getOrSet<String>("macos_gpu", CachePolicy::neverExpire(), []() -> Result<String> {
       const Result<String> gpuModel = macOS::GetGPUModel();
 
@@ -396,11 +396,11 @@ namespace draconis::core::system {
     });
   }
 
-  fn GetDiskUsage(CacheManager& /*cache*/) -> Result<ResourceUsage> {
+  auto GetDiskUsage(CacheManager& /*cache*/) -> Result<ResourceUsage> {
     return os::unix_shared::GetRootDiskUsage();
   }
 
-  fn GetShell(CacheManager& cache) -> Result<String> {
+  auto GetShell(CacheManager& cache) -> Result<String> {
     return cache.getOrSet<String>("macos_shell", CachePolicy::tempDirectory(), []() -> Result<String> {
       if (const Result<String> shellPath = draconis::utils::env::GetEnv("SHELL")) {
         // clang-format off
@@ -427,7 +427,7 @@ namespace draconis::core::system {
     });
   }
 
-  fn GetUptime() -> Result<std::chrono::seconds> {
+  auto GetUptime() -> Result<std::chrono::seconds> {
     using namespace std::chrono;
 
     Array<i32, 2> mib = { CTL_KERN, KERN_BOOTTIME };
@@ -445,13 +445,13 @@ namespace draconis::core::system {
     return duration_cast<seconds>(now - bootTimepoint);
   }
 
-  fn GetPrimaryOutput(CacheManager& cache) -> Result<DisplayInfo> {
+  auto GetPrimaryOutput(CacheManager& cache) -> Result<DisplayInfo> {
     return cache.getOrSet<DisplayInfo>("macos_primary_output", CachePolicy::tempDirectory(), []() -> Result<DisplayInfo> {
       return getDisplayInfoById(CGMainDisplayID());
     });
   }
 
-  fn GetOutputs(CacheManager& cache) -> Result<Vec<DisplayInfo>> {
+  auto GetOutputs(CacheManager& cache) -> Result<Vec<DisplayInfo>> {
     return cache.getOrSet<Vec<DisplayInfo>>("macos_outputs", CachePolicy::tempDirectory(), []() -> Result<Vec<DisplayInfo>> {
       u32 displayCount = 0;
 
@@ -512,7 +512,7 @@ namespace draconis::core::system {
     });
   }
 
-  fn GetPrimaryNetworkInterface(CacheManager& cache) -> Result<NetworkInterface> {
+  auto GetPrimaryNetworkInterface(CacheManager& cache) -> Result<NetworkInterface> {
     return cache.getOrSet<NetworkInterface>("macos_primary_network_interface", CachePolicy::tempDirectory(), []() -> Result<NetworkInterface> {
       // NOLINTBEGIN(cppcoreguidelines-pro-type-reinterpret-cast) – unavoidable when talking to C APIs.
       Array<i32, 6> mib = { CTL_NET, PF_ROUTE, 0, AF_INET, NET_RT_FLAGS, RTF_GATEWAY };
@@ -617,7 +617,7 @@ namespace draconis::core::system {
     });
   }
 
-  fn GetNetworkInterfaces(CacheManager& cache) -> Result<Vec<NetworkInterface>> {
+  auto GetNetworkInterfaces(CacheManager& cache) -> Result<Vec<NetworkInterface>> {
     return cache.getOrSet<Vec<NetworkInterface>>("macos_network_interfaces", CachePolicy::tempDirectory(), []() -> Result<Vec<NetworkInterface>> {
       // NOLINTBEGIN(cppcoreguidelines-pro-type-reinterpret-cast) - This requires a lot of casts and there's no good way to avoid them.
       ifaddrs* ifaddrList = nullptr;
@@ -683,7 +683,7 @@ namespace draconis::core::system {
     });
   }
 
-  fn GetBatteryInfo(CacheManager& /*cache*/) -> Result<Battery> {
+  auto GetBatteryInfo(CacheManager& /*cache*/) -> Result<Battery> {
     using matchit::match, matchit::is, matchit::_;
     using enum Battery::Status;
 
@@ -753,7 +753,7 @@ namespace draconis::core::system {
 namespace draconis::services::packages {
   namespace fs = std::filesystem;
 
-  fn GetHomebrewCount(CacheManager& cache) -> Result<u64> {
+  auto GetHomebrewCount(CacheManager& cache) -> Result<u64> {
     return cache.getOrSet<u64>("homebrew_total", [&]() -> Result<u64> {
       Array<fs::path, 2> cellarPaths {
         "/opt/homebrew/Cellar",
@@ -790,7 +790,7 @@ namespace draconis::services::packages {
     });
   }
 
-  fn GetMacPortsCount(CacheManager& cache) -> Result<u64> {
+  auto GetMacPortsCount(CacheManager& cache) -> Result<u64> {
     return GetCountFromDb(cache, "macports", "/opt/local/var/macports/registry/registry.db", "SELECT COUNT(*) FROM ports WHERE state='installed';");
   }
 } // namespace draconis::services::packages

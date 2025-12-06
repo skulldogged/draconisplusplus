@@ -46,15 +46,24 @@ plugin_install_dir = get_option('libdir') / 'draconis++' / 'plugins'
 # Track built plugins for summary
 plugins_built = []
 
-# Get list of plugin directories (exclude meson.build itself)
-plugin_dirs = run_command(
-  'python',
-  '-c', 'import os; print("\\n".join([d for d in os.listdir(".") if os.path.isdir(d) and os.path.exists(os.path.join(d, "meson.build"))]))',
-  check: false,
-).stdout().strip().split('\n')
+# Known plugin directories - add new plugins here
+# Each must have a meson.build that sets: plugin_name, plugin_sources, plugin_deps, plugin_platform
+known_plugins = [
+  'json_format',
+  'markdown_format',
+  'now_playing',
+  'weather',
+  'yaml_format',
+]
 
-foreach plugin_dir : plugin_dirs
-  if plugin_dir == ''
+foreach plugin_dir : known_plugins
+  # Skip if directory doesn't exist (allows conditional plugin inclusion)
+  if not fs.is_dir(plugin_dir)
+    continue
+  endif
+
+  # Skip if no meson.build (not a buildable plugin)
+  if not fs.is_file(plugin_dir / 'meson.build')
     continue
   endif
 

@@ -23,7 +23,7 @@ namespace draconis::core::system {
     using draconis::core::plugin::IInfoProviderPlugin;
 #endif
 
-    fn GetDate() -> Result<String> {
+    auto GetDate() -> Result<String> {
       using std::chrono::system_clock;
 
       const system_clock::time_point nowTp = system_clock::now();
@@ -122,7 +122,7 @@ namespace draconis::core::system {
     debug_log("SystemInfo: Construction complete");
   }
 
-  fn SystemInfo::toMap() const -> Map<String, String> {
+  auto SystemInfo::toMap() const -> Map<String, String> {
     Map<String, String> data;
 
     // Basic system info
@@ -199,7 +199,7 @@ namespace draconis::core::system {
   }
 
 #if DRAC_ENABLE_PLUGINS
-  fn SystemInfo::collectPluginData(utils::cache::CacheManager& cache) -> Unit {
+  auto SystemInfo::collectPluginData(utils::cache::CacheManager& cache) -> Unit {
     using draconis::core::plugin::GetPluginManager;
 
     auto& pluginManager = GetPluginManager();

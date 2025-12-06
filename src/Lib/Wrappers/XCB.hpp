@@ -70,7 +70,7 @@ namespace xcb {
    * @param screenp Pointer to an integer that will store the screen number
    * @return A pointer to the connection object
    */
-  inline fn Connect(types::PCStr displayname, types::i32* screenp) -> Connection* {
+  inline auto Connect(types::PCStr displayname, types::i32* screenp) -> Connection* {
     return xcb_connect(displayname, screenp);
   }
 
@@ -82,7 +82,7 @@ namespace xcb {
    *
    * @param conn The connection object to disconnect from
    */
-  inline fn Disconnect(Connection* conn) -> types::Unit {
+  inline auto Disconnect(Connection* conn) -> types::Unit {
     xcb_disconnect(conn);
   }
 
@@ -95,7 +95,7 @@ namespace xcb {
    * @param conn The connection object to check
    * @return 1 if the connection has an error, 0 otherwise
    */
-  inline fn ConnectionHasError(Connection* conn) -> types::i32 {
+  inline auto ConnectionHasError(Connection* conn) -> types::i32 {
     return xcb_connection_has_error(conn);
   }
 
@@ -110,7 +110,7 @@ namespace xcb {
    * @param name The name of the atom
    * @return The cookie for the atom
    */
-  inline fn InternAtom(Connection* conn, const types::u8 only_if_exists, const types::u16 name_len, types::PCStr name) -> IntAtomCookie {
+  inline auto InternAtom(Connection* conn, const types::u8 only_if_exists, const types::u16 name_len, types::PCStr name) -> IntAtomCookie {
     return xcb_intern_atom(conn, only_if_exists, name_len, name);
   }
 
@@ -125,7 +125,7 @@ namespace xcb {
    * @param err The pointer to the generic error
    * @return The reply for the atom
    */
-  inline fn InternAtomReply(Connection* conn, const IntAtomCookie cookie, GenericError** err) -> IntAtomReply* {
+  inline auto InternAtomReply(Connection* conn, const IntAtomCookie cookie, GenericError** err) -> IntAtomReply* {
     return xcb_intern_atom_reply(conn, cookie, err);
   }
 
@@ -141,7 +141,7 @@ namespace xcb {
    * @param property The property
    * @param type The type
    */
-  inline fn GetProperty(
+  inline auto GetProperty(
     Connection*      conn,
     const types::u8  _delete,
     const Window     window,
@@ -164,7 +164,7 @@ namespace xcb {
    * @param err The pointer to the generic error
    * @return The reply for the property
    */
-  inline fn GetPropertyReply(Connection* conn, const GetPropCookie cookie, GenericError** err) -> GetPropReply* {
+  inline auto GetPropertyReply(Connection* conn, const GetPropCookie cookie, GenericError** err) -> GetPropReply* {
     return xcb_get_property_reply(conn, cookie, err);
   }
 
@@ -174,7 +174,7 @@ namespace xcb {
    * @param reply The reply for the property
    * @return The value length for the property
    */
-  inline fn GetPropertyValueLength(const GetPropReply* reply) -> types::i32 {
+  inline auto GetPropertyValueLength(const GetPropReply* reply) -> types::i32 {
     return xcb_get_property_value_length(reply);
   }
 
@@ -184,7 +184,7 @@ namespace xcb {
    * @param reply The reply for the property
    * @return The value for the property
    */
-  inline fn GetPropertyValue(const GetPropReply* reply) -> types::RawPointer {
+  inline auto GetPropertyValue(const GetPropReply* reply) -> types::RawPointer {
     return xcb_get_property_value(reply);
   }
 
@@ -196,7 +196,7 @@ namespace xcb {
    * @param name The name of the extension
    * @return The cookie for the extension query
    */
-  inline fn QueryExtension(Connection* conn, const types::u16 len, types::PCStr name) -> QueryExtensionCookie {
+  inline auto QueryExtension(Connection* conn, const types::u16 len, types::PCStr name) -> QueryExtensionCookie {
     return xcb_query_extension(conn, len, name);
   }
 
@@ -208,7 +208,7 @@ namespace xcb {
    * @param err The pointer to the generic error
    * @return The reply for the extension query
    */
-  inline fn GetQueryExtensionReply(Connection* conn, const QueryExtensionCookie cookie, GenericError** err) -> QueryExtensionReply* {
+  inline auto GetQueryExtensionReply(Connection* conn, const QueryExtensionCookie cookie, GenericError** err) -> QueryExtensionReply* {
     return xcb_query_extension_reply(conn, cookie, err);
   }
 
@@ -219,7 +219,7 @@ namespace xcb {
    * @param window The window
    * @return The cookie for the screen resources query
    */
-  inline fn GetScreenResourcesCurrent(Connection* conn, const Window window) -> RandrGetScreenResourcesCurrentCookie {
+  inline auto GetScreenResourcesCurrent(Connection* conn, const Window window) -> RandrGetScreenResourcesCurrentCookie {
     return xcb_randr_get_screen_resources_current(conn, window);
   }
 
@@ -231,7 +231,7 @@ namespace xcb {
    * @param err The pointer to the generic error
    * @return The reply for the screen resources query
    */
-  inline fn GetScreenResourcesCurrentReply(Connection* conn, const RandrGetScreenResourcesCurrentCookie cookie, GenericError** err) -> RandrGetScreenResourcesCurrentReply* {
+  inline auto GetScreenResourcesCurrentReply(Connection* conn, const RandrGetScreenResourcesCurrentCookie cookie, GenericError** err) -> RandrGetScreenResourcesCurrentReply* {
     return xcb_randr_get_screen_resources_current_reply(conn, cookie, err);
   }
 
@@ -241,7 +241,7 @@ namespace xcb {
    * @param reply The reply for the screen resources query
    * @return The outputs from the screen resources reply
    */
-  inline fn GetScreenResourcesCurrentOutputs(const RandrGetScreenResourcesCurrentReply* reply) -> RandrOutput* {
+  inline auto GetScreenResourcesCurrentOutputs(const RandrGetScreenResourcesCurrentReply* reply) -> RandrOutput* {
     return xcb_randr_get_screen_resources_current_outputs(reply);
   }
 
@@ -251,7 +251,7 @@ namespace xcb {
    * @param reply The reply for the screen resources query
    * @return The length of the outputs from the screen resources reply
    */
-  inline fn GetScreenResourcesCurrentOutputsLength(const RandrGetScreenResourcesCurrentReply* reply) -> types::i32 {
+  inline auto GetScreenResourcesCurrentOutputsLength(const RandrGetScreenResourcesCurrentReply* reply) -> types::i32 {
     return xcb_randr_get_screen_resources_current_outputs_length(reply);
   }
 
@@ -261,7 +261,7 @@ namespace xcb {
    * @param reply The reply for the screen resources query
    * @return The modes iterator from the screen resources reply
    */
-  inline fn GetScreenResourcesCurrentModesIterator(const RandrGetScreenResourcesCurrentReply* reply) -> RandrModeInfoIterator {
+  inline auto GetScreenResourcesCurrentModesIterator(const RandrGetScreenResourcesCurrentReply* reply) -> RandrModeInfoIterator {
     return xcb_randr_get_screen_resources_current_modes_iterator(reply);
   }
 
@@ -270,7 +270,7 @@ namespace xcb {
    *
    * @param iter The modes iterator
    */
-  inline fn ModeInfoNext(RandrModeInfoIterator* iter) -> types::Unit {
+  inline auto ModeInfoNext(RandrModeInfoIterator* iter) -> types::Unit {
     xcb_randr_mode_info_next(iter);
   }
 
@@ -281,7 +281,7 @@ namespace xcb {
    * @param window The window
    * @return The cookie for the primary output query
    */
-  inline fn GetOutputPrimary(Connection* conn, const Window window) -> RandrGetOutputPrimaryCookie {
+  inline auto GetOutputPrimary(Connection* conn, const Window window) -> RandrGetOutputPrimaryCookie {
     return xcb_randr_get_output_primary(conn, window);
   }
 
@@ -293,7 +293,7 @@ namespace xcb {
    * @param err The pointer to the generic error
    * @return The reply for the primary output query
    */
-  inline fn GetOutputPrimaryReply(Connection* conn, const RandrGetOutputPrimaryCookie cookie, GenericError** err) -> RandrGetOutputPrimaryReply* {
+  inline auto GetOutputPrimaryReply(Connection* conn, const RandrGetOutputPrimaryCookie cookie, GenericError** err) -> RandrGetOutputPrimaryReply* {
     return xcb_randr_get_output_primary_reply(conn, cookie, err);
   }
 
@@ -305,7 +305,7 @@ namespace xcb {
    * @param timestamp The timestamp
    * @return The cookie for the output info query
    */
-  inline fn GetOutputInfo(Connection* conn, const RandrOutput output, const Timestamp timestamp) -> RandrGetOutputInfoCookie {
+  inline auto GetOutputInfo(Connection* conn, const RandrOutput output, const Timestamp timestamp) -> RandrGetOutputInfoCookie {
     return xcb_randr_get_output_info(conn, output, timestamp);
   }
 
@@ -317,7 +317,7 @@ namespace xcb {
    * @param err The pointer to the generic error
    * @return The reply for the output info query
    */
-  inline fn GetOutputInfoReply(Connection* conn, const RandrGetOutputInfoCookie cookie, GenericError** err) -> RandrGetOutputInfoReply* {
+  inline auto GetOutputInfoReply(Connection* conn, const RandrGetOutputInfoCookie cookie, GenericError** err) -> RandrGetOutputInfoReply* {
     return xcb_randr_get_output_info_reply(conn, cookie, err);
   }
 
@@ -329,7 +329,7 @@ namespace xcb {
    * @param timestamp The timestamp
    * @return The cookie for the CRTC info query
    */
-  inline fn GetCrtcInfo(Connection* conn, const RandrCrtc crtc, const Timestamp timestamp) -> RandrGetCrtcInfoCookie {
+  inline auto GetCrtcInfo(Connection* conn, const RandrCrtc crtc, const Timestamp timestamp) -> RandrGetCrtcInfoCookie {
     return xcb_randr_get_crtc_info(conn, crtc, timestamp);
   }
 
@@ -341,7 +341,7 @@ namespace xcb {
    * @param err The pointer to the generic error
    * @return The reply for the CRTC info query
    */
-  inline fn GetCrtcInfoReply(Connection* conn, const RandrGetCrtcInfoCookie cookie, GenericError** err) -> RandrGetCrtcInfoReply* {
+  inline auto GetCrtcInfoReply(Connection* conn, const RandrGetCrtcInfoCookie cookie, GenericError** err) -> RandrGetCrtcInfoReply* {
     return xcb_randr_get_crtc_info_reply(conn, cookie, err);
   }
 
@@ -366,8 +366,8 @@ namespace xcb {
     }
 
     // Non-copyable
-    DisplayGuard(const DisplayGuard&)                = delete;
-    fn operator=(const DisplayGuard&)->DisplayGuard& = delete;
+    DisplayGuard(const DisplayGuard&)                    = delete;
+    auto operator=(const DisplayGuard&) -> DisplayGuard& = delete;
 
     // Movable
     DisplayGuard(DisplayGuard&& other) noexcept
@@ -378,7 +378,7 @@ namespace xcb {
      * @param other The other display guard
      * @return The moved display guard
      */
-    fn operator=(DisplayGuard&& other) noexcept -> DisplayGuard& {
+    auto operator=(DisplayGuard&& other) noexcept -> DisplayGuard& {
       if (this != &other) {
         if (m_connection)
           Disconnect(m_connection);
@@ -400,7 +400,7 @@ namespace xcb {
      * @brief Get the connection to the display
      * @return The connection to the display
      */
-    [[nodiscard]] fn get() const -> Connection* {
+    [[nodiscard]] auto get() const -> Connection* {
       return m_connection;
     }
 
@@ -408,7 +408,7 @@ namespace xcb {
      * @brief Get the setup for the display
      * @return The setup for the display
      */
-    [[nodiscard]] fn setup() const -> const Setup* {
+    [[nodiscard]] auto setup() const -> const Setup* {
       return m_connection ? xcb_get_setup(m_connection) : nullptr;
     }
 
@@ -416,7 +416,7 @@ namespace xcb {
      * @brief Get the root screen for the display
      * @return The root screen for the display
      */
-    [[nodiscard]] fn rootScreen() const -> Screen* {
+    [[nodiscard]] auto rootScreen() const -> Screen* {
       const Setup* setup = this->setup();
 
       return setup ? xcb_setup_roots_iterator(setup).data : nullptr;
@@ -453,8 +453,8 @@ namespace xcb {
     }
 
     // Non-copyable
-    ReplyGuard(const ReplyGuard&)                = delete;
-    fn operator=(const ReplyGuard&)->ReplyGuard& = delete;
+    ReplyGuard(const ReplyGuard&)                    = delete;
+    auto operator=(const ReplyGuard&) -> ReplyGuard& = delete;
 
     // Movable
     ReplyGuard(ReplyGuard&& other) noexcept
@@ -465,7 +465,7 @@ namespace xcb {
      * @param other The other reply guard
      * @return The moved reply guard
      */
-    fn operator=(ReplyGuard&& other) noexcept -> ReplyGuard& {
+    auto operator=(ReplyGuard&& other) noexcept -> ReplyGuard& {
       if (this != &other) {
         if (m_reply)
           free(m_reply);
@@ -487,7 +487,7 @@ namespace xcb {
      * @brief Get the reply
      * @return The reply
      */
-    [[nodiscard]] fn get() const -> T* {
+    [[nodiscard]] auto get() const -> T* {
       return m_reply;
     }
 
@@ -495,7 +495,7 @@ namespace xcb {
      * @brief Get the reply
      * @return The reply
      */
-    [[nodiscard]] fn operator->() const->T* {
+    [[nodiscard]] auto operator->() const -> T* {
       return m_reply;
     }
 
@@ -503,7 +503,7 @@ namespace xcb {
      * @brief Dereference the reply
      * @return The reply
      */
-    [[nodiscard]] fn operator*() const->T& {
+    [[nodiscard]] auto operator*() const -> T& {
       return *m_reply;
     }
   };

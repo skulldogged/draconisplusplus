@@ -84,41 +84,41 @@ namespace now_playing::npsm {
   MIDL_INTERFACE("3b6a7908-ce07-4ba9-878c-6e4a15db5e5b")
   INowPlayingSessionManager : public IUnknown {
    public:
-    virtual fn STDMETHODCALLTYPE get_Count(ULONG64 * pCount)->HRESULT               = 0;
-    virtual fn STDMETHODCALLTYPE get_CurrentSession(IUnknown * *ppSession)->HRESULT = 0;
+    virtual auto STDMETHODCALLTYPE get_Count(ULONG64 * pCount)->HRESULT               = 0;
+    virtual auto STDMETHODCALLTYPE get_CurrentSession(IUnknown * *ppSession)->HRESULT = 0;
   };
 
   // INowPlayingSession - {431268cf-7477-4285-950b-6f892a944712} (14393+)
   MIDL_INTERFACE("431268cf-7477-4285-950b-6f892a944712")
   INowPlayingSession : public IUnknown {
    public:
-    virtual fn STDMETHODCALLTYPE get_SessionType(int* pType) -> HRESULT                            = 0;
-    virtual fn STDMETHODCALLTYPE get_SourceAppId(LPWSTR * pszSrcAppId)->HRESULT                    = 0;
-    virtual fn STDMETHODCALLTYPE get_SourceDeviceId(LPWSTR * pszSourceDeviceId)->HRESULT           = 0;
-    virtual fn STDMETHODCALLTYPE get_RenderDeviceId(LPWSTR * pszRenderId)->HRESULT                 = 0;
-    virtual fn STDMETHODCALLTYPE get_HWND(HWND * pHwnd)->HRESULT                                   = 0;
-    virtual fn STDMETHODCALLTYPE get_PID(DWORD * pdwPID)->HRESULT                                  = 0;
-    virtual fn STDMETHODCALLTYPE get_Info(IUnknown * *ppInfo)->HRESULT                             = 0;
-    virtual fn STDMETHODCALLTYPE get_Connection(IUnknown * *ppUnknown)->HRESULT                    = 0;
-    virtual fn STDMETHODCALLTYPE ActivateMediaPlaybackDataSource(IUnknown * *ppMediaCtrl)->HRESULT = 0;
+    virtual auto STDMETHODCALLTYPE get_SessionType(int* pType) -> HRESULT                            = 0;
+    virtual auto STDMETHODCALLTYPE get_SourceAppId(LPWSTR * pszSrcAppId)->HRESULT                    = 0;
+    virtual auto STDMETHODCALLTYPE get_SourceDeviceId(LPWSTR * pszSourceDeviceId)->HRESULT           = 0;
+    virtual auto STDMETHODCALLTYPE get_RenderDeviceId(LPWSTR * pszRenderId)->HRESULT                 = 0;
+    virtual auto STDMETHODCALLTYPE get_HWND(HWND * pHwnd)->HRESULT                                   = 0;
+    virtual auto STDMETHODCALLTYPE get_PID(DWORD * pdwPID)->HRESULT                                  = 0;
+    virtual auto STDMETHODCALLTYPE get_Info(IUnknown * *ppInfo)->HRESULT                             = 0;
+    virtual auto STDMETHODCALLTYPE get_Connection(IUnknown * *ppUnknown)->HRESULT                    = 0;
+    virtual auto STDMETHODCALLTYPE ActivateMediaPlaybackDataSource(IUnknown * *ppMediaCtrl)->HRESULT = 0;
   };
 
   // IMediaPlaybackDataSource - {0F4521BE-A0B8-4116-B3B1-BFECEBAEEBE6} (10586-19041)
   MIDL_INTERFACE("0F4521BE-A0B8-4116-B3B1-BFECEBAEEBE6")
   IMediaPlaybackDataSource : public IUnknown {
    public:
-    virtual fn STDMETHODCALLTYPE GetMediaPlaybackInfo(void* pPlaybackInfo) -> HRESULT       = 0;
-    virtual fn STDMETHODCALLTYPE SendMediaPlaybackCommand(int command) -> HRESULT           = 0;
-    virtual fn STDMETHODCALLTYPE GetMediaObjectInfo(IPropertyStore * *ppPropStore)->HRESULT = 0;
+    virtual auto STDMETHODCALLTYPE GetMediaPlaybackInfo(void* pPlaybackInfo) -> HRESULT       = 0;
+    virtual auto STDMETHODCALLTYPE SendMediaPlaybackCommand(int command) -> HRESULT           = 0;
+    virtual auto STDMETHODCALLTYPE GetMediaObjectInfo(IPropertyStore * *ppPropStore)->HRESULT = 0;
   };
 
   // IMediaPlaybackDataSource2 - {c4f66b80-df04-4f79-afc2-bee3fc7c46e3} (20279+ / Windows 11)
   MIDL_INTERFACE("c4f66b80-df04-4f79-afc2-bee3fc7c46e3")
   IMediaPlaybackDataSource2 : public IUnknown {
    public:
-    virtual fn STDMETHODCALLTYPE GetMediaPlaybackInfo(void* pPlaybackInfo) -> HRESULT       = 0;
-    virtual fn STDMETHODCALLTYPE SendMediaPlaybackCommand(int command) -> HRESULT           = 0;
-    virtual fn STDMETHODCALLTYPE GetMediaObjectInfo(IPropertyStore * *ppPropStore)->HRESULT = 0;
+    virtual auto STDMETHODCALLTYPE GetMediaPlaybackInfo(void* pPlaybackInfo) -> HRESULT       = 0;
+    virtual auto STDMETHODCALLTYPE SendMediaPlaybackCommand(int command) -> HRESULT           = 0;
+    virtual auto STDMETHODCALLTYPE GetMediaObjectInfo(IPropertyStore * *ppPropStore)->HRESULT = 0;
   };
   // NOLINTEND(cppcoreguidelines-virtual-class-destructor, readability-identifier-naming)
 
@@ -145,7 +145,7 @@ namespace now_playing::npsm {
     /**
      * @brief Converts a wide string (UTF-16) to a UTF-8 encoded string.
      */
-    fn ConvertWStringToUTF8(const WString& wstr) -> Result<String> {
+    auto ConvertWStringToUTF8(const WString& wstr) -> Result<String> {
       if (wstr.empty())
         return String {};
 
@@ -168,7 +168,7 @@ namespace now_playing::npsm {
     /**
      * @brief Fetch now playing information via Windows NPSM API
      */
-    fn FetchNowPlaying() -> Result<MediaData> {
+    auto FetchNowPlaying() -> Result<MediaData> {
       Microsoft::WRL::ComPtr<INowPlayingSessionManager> sessionManager;
 
   #pragma clang diagnostic push
@@ -270,7 +270,7 @@ namespace now_playing::macos {
   /**
    * @brief Fetch now playing information via macOS MediaRemote framework
    */
-  fn fetchNowPlaying() -> Result<MediaData> {
+  auto fetchNowPlaying() -> Result<MediaData> {
     @autoreleasepool {
       // Since MediaRemote.framework is private, we cannot link against it directly.
       // Instead, it must be loaded at runtime using CFURL and CFBundle.
@@ -370,8 +370,8 @@ namespace now_playing::dbus {
         dbus_error_free(&m_err);
     }
 
-    Error(const Error&)                = delete;
-    fn operator=(const Error&)->Error& = delete;
+    Error(const Error&)                    = delete;
+    auto operator=(const Error&) -> Error& = delete;
 
     Error(Error&& other) noexcept
       : m_err(other.m_err), m_isInitialized(other.m_isInitialized) {
@@ -379,7 +379,7 @@ namespace now_playing::dbus {
       dbus_error_init(&other.m_err);
     }
 
-    fn operator=(Error&& other) noexcept -> Error& {
+    auto operator=(Error&& other) noexcept -> Error& {
       if (this != &other) {
         if (m_isInitialized)
           dbus_error_free(&m_err);
@@ -391,15 +391,15 @@ namespace now_playing::dbus {
       return *this;
     }
 
-    [[nodiscard]] fn isSet() const -> bool {
+    [[nodiscard]] auto isSet() const -> bool {
       return m_isInitialized && dbus_error_is_set(&m_err);
     }
 
-    [[nodiscard]] fn message() const -> const char* {
+    [[nodiscard]] auto message() const -> const char* {
       return isSet() ? m_err.message : "";
     }
 
-    [[nodiscard]] fn get() -> DBusError* {
+    [[nodiscard]] auto get() -> DBusError* {
       return &m_err;
     }
   };
@@ -416,35 +416,35 @@ namespace now_playing::dbus {
     explicit MessageIter(const DBusMessageIter& iter, const bool isValid)
       : m_iter(iter), m_isValid(isValid) {}
 
-    fn getBasic(RawPointer value) -> Unit {
+    auto getBasic(RawPointer value) {
       if (m_isValid)
         dbus_message_iter_get_basic(&m_iter, value);
     }
 
    public:
-    MessageIter(const MessageIter&)                = delete;
-    fn operator=(const MessageIter&)->MessageIter& = delete;
-    MessageIter(MessageIter&&)                     = delete;
-    fn operator=(MessageIter&&)->MessageIter&      = delete;
-    ~MessageIter()                                 = default;
+    MessageIter(const MessageIter&)                    = delete;
+    auto operator=(const MessageIter&) -> MessageIter& = delete;
+    MessageIter(MessageIter&&)                         = delete;
+    auto operator=(MessageIter&&) -> MessageIter&      = delete;
+    ~MessageIter()                                     = default;
 
-    [[nodiscard]] fn isValid() const -> bool {
+    [[nodiscard]] auto isValid() const -> bool {
       return m_isValid;
     }
 
-    [[nodiscard]] fn getArgType() -> i32 {
+    [[nodiscard]] auto getArgType() -> i32 {
       return m_isValid ? dbus_message_iter_get_arg_type(&m_iter) : DBUS_TYPE_INVALID;
     }
 
-    [[nodiscard]] fn getElementType() -> i32 {
+    [[nodiscard]] auto getElementType() -> i32 {
       return m_isValid ? dbus_message_iter_get_element_type(&m_iter) : DBUS_TYPE_INVALID;
     }
 
-    fn next() -> bool {
+    auto next() -> bool {
       return m_isValid && dbus_message_iter_next(&m_iter);
     }
 
-    [[nodiscard]] fn recurse() -> MessageIter {
+    [[nodiscard]] auto recurse() -> MessageIter {
       if (!m_isValid)
         return MessageIter({}, false);
 
@@ -453,7 +453,7 @@ namespace now_playing::dbus {
       return MessageIter(subIter, true);
     }
 
-    [[nodiscard]] fn getString() -> Option<String> {
+    [[nodiscard]] auto getString() -> Option<String> {
       if (m_isValid && getArgType() == DBUS_TYPE_STRING) {
         const char* strPtr = nullptr;
         getBasic(static_cast<RawPointer>(&strPtr));
@@ -478,13 +478,13 @@ namespace now_playing::dbus {
         dbus_message_unref(m_msg);
     }
 
-    Message(const Message&)                = delete;
-    fn operator=(const Message&)->Message& = delete;
+    Message(const Message&)                    = delete;
+    auto operator=(const Message&) -> Message& = delete;
 
     Message(Message&& other) noexcept
       : m_msg(std::exchange(other.m_msg, nullptr)) {}
 
-    fn operator=(Message&& other) noexcept -> Message& {
+    auto operator=(Message&& other) noexcept -> Message& {
       if (this != &other) {
         if (m_msg)
           dbus_message_unref(m_msg);
@@ -493,11 +493,11 @@ namespace now_playing::dbus {
       return *this;
     }
 
-    [[nodiscard]] fn get() const -> DBusMessage* {
+    [[nodiscard]] auto get() const -> DBusMessage* {
       return m_msg;
     }
 
-    [[nodiscard]] fn iterInit() const -> MessageIter {
+    [[nodiscard]] auto iterInit() const -> MessageIter {
       if (!m_msg)
         return MessageIter({}, false);
 
@@ -507,7 +507,7 @@ namespace now_playing::dbus {
     }
 
     template <typename... Args>
-    [[nodiscard]] fn appendArgs(Args&&... args) -> bool {
+    [[nodiscard]] auto appendArgs(Args&&... args) -> bool {
       if (!m_msg)
         return false;
 
@@ -519,7 +519,7 @@ namespace now_playing::dbus {
       return success;
     }
 
-    static fn newMethodCall(const char* destination, const char* path, const char* interface, const char* method)
+    static auto newMethodCall(const char* destination, const char* path, const char* interface, const char* method)
       -> Result<Message> {
       DBusMessage* rawMsg = dbus_message_new_method_call(destination, path, interface, method);
       if (!rawMsg)
@@ -529,7 +529,7 @@ namespace now_playing::dbus {
 
    private:
     template <typename T>
-    fn appendArgInternal(DBusMessageIter& iter, T&& arg) -> bool {
+    auto appendArgInternal(DBusMessageIter& iter, T&& arg) -> bool {
       using DecayedT = std::decay_t<T>;
       if constexpr (std::is_convertible_v<DecayedT, const char*>) {
         const char* valuePtr = static_cast<const char*>(std::forward<T>(arg));
@@ -555,13 +555,13 @@ namespace now_playing::dbus {
         dbus_connection_unref(m_conn);
     }
 
-    Connection(const Connection&)                = delete;
-    fn operator=(const Connection&)->Connection& = delete;
+    Connection(const Connection&)                    = delete;
+    auto operator=(const Connection&) -> Connection& = delete;
 
     Connection(Connection&& other) noexcept
       : m_conn(std::exchange(other.m_conn, nullptr)) {}
 
-    fn operator=(Connection&& other) noexcept -> Connection& {
+    auto operator=(Connection&& other) noexcept -> Connection& {
       if (this != &other) {
         if (m_conn)
           dbus_connection_unref(m_conn);
@@ -570,11 +570,11 @@ namespace now_playing::dbus {
       return *this;
     }
 
-    [[nodiscard]] fn get() const -> DBusConnection* {
+    [[nodiscard]] auto get() const -> DBusConnection* {
       return m_conn;
     }
 
-    [[nodiscard]] fn sendWithReplyAndBlock(const Message& message, const i32 timeout_milliseconds = 1000) const
+    [[nodiscard]] auto sendWithReplyAndBlock(const Message& message, const i32 timeout_milliseconds = 1000) const
       -> Result<Message> {
       if (!m_conn || !message.get())
         ERR(InvalidArgument, "Invalid connection or message");
@@ -591,7 +591,7 @@ namespace now_playing::dbus {
       return Message(rawReply);
     }
 
-    static fn busGet(const DBusBusType bus_type) -> Result<Connection> {
+    static auto busGet(const DBusBusType bus_type) -> Result<Connection> {
       Error           err;
       DBusConnection* rawConn = dbus_bus_get(bus_type, err.get());
 
@@ -608,7 +608,7 @@ namespace now_playing::dbus {
   /**
    * @brief Extract player name from MPRIS bus name
    */
-  fn extractPlayerName(const String& busName) -> String {
+  auto extractPlayerName(const String& busName) -> String {
     constexpr StringView prefix = "org.mpris.MediaPlayer2.";
     if (busName.starts_with(prefix))
       return busName.substr(prefix.size());
@@ -618,7 +618,7 @@ namespace now_playing::dbus {
   /**
    * @brief Fetch now playing information via MPRIS/DBus
    */
-  fn fetchNowPlaying() -> Result<MediaData> {
+  auto fetchNowPlaying() -> Result<MediaData> {
     Connection connection = TRY(Connection::busGet(DBUS_BUS_SESSION));
 
     Option<String> activePlayer = None;
@@ -760,33 +760,33 @@ namespace {
       };
     }
 
-    [[nodiscard]] fn getMetadata() const -> const PluginMetadata& override {
+    [[nodiscard]] auto getMetadata() const -> const PluginMetadata& override {
       return m_metadata;
     }
 
-    [[nodiscard]] fn getProviderId() const -> String override {
+    [[nodiscard]] auto getProviderId() const -> String override {
       return "now_playing";
     }
 
-    fn initialize(const PluginContext& /*ctx*/, PluginCache& /*cache*/) -> Result<Unit> override {
+    auto initialize(const PluginContext& /*ctx*/, PluginCache& /*cache*/) -> Result<Unit> override {
       m_config.enabled = true;
       m_ready          = true;
       return {};
     }
 
-    fn shutdown() -> Unit override {
+    auto shutdown() -> Unit override {
       m_ready = false;
     }
 
-    [[nodiscard]] fn isReady() const -> bool override {
+    [[nodiscard]] auto isReady() const -> bool override {
       return m_ready;
     }
 
-    [[nodiscard]] fn isEnabled() const -> bool override {
+    [[nodiscard]] auto isEnabled() const -> bool override {
       return m_config.enabled;
     }
 
-    fn collectData(PluginCache& /*cache*/) -> Result<Unit> override {
+    auto collectData(PluginCache& /*cache*/) -> Result<Unit> override {
       if (!m_ready)
         ERR(NotSupported, "Now Playing plugin is not ready");
 
@@ -816,14 +816,14 @@ namespace {
       return {};
     }
 
-    [[nodiscard]] fn toJson() const -> Result<String> override {
+    [[nodiscard]] auto toJson() const -> Result<String> override {
       String jsonStr;
       if (glz::error_ctx errc = glz::write<glz::opts { .skip_null_members = true, .prettify = true }>(m_data, jsonStr); errc)
         ERR_FMT(ParseError, "Failed to serialize now playing data: {}", glz::format_error(errc, jsonStr));
       return jsonStr;
     }
 
-    [[nodiscard]] fn getFields() const -> Map<String, String> override {
+    [[nodiscard]] auto getFields() const -> Map<String, String> override {
       Map<String, String> fields;
 
       if (m_data.title)
@@ -841,7 +841,7 @@ namespace {
       return fields;
     }
 
-    [[nodiscard]] fn getDisplayValue() const -> Result<String> override {
+    [[nodiscard]] auto getDisplayValue() const -> Result<String> override {
       if (!m_data.title)
         ERR(NotFound, "No media currently playing");
 
@@ -851,15 +851,15 @@ namespace {
       return *m_data.title;
     }
 
-    [[nodiscard]] fn getDisplayIcon() const -> String override {
+    [[nodiscard]] auto getDisplayIcon() const -> String override {
       return " 󰝚  "; // Nerd Font music icon
     }
 
-    [[nodiscard]] fn getDisplayLabel() const -> String override {
+    [[nodiscard]] auto getDisplayLabel() const -> String override {
       return "Playing";
     }
 
-    [[nodiscard]] fn getLastError() const -> Option<String> override {
+    [[nodiscard]] auto getLastError() const -> Option<String> override {
       return m_lastError;
     }
   };

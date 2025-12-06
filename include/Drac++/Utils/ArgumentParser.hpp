@@ -56,7 +56,7 @@ namespace draconis::utils::argparse {
   struct EnumTraits {
     static constexpr bool has_string_conversion = magic_enum::is_scoped_enum_v<EnumType>;
 
-    static fn getChoices() -> const ArgChoices& {
+    static auto getChoices() -> const ArgChoices& {
       static_assert(has_string_conversion, "Enum type must be a scoped enum");
 
       static const ArgChoices CACHED_CHOICES = [] {
@@ -71,7 +71,7 @@ namespace draconis::utils::argparse {
       return CACHED_CHOICES;
     }
 
-    static fn stringToEnum(const types::String& str) -> EnumType {
+    static auto stringToEnum(const types::String& str) -> EnumType {
       static_assert(has_string_conversion, "Enum type must be a scoped enum");
 
       auto result = magic_enum::enum_cast<EnumType>(str);
@@ -88,7 +88,7 @@ namespace draconis::utils::argparse {
       return enumValues[0];
     }
 
-    static fn enumToString(EnumType value) -> types::String {
+    static auto enumToString(EnumType value) -> types::String {
       static_assert(has_string_conversion, "Enum type must be a scoped enum");
       return types::String(magic_enum::enum_name(value));
     }
@@ -131,7 +131,7 @@ namespace draconis::utils::argparse {
      * @param help_text The help text
      * @return Reference to this argument for method chaining
      */
-    fn help(types::String help_text) -> Argument& {
+    auto help(types::String help_text) -> Argument& {
       m_helpText = std::move(help_text);
       return *this;
     }
@@ -143,7 +143,7 @@ namespace draconis::utils::argparse {
      * @return Reference to this argument for method chaining
      */
     template <typename T>
-    fn defaultValue(T value) -> Argument& {
+    auto defaultValue(T value) -> Argument& {
       m_defaultValue = std::move(value);
       return *this;
     }
@@ -156,7 +156,7 @@ namespace draconis::utils::argparse {
      */
     template <typename EnumType>
       requires std::is_enum_v<EnumType> && EnumTraits<EnumType>::has_string_conversion
-                                         fn defaultValue(EnumType value) -> Argument& {
+    auto defaultValue(EnumType value) -> Argument& {
       types::String strValue = EnumTraits<EnumType>::enumToString(value);
 
       m_defaultValue = strValue;
@@ -169,7 +169,7 @@ namespace draconis::utils::argparse {
      * @brief Configure this argument as a flag.
      * @return Reference to this argument for method chaining
      */
-    fn flag() -> Argument& {
+    auto flag() -> Argument& {
       m_isFlag       = true;
       m_defaultValue = false;
       return *this;
@@ -180,7 +180,7 @@ namespace draconis::utils::argparse {
      * @param choices Vector of allowed string values
      * @return Reference to this argument for method chaining
      */
-    fn choices(const ArgChoices& choices) -> Argument& {
+    auto choices(const ArgChoices& choices) -> Argument& {
       m_choices = choices;
 
       std::unordered_set<types::String> lowered;
@@ -207,7 +207,7 @@ namespace draconis::utils::argparse {
      * @return The argument value, or default value if not provided
      */
     template <typename T>
-    fn get() const -> T {
+    auto get() const -> T {
       if (m_isUsed && m_value.has_value())
         return std::get<T>(m_value.value());
 
@@ -224,7 +224,7 @@ namespace draconis::utils::argparse {
      */
     template <typename EnumType>
       requires std::is_enum_v<EnumType> && EnumTraits<EnumType>::has_string_conversion
-                                         fn getEnum() const -> EnumType {
+    auto getEnum() const -> EnumType {
       const auto strValue = get<types::String>();
 
       return EnumTraits<EnumType>::stringToEnum(strValue);
@@ -234,7 +234,7 @@ namespace draconis::utils::argparse {
      * @brief Check if this argument was used in the command line.
      * @return true if the argument was used, false otherwise
      */
-    [[nodiscard]] fn isUsed() const -> bool {
+    [[nodiscard]] auto isUsed() const -> bool {
       return m_isUsed;
     }
 
@@ -242,7 +242,7 @@ namespace draconis::utils::argparse {
      * @brief Get the primary name of this argument.
      * @return The first name in the names list
      */
-    [[nodiscard]] fn getPrimaryName() const -> const types::String& {
+    [[nodiscard]] auto getPrimaryName() const -> const types::String& {
       return m_names.front();
     }
 
@@ -250,7 +250,7 @@ namespace draconis::utils::argparse {
      * @brief Get all names for this argument.
      * @return Vector of all argument names
      */
-    [[nodiscard]] fn getNames() const -> const types::Vec<types::String>& {
+    [[nodiscard]] auto getNames() const -> const types::Vec<types::String>& {
       return m_names;
     }
 
@@ -258,7 +258,7 @@ namespace draconis::utils::argparse {
      * @brief Get the help text for this argument.
      * @return The help text
      */
-    [[nodiscard]] fn getHelpText() const -> const types::String& {
+    [[nodiscard]] auto getHelpText() const -> const types::String& {
       return m_helpText;
     }
 
@@ -267,7 +267,7 @@ namespace draconis::utils::argparse {
 // ...
      * @return true if this is a flag argument, false otherwise
      */
-    [[nodiscard]] fn isFlag() const -> bool {
+    [[nodiscard]] auto isFlag() const -> bool {
       return m_isFlag;
     }
 
@@ -275,7 +275,7 @@ namespace draconis::utils::argparse {
      * @brief Check if this argument has choices (enum-style).
      * @return true if this argument has choices, false otherwise
      */
-    [[nodiscard]] fn hasChoices() const -> bool {
+    [[nodiscard]] auto hasChoices() const -> bool {
       return m_choices.has_value();
     }
 
@@ -283,7 +283,7 @@ namespace draconis::utils::argparse {
      * @brief Get the allowed choices for this argument.
      * @return Vector of allowed choices, or empty vector if none set
      */
-    [[nodiscard]] fn getChoices() const -> ArgChoices {
+    [[nodiscard]] auto getChoices() const -> ArgChoices {
       return m_choices.value_or(ArgChoices {});
     }
 
@@ -291,7 +291,7 @@ namespace draconis::utils::argparse {
      * @brief Check if this argument has a default value.
      * @return true if a default value is set, false otherwise
      */
-    [[nodiscard]] fn hasDefault() const -> bool {
+    [[nodiscard]] auto hasDefault() const -> bool {
       return m_defaultValue.has_value();
     }
 
@@ -299,7 +299,7 @@ namespace draconis::utils::argparse {
      * @brief Get the default value as a lowercase string (for help text).
      *        Returns an empty string if no default value is set.
      */
-    [[nodiscard]] fn getDefaultAsString() const -> types::String {
+    [[nodiscard]] auto getDefaultAsString() const -> types::String {
       if (!m_defaultValue.has_value())
         return {};
 
@@ -329,7 +329,7 @@ namespace draconis::utils::argparse {
      * @param value The value to set
      * @return Result indicating success or failure
      */
-    fn setValue(ArgValue value) -> types::Result<> {
+    auto setValue(ArgValue value) -> types::Result<> {
       if (hasChoices() && std::holds_alternative<types::String>(value)) {
         const types::String& strValue = std::get<types::String>(value);
 
@@ -395,7 +395,7 @@ namespace draconis::utils::argparse {
     /**
      * @brief Mark this argument as used.
      */
-    fn markUsed() -> types::Unit {
+    auto markUsed() -> types::Unit {
       m_isUsed = true;
 
       if (m_isFlag)
@@ -416,7 +416,7 @@ namespace draconis::utils::argparse {
      */
     template <typename T>
       requires std::same_as<T, bool> || std::same_as<T, types::i32> || std::same_as<T, types::f64> || std::same_as<T, types::String>
-                                                                                                    fn bindTo(T& member) -> Argument& {
+    auto bindTo(T& member) -> Argument& {
       m_binding = [&member](const Argument& arg) {
         member = arg.get<T>();
       };
@@ -439,7 +439,7 @@ namespace draconis::utils::argparse {
      */
     template <typename T, typename Func>
       requires std::invocable<Func, const Argument&> && std::convertible_to<std::invoke_result_t<Func, const Argument&>, T>
-                                                      fn bindTo(T& member, Func&& transform) -> Argument& {
+    auto bindTo(T& member, Func&& transform) -> Argument& {
       m_binding = [&member, transform = std::forward<Func>(transform)](const Argument& arg) {
         member = transform(arg);
       };
@@ -454,7 +454,7 @@ namespace draconis::utils::argparse {
      */
     template <typename EnumType>
       requires std::is_enum_v<EnumType> && EnumTraits<EnumType>::has_string_conversion
-                                         fn bindToEnum(EnumType& member) -> Argument& {
+    auto bindToEnum(EnumType& member) -> Argument& {
       m_binding = [&member](const Argument& arg) {
         member = arg.getEnum<EnumType>();
       };
@@ -465,14 +465,14 @@ namespace draconis::utils::argparse {
      * @brief Check if this argument has a binding.
      * @return true if a binding is set, false otherwise
      */
-    [[nodiscard]] fn hasBinding() const -> bool {
+    [[nodiscard]] auto hasBinding() const -> bool {
       return m_binding != nullptr;
     }
 
     /**
      * @brief Apply the binding if one exists.
      */
-    fn applyBinding() const -> types::Unit {
+    auto applyBinding() const -> types::Unit {
       if (m_binding)
         m_binding(*this);
     }
@@ -544,7 +544,7 @@ namespace draconis::utils::argparse {
      */
     template <typename... NameTs>
       requires(sizeof...(NameTs) >= 1 && (std::convertible_to<NameTs, types::String> && ...))
-    fn addArguments(NameTs&&... names) -> Argument& {
+    auto addArguments(NameTs&&... names) -> Argument& {
       m_arguments.emplace_back(std::make_unique<Argument>(types::String {}, false, std::forward<NameTs>(names)...));
       Argument& arg = *m_arguments.back();
 
@@ -559,7 +559,7 @@ namespace draconis::utils::argparse {
      * @param args Span of argument strings
      * @return Result indicating success or failure
      */
-    fn parseArgs(types::Span<const char* const> args) -> types::Result<> {
+    auto parseArgs(types::Span<const char* const> args) -> types::Result<> {
       if (args.empty())
         return {};
 
@@ -605,7 +605,7 @@ namespace draconis::utils::argparse {
      * @param args Vector of argument strings
      * @return Result indicating success or failure
      */
-    fn parseArgs(const types::Vec<types::String>& args) -> types::Result<> {
+    auto parseArgs(const types::Vec<types::String>& args) -> types::Result<> {
       if (args.empty())
         return {};
 
@@ -653,7 +653,7 @@ namespace draconis::utils::argparse {
      * @return The argument value, or default value if not provided
      */
     template <typename T = types::String>
-    fn get(types::StringView name) const -> T {
+    auto get(types::StringView name) const -> T {
       auto iter = m_argumentMap.find(types::String(name));
 
       if (iter != m_argumentMap.end())
@@ -669,7 +669,7 @@ namespace draconis::utils::argparse {
      * @return The argument value converted to the enum type
      */
     template <typename EnumType>
-    fn getEnum(types::StringView name) const -> EnumType {
+    auto getEnum(types::StringView name) const -> EnumType {
       auto iter = m_argumentMap.find(types::String(name));
 
       if (iter != m_argumentMap.end())
@@ -685,7 +685,7 @@ namespace draconis::utils::argparse {
      * @param name Argument name
      * @return true if the argument was used, false otherwise
      */
-    [[nodiscard]] fn isUsed(types::StringView name) const -> bool {
+    [[nodiscard]] auto isUsed(types::StringView name) const -> bool {
       auto iter = m_argumentMap.find(types::String(name));
       if (iter != m_argumentMap.end())
         return iter->second->isUsed();
@@ -696,7 +696,7 @@ namespace draconis::utils::argparse {
     /**
      * @brief Print help message.
      */
-    fn printHelp() const -> types::Unit {
+    auto printHelp() const -> types::Unit {
       std::ostringstream usageStream;
       usageStream << "Usage: " << m_programName;
 
@@ -777,7 +777,7 @@ namespace draconis::utils::argparse {
      *   parser.parseArgs(args);
      *   parser.applyBindings(); // opts.verbose and opts.output are now populated
      */
-    fn applyBindings() const -> types::Unit {
+    auto applyBindings() const -> types::Unit {
       for (const auto& arg : m_arguments)
         arg->applyBinding();
     }
@@ -789,7 +789,7 @@ namespace draconis::utils::argparse {
      *
      * Convenience method that combines parseArgs() and applyBindings().
      */
-    fn parseInto(types::Span<const char* const> args) -> types::Result<> {
+    auto parseInto(types::Span<const char* const> args) -> types::Result<> {
       if (auto result = parseArgs(args); !result)
         return result;
       applyBindings();
@@ -801,7 +801,7 @@ namespace draconis::utils::argparse {
      * @param args Vector of argument strings
      * @return Result indicating success or failure
      */
-    fn parseInto(const types::Vec<types::String>& args) -> types::Result<> {
+    auto parseInto(const types::Vec<types::String>& args) -> types::Result<> {
       if (auto result = parseArgs(args); !result)
         return result;
       applyBindings();

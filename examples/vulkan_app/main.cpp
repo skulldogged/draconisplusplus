@@ -27,7 +27,7 @@ using namespace draconis::utils::types;
 using enum draconis::utils::error::DracErrorCode;
 
 namespace {
-  fn cleanupSwapChain(const vk::Device device, Vec<vk::ImageView>& swapChainImageViews, const vk::CommandPool commandPool, Vec<vk::CommandBuffer>& commandBuffers) -> Unit {
+  auto cleanupSwapChain(const vk::Device device, Vec<vk::ImageView>& swapChainImageViews, const vk::CommandPool commandPool, Vec<vk::CommandBuffer>& commandBuffers) {
     if (!commandBuffers.empty()) {
       device.freeCommandBuffers(commandPool, commandBuffers);
       commandBuffers.clear();
@@ -40,7 +40,7 @@ namespace {
     swapChainImageViews.clear();
   }
 
-  fn recreateSwapChain(GLFWwindow* window, vk::Device device, vk::PhysicalDevice physicalDevice, vk::SurfaceKHR surface, vk::SwapchainKHR& swapChain, Vec<vk::Image>& swapChainImages, vk::SurfaceFormatKHR& surfaceFormat, vk::Extent2D& swapChainExtent, Vec<vk::ImageView>& swapChainImageViews, vk::CommandPool commandPool, Vec<vk::CommandBuffer>& commandBuffers, vk::PresentModeKHR& presentMode) -> Result<> {
+  auto recreateSwapChain(GLFWwindow* window, vk::Device device, vk::PhysicalDevice physicalDevice, vk::SurfaceKHR surface, vk::SwapchainKHR& swapChain, Vec<vk::Image>& swapChainImages, vk::SurfaceFormatKHR& surfaceFormat, vk::Extent2D& swapChainExtent, Vec<vk::ImageView>& swapChainImageViews, vk::CommandPool commandPool, Vec<vk::CommandBuffer>& commandBuffers, vk::PresentModeKHR& presentMode) -> Result<> {
     i32 width = 0, height = 0;
     glfwGetFramebufferSize(window, &width, &height);
 
@@ -176,7 +176,7 @@ namespace {
   }
 } // namespace
 
-fn main() -> i32 {
+auto main() -> i32 {
   static vk::detail::DynamicLoader Loader;
 
   VULKAN_HPP_DEFAULT_DISPATCHER.init(Loader.getProcAddress<PFN_vkGetInstanceProcAddr>("vkGetInstanceProcAddr"));

@@ -73,7 +73,7 @@ namespace draconis::utils::error {
  *
  * @example
  * @code
- * fn fetchData() -> Result<Data> {
+ * auto fetchData() -> Result<Data> {
  *   // Instead of:
  *   // auto urlResult = buildUrl();
  *   // if (!urlResult) return Err(urlResult.error());
@@ -137,7 +137,7 @@ namespace draconis::utils::error {
  *
  * @example
  * @code
- * fn initializeSystem() -> Result<> {
+ * auto initializeSystem() -> Result<> {
  *   // Propagate errors from void-returning operations:
  *   TRY_VOID(validateConfig());
  *   TRY_VOID(initializeCache());

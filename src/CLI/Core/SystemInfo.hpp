@@ -70,7 +70,7 @@ namespace draconis::core::system {
      * @param fieldName Name of the field to retrieve
      * @return Field value or empty string if not found
      */
-    [[nodiscard]] fn getPluginField(const types::String& pluginId, const types::String& fieldName) const noexcept -> types::String {
+    [[nodiscard]] auto getPluginField(const types::String& pluginId, const types::String& fieldName) const noexcept -> types::String {
       if (auto pluginIter = pluginData.find(pluginId); pluginIter != pluginData.end())
         if (auto fieldIter = pluginIter->second.find(fieldName); fieldIter != pluginIter->second.end())
           return fieldIter->second;
@@ -84,7 +84,7 @@ namespace draconis::core::system {
      * @param fieldName Name of the field to check
      * @return True if field exists
      */
-    [[nodiscard]] fn hasPluginField(const types::String& pluginId, const types::String& fieldName) const noexcept -> bool {
+    [[nodiscard]] auto hasPluginField(const types::String& pluginId, const types::String& fieldName) const noexcept -> bool {
       if (auto pluginIter = pluginData.find(pluginId); pluginIter != pluginData.end())
         return pluginIter->second.contains(fieldName);
       return false;
@@ -94,7 +94,7 @@ namespace draconis::core::system {
      * @brief Get all plugin IDs that have contributed data
      * @return Vector of plugin IDs
      */
-    [[nodiscard]] fn getPluginIds() const -> types::Vec<types::String> {
+    [[nodiscard]] auto getPluginIds() const -> types::Vec<types::String> {
       types::Vec<types::String> ids;
       ids.reserve(pluginData.size());
       for (const auto& [pluginId, fields] : pluginData)
@@ -107,7 +107,7 @@ namespace draconis::core::system {
      * @param pluginId ID of the plugin
      * @return Vector of field names
      */
-    [[nodiscard]] fn getPluginFieldNames(const types::String& pluginId) const -> types::Vec<types::String> {
+    [[nodiscard]] auto getPluginFieldNames(const types::String& pluginId) const -> types::Vec<types::String> {
       types::Vec<types::String> names;
       if (auto pluginIter = pluginData.find(pluginId); pluginIter != pluginData.end()) {
         names.reserve(pluginIter->second.size());
@@ -126,7 +126,7 @@ namespace draconis::core::system {
      * makes them available everywhere.
      * @return Map of field names to their string values
      */
-    [[nodiscard]] fn toMap() const -> types::Map<types::String, types::String>;
+    [[nodiscard]] auto toMap() const -> types::Map<types::String, types::String>;
 
     explicit SystemInfo(utils::cache::CacheManager& cache, const Config& config);
 
@@ -136,7 +136,7 @@ namespace draconis::core::system {
      * @brief Collect data from all system info plugins efficiently
      * @param cache Cache manager for plugin data persistence
      */
-    fn collectPluginData(utils::cache::CacheManager& cache) -> types::Unit;
+    auto collectPluginData(utils::cache::CacheManager& cache) -> types::Unit;
 #endif
   };
 

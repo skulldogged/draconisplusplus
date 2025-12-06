@@ -179,7 +179,7 @@ namespace draconis::utils::types {
 namespace std {
   template <>
   struct formatter<draconis::utils::types::BytesToGiB> : formatter<draconis::utils::types::f64> {
-    fn format(const draconis::utils::types::BytesToGiB& BTG, auto& ctx) const {
+    auto format(const draconis::utils::types::BytesToGiB& BTG, auto& ctx) const {
       constexpr draconis::utils::types::u64 gib = 1'073'741'824;
 
       return format_to(ctx.out(), "{:.2f}GiB", static_cast<draconis::utils::types::f64>(BTG.value) / gib);
@@ -188,7 +188,7 @@ namespace std {
 
   template <>
   struct formatter<draconis::utils::types::SecondsToFormattedDuration> : formatter<draconis::utils::types::String> {
-    fn format(const draconis::utils::types::SecondsToFormattedDuration& stfd, auto& ctx) const {
+    auto format(const draconis::utils::types::SecondsToFormattedDuration& stfd, auto& ctx) const {
       using draconis::utils::types::Array;
       using draconis::utils::types::String;
       using draconis::utils::types::u64;

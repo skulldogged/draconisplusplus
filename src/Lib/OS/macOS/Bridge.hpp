@@ -25,7 +25,7 @@ namespace draconis::core::system::macOS {
    * This function uses the Metal framework, which is Apple's modern graphics API,
    * to identify the default graphics device.
    */
-  fn GetGPUModel() -> types::Result<types::String>;
+  auto GetGPUModel() -> types::Result<types::String>;
 
   /**
    * @brief Gets the version of the macOS operating system.
@@ -35,7 +35,7 @@ namespace draconis::core::system::macOS {
    * returns 16, while the actual Tahoe SDK returns 26. To get around that, we simply add 10
    * to the displayed major version.
    */
-  fn GetOSVersion() -> types::Result<types::OSInfo>;
+  auto GetOSVersion() -> types::Result<types::OSInfo>;
 } // namespace draconis::core::system::macOS
 
 #endif

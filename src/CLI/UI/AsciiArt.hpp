@@ -153,7 +153,7 @@ namespace draconis::ui::ascii {
       "\033[1m\033[38;5;12m/////////////////  \033[38;5;12m/////////////////\033[0m";
   } // namespace logos
 
-  constexpr fn GetAsciiArt(types::StringView operatingSystem) -> types::Vec<types::StringView> {
+  constexpr auto GetAsciiArt(types::StringView operatingSystem) -> types::Vec<types::StringView> {
     using namespace logos;
 
     // clang-format off

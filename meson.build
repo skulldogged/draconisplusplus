@@ -41,7 +41,6 @@ project_string_defines = {
   'DRAC_BUILD_DATE': '"' + drac_build_date + '"',
   'DRAC_GIT_HASH': '"' + drac_git_hash + '"',
   'DRAC_DEFAULT_LANGUAGE': '"' + get_option('default_language') + '"',
-  'fn': 'auto',
   '_WIN32_WINNT': '0x0602',
 }
 
@@ -285,6 +284,11 @@ if get_option('build_examples')
   subdir('examples')
 endif
 
+# Build unit tests
+if get_option('build_tests')
+  subdir('tests')
+endif
+
 # Build example plugins if plugin support is enabled
 if feature_states['plugins']
   subdir('plugins')
@@ -339,6 +343,7 @@ endif
 summary(
   {
     'Build examples': get_option('build_examples'),
+    'Build tests': get_option('build_tests'),
   },
   section: 'Build Options',
   bool_yn: true,

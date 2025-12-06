@@ -49,53 +49,53 @@ namespace draconis::utils::localization {
      * @param languageCode The language code to switch to
      * @return true if the language was successfully loaded, false otherwise
      */
-    fn setLanguage(StringView languageCode) -> bool;
+    auto setLanguage(StringView languageCode) -> bool;
 
     /**
      * @brief Gets the current language code.
      * @return The current language code
      */
-    fn getCurrentLanguage() const -> StringView;
+    auto getCurrentLanguage() const -> StringView;
 
     /**
      * @brief Gets a localized string by key.
      * @param key The translation key
      * @return The localized string, or the key itself if not found
      */
-    fn get(StringView key) const -> String;
+    auto get(StringView key) const -> String;
 
     /**
      * @brief Gets a localized string with fallback to English.
      * @param key The translation key
      * @return The localized string, or English translation, or key if not found
      */
-    fn getWithFallback(StringView key) const -> String;
+    auto getWithFallback(StringView key) const -> String;
 
     /**
      * @brief Checks if a translation key exists.
      * @param key The translation key to check
      * @return true if the key exists in current language or fallback
      */
-    fn hasKey(StringView key) const -> bool;
+    auto hasKey(StringView key) const -> bool;
 
     /**
      * @brief Gets all available languages.
      * @return Vector of available Language objects
      */
-    static fn getAvailableLanguages() -> Vec<Language>;
+    static auto getAvailableLanguages() -> Vec<Language>;
 
     /**
      * @brief Gets the system default language code.
      * @return The system language code, or "en" as fallback
      */
-    static fn getSystemLanguage() -> String;
+    static auto getSystemLanguage() -> String;
 
     /**
      * @brief Extracts language code from locale string (e.g., "en_US.UTF-8" -> "en").
      * @param localeStr The locale string to parse
      * @return The extracted language code
      */
-    static fn extractLanguageCode(StringView localeStr) -> String;
+    static auto extractLanguageCode(StringView localeStr) -> String;
 
    private:
     /**
@@ -103,14 +103,14 @@ namespace draconis::utils::localization {
      * @param languageCode The language code to load
      * @return true if successfully loaded, false otherwise
      */
-    fn loadTranslations(StringView languageCode) -> bool;
+    auto loadTranslations(StringView languageCode) -> bool;
 
     /**
      * @brief Computes hash for a string key (same as TranslationEntry::hash).
      * @param str The string to hash
      * @return The computed hash
      */
-    static constexpr fn hashKey(StringView str) -> u64 {
+    static constexpr auto hashKey(StringView str) -> u64 {
       u64 hash = 0;
 
       for (char character : str)
@@ -128,14 +128,14 @@ namespace draconis::utils::localization {
   /**
    * @brief Global translation manager instance.
    */
-  extern fn GetTranslationManager() -> TranslationManager&;
+  extern auto GetTranslationManager() -> TranslationManager&;
 
   /**
    * @brief Convenience function to get a localized string.
    * @param key The translation key
    * @return The localized string
    */
-  inline fn _(StringView key) -> String {
+  inline auto _(StringView key) -> String {
     return GetTranslationManager().get(key);
   }
 
@@ -144,7 +144,7 @@ namespace draconis::utils::localization {
    * @param key The translation key
    * @return The localized string with fallback
    */
-  inline fn _f(StringView key) -> String { // NOLINT(readability-identifier-naming)
+  inline auto _f(StringView key) -> String { // NOLINT(readability-identifier-naming)
     return GetTranslationManager().getWithFallback(key);
   }
 
@@ -156,7 +156,7 @@ namespace draconis::utils::localization {
    * @return The formatted localized string
    */
   template <typename... Args>
-  inline fn _format(StringView key, Args&&... args) -> String { // NOLINT(readability-identifier-naming)
+  inline auto _format(StringView key, Args&&... args) -> String { // NOLINT(readability-identifier-naming)
     return std::vformat(GetTranslationManager().get(key), std::make_format_args(std::forward<Args>(args)...));
   }
 
@@ -168,7 +168,7 @@ namespace draconis::utils::localization {
    * @return The formatted localized string with fallback
    */
   template <typename... Args>
-  inline fn _format_f(StringView key, Args&&... args) -> String { // NOLINT(readability-identifier-naming)
+  inline auto _format_f(StringView key, Args&&... args) -> String { // NOLINT(readability-identifier-naming)
     return std::vformat(GetTranslationManager().getWithFallback(key), std::make_format_args(std::forward<Args>(args)...));
   }
 } // namespace draconis::utils::localization

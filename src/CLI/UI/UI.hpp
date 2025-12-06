@@ -49,5 +49,5 @@ namespace draconis::ui {
    * @param noAscii Whether to disable ASCII art.
    * @return A string containing the formatted UI.
    */
-  fn CreateUI(const config::Config& config, const system::SystemInfo& data, bool noAscii) -> types::String;
+  auto CreateUI(const config::Config& config, const system::SystemInfo& data, bool noAscii) -> types::String;
 } // namespace draconis::ui

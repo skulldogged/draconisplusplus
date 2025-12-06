@@ -31,7 +31,7 @@ using draconis::utils::error::DracError;
 using enum draconis::utils::error::DracErrorCode;
 
 namespace draconis::core::system {
-  fn GetOperatingSystem(CacheManager& cache) -> Result<OSInfo> {
+  auto GetOperatingSystem(CacheManager& cache) -> Result<OSInfo> {
     return cache.getOrSet<OSInfo>("haiku_os_info", []() -> Result<OSInfo> {
       BFile    file;
       status_t status = file.SetTo("/boot/system/lib/libbe.so", B_READ_ONLY);
@@ -60,7 +60,7 @@ namespace draconis::core::system {
     });
   }
 
-  fn GetMemInfo(CacheManager& /*cache*/) -> Result<ResourceUsage> {
+  auto GetMemInfo(CacheManager& /*cache*/) -> Result<ResourceUsage> {
     system_info    sysinfo;
     const status_t status = get_system_info(&sysinfo);
 
@@ -73,19 +73,19 @@ namespace draconis::core::system {
     return ResourceUsage(usedMem, totalMem);
   }
 
-  fn GetWindowManager(CacheManager& cache) -> Result<String> {
+  auto GetWindowManager(CacheManager& cache) -> Result<String> {
     return cache.getOrSet<String>("haiku_wm", []() -> Result<String> {
       return "app_server";
     });
   }
 
-  fn GetDesktopEnvironment(CacheManager& cache) -> Result<String> {
+  auto GetDesktopEnvironment(CacheManager& cache) -> Result<String> {
     return cache.getOrSet<String>("haiku_desktop_environment", []() -> Result<String> {
       return "Haiku Desktop Environment";
     });
   }
 
-  fn GetShell(CacheManager& cache) -> Result<String> {
+  auto GetShell(CacheManager& cache) -> Result<String> {
     return cache.getOrSet<String>("haiku_shell", []() -> Result<String> {
       if (const Result<String> shellPath = GetEnv("SHELL")) {
         // clang-format off
@@ -109,7 +109,7 @@ namespace draconis::core::system {
     });
   }
 
-  fn GetHost(CacheManager& cache) -> Result<String> {
+  auto GetHost(CacheManager& cache) -> Result<String> {
     return cache.getOrSet<String>("haiku_host", []() -> Result<String> {
       Array<char, HOST_NAME_MAX + 1> hostnameBuffer {};
 
@@ -124,7 +124,7 @@ namespace draconis::core::system {
     });
   }
 
-  fn GetKernelVersion(CacheManager& cache) -> Result<String> {
+  auto GetKernelVersion(CacheManager& cache) -> Result<String> {
     return cache.getOrSet<String>("haiku_kernel_version", []() -> Result<String> {
       system_info    sysinfo;
       const status_t status = get_system_info(&sysinfo);
@@ -136,7 +136,7 @@ namespace draconis::core::system {
     });
   }
 
-  fn GetDiskUsage(CacheManager& /*cache*/) -> Result<ResourceUsage> {
+  auto GetDiskUsage(CacheManager& /*cache*/) -> Result<ResourceUsage> {
     // Haiku uses /boot as the primary filesystem
     return os::unix_shared::GetDiskUsageAt("/boot");
   }

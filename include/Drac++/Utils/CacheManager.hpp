@@ -29,15 +29,15 @@ namespace draconis::utils::cache {
 
     types::Option<seconds> ttl = days(1); ///< Default to 1 day.
 
-    static fn inMemory() -> CachePolicy {
+    static auto inMemory() -> CachePolicy {
       return { .location = CacheLocation::InMemory, .ttl = types::None };
     }
 
-    static fn neverExpire() -> CachePolicy {
+    static auto neverExpire() -> CachePolicy {
       return { .location = CacheLocation::Persistent, .ttl = types::None };
     }
 
-    static fn tempDirectory() -> CachePolicy {
+    static auto tempDirectory() -> CachePolicy {
       return { .location = CacheLocation::TempDirectory, .ttl = types::None };
     }
   };
@@ -59,7 +59,7 @@ namespace draconis::utils::cache {
      * @return The path to the cache directory (e.g., ~/.cache/draconis++ on Linux,
      *         ~/Library/Caches/draconis++ on macOS, %LOCALAPPDATA%/draconis++/cache on Windows)
      */
-    static fn getPersistentCacheDir() -> fs::path {
+    static auto getPersistentCacheDir() -> fs::path {
 #ifdef __APPLE__
       return fs::path(std::format("{}/Library/Caches/draconis++", draconis::utils::env::GetEnv("HOME").value_or(".")));
 #elif defined(_WIN32)
@@ -75,7 +75,7 @@ namespace draconis::utils::cache {
 
     CacheManager() : m_globalPolicy { .location = CacheLocation::Persistent, .ttl = days(1) } {}
 
-    fn setGlobalPolicy(const CachePolicy& policy) -> types::Unit {
+    auto setGlobalPolicy(const CachePolicy& policy) -> types::Unit {
       types::LockGuard lock(m_cacheMutex);
       m_globalPolicy = policy;
     }
@@ -87,7 +87,7 @@ namespace draconis::utils::cache {
     };
 
     template <typename T>
-    fn getOrSet(
+    auto getOrSet(
       const types::String&          key,
       types::Option<CachePolicy>    overridePolicy,
       types::Fn<types::Result<T>()> fetcher
@@ -178,7 +178,7 @@ namespace draconis::utils::cache {
     }
 
     template <typename T>
-    fn getOrSet(const types::String& key, types::Fn<types::Result<T>()> fetcher) -> types::Result<T> {
+    auto getOrSet(const types::String& key, types::Fn<types::Result<T>()> fetcher) -> types::Result<T> {
       return getOrSet(key, types::None, fetcher);
     }
 
@@ -191,7 +191,7 @@ namespace draconis::utils::cache {
      *
      * @param key Cache key to invalidate.
      */
-    fn invalidate(const types::String& key) -> types::Unit {
+    auto invalidate(const types::String& key) -> types::Unit {
       if constexpr (DRAC_ENABLE_CACHING) {
         types::LockGuard lock(m_cacheMutex);
 
@@ -216,7 +216,7 @@ namespace draconis::utils::cache {
      * persistent and temporary cache directories while preserving the
      * directory structure.
      */
-    fn invalidateAll(bool logRemovals = false) -> types::u8 {
+    auto invalidateAll(bool logRemovals = false) -> types::u8 {
       if constexpr (DRAC_ENABLE_CACHING) {
         types::LockGuard lock(m_cacheMutex);
 
@@ -293,7 +293,7 @@ namespace draconis::utils::cache {
 
     types::Mutex m_cacheMutex;
 
-    static fn getCacheFilePath(const types::String& key, const CacheLocation location) -> types::Option<fs::path> {
+    static auto getCacheFilePath(const types::String& key, const CacheLocation location) -> types::Option<fs::path> {
       using matchit::match, matchit::is, matchit::_;
 
       types::Option<fs::path> cacheDir = types::None;

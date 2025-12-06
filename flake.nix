@@ -40,7 +40,6 @@
               IMGUI_BUILD_GLFW_BINDING = true;
               IMGUI_BUILD_VULKAN_BINDING = true;
             })
-            gtest
             vulkan-extension-layer
             vulkan-memory-allocator
             vulkan-utility-libraries
