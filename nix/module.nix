@@ -161,31 +161,55 @@ with lib; let
     )
     cfg.layout;
 
-  cfgDelimiter = "DRACCFG";
+  # Helper to convert weather provider string to enum
+  weatherProviderToEnum = provider:
+    if provider == "metno" then "MetNo"
+    else if provider == "openweathermap" then "OpenWeatherMap"
+    else "OpenMeteo";
 
-  pluginConfigEntries =
-    lib.mapAttrsToList (
-      name: val:
-        let
-          content = builtins.readFile (tomlFormat.generate "${name}.toml" val);
-        in ''
-          PrecompiledPluginConfig{ .name = "${name}", .config = R"${cfgDelimiter}(${content})${cfgDelimiter}" },
-        ''
-    )
-    cfg.pluginConfigs;
+  # Helper to convert units string to enum
+  weatherUnitsToEnum = units:
+    if units == "imperial" then "Imperial"
+    else "Metric";
 
-  pluginConfigArray =
-    if pluginConfigEntries == []
-    then ''
-      inline constexpr bool DRAC_HAS_PLUGIN_CONFIGS = false;
-      inline constexpr std::array<PrecompiledPluginConfig, 0> DRAC_PLUGIN_CONFIGS = {};
+  # Get weather plugin config or empty
+  weatherPluginConfig = cfg.pluginConfigs.weather or {};
+  hasWeatherConfig = weatherPluginConfig != {};
+
+  # Generate location variant
+  weatherLocation = 
+    let
+      coords = weatherPluginConfig.coords or null;
+      city = weatherPluginConfig.location or null;
+    in
+      if city != null then
+        ''CityName { "${city}" }''
+      else if coords != null then
+        ''Coordinates { ${toString coords.lat}, ${toString coords.lon} }''
+      else
+        ''Coordinates { 0.0, 0.0 }'';
+
+  # Generate weather config struct (inside draconis::config namespace)
+  weatherConfigCode =
+    if hasWeatherConfig then ''
+      #include "plugins/weather/WeatherConfig.hpp"
+      inline constexpr auto WEATHER_CONFIG = weather::config::MakeConfig(
+        weather::config::Provider::${weatherProviderToEnum (weatherPluginConfig.provider or "openmeteo")},
+        weather::config::Units::${weatherUnitsToEnum (weatherPluginConfig.units or "metric")},
+        weather::config::${weatherLocation}${lib.optionalString (weatherPluginConfig.api_key or "" != "") ",\n        \"${weatherPluginConfig.api_key}\""}
+      );
     ''
     else ''
-      inline constexpr bool DRAC_HAS_PLUGIN_CONFIGS = true;
-      inline constexpr std::array<PrecompiledPluginConfig, ${toString (builtins.length pluginConfigEntries)}> DRAC_PLUGIN_CONFIGS = {
-        ${builtins.concatStringsSep "\n        " pluginConfigEntries}
-      };
+      // No weather plugin configured - using defaults
+      #include "plugins/weather/WeatherConfig.hpp"
+      inline constexpr auto WEATHER_CONFIG = weather::config::MakeConfig(
+        weather::config::Provider::OpenMeteo,
+        weather::config::Units::Metric,
+        weather::config::Coordinates { 0.0, 0.0 }
+      );
     '';
+  # Check if weather plugin is in static plugins
+  hasWeatherPlugin = builtins.elem "weather" cfg.staticPlugins;
 
   configHpp =
     pkgs.writeText "config.hpp"
@@ -197,7 +221,6 @@ with lib; let
 
         #include <array>
         #include <Drac++/Config/PrecompiledLayout.hpp>
-        #include <Drac++/Config/PrecompiledPlugins.hpp>
 
         #if DRAC_ENABLE_PACKAGECOUNT
           #include <Drac++/Services/Packages.hpp>
@@ -214,7 +237,7 @@ with lib; let
 
         ${layoutArrayHppCode}
 
-        ${pluginConfigArray}
+        ${lib.optionalString hasWeatherPlugin weatherConfigCode}
       }
 
       #endif

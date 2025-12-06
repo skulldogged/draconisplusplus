@@ -34,7 +34,7 @@ namespace draconis::ui {
 
   using core::system::SystemInfo;
 
-    constexpr Theme DEFAULT_THEME = {
+  constexpr Theme DEFAULT_THEME = {
     .icon  = LogColor::Cyan,
     .label = LogColor::Yellow,
     .value = LogColor::White,
@@ -141,8 +141,8 @@ namespace draconis::ui {
     struct LogoRender {
       Vec<String> lines;    // ASCII art lines when using ascii logos
       String      sequence; // Escape sequence when using inline image logos
-      usize       width   = 0;
-      usize       height  = 0;
+      usize       width    = 0;
+      usize       height   = 0;
       bool        isInline = false;
     };
 
@@ -497,12 +497,12 @@ namespace draconis::ui {
 
       // Determine how many terminal columns/rows the image will occupy to shift the text,
       // and prefer to send cell sizing when possible (kitty scales to fit).
-      usize shiftWidthCells  = 0;
-      usize logoHeightCells  = 0;
-      usize sendWidthCells   = 0;
-      usize sendHeightCells  = 0;
-      const usize renderWidthPx  = logoWidthPx;
-      const usize renderHeightPx = logoHeightPx;
+      usize       shiftWidthCells = 0;
+      usize       logoHeightCells = 0;
+      usize       sendWidthCells  = 0;
+      usize       sendHeightCells = 0;
+      const usize renderWidthPx   = logoWidthPx;
+      const usize renderHeightPx  = logoHeightPx;
 
       if (const Option<Pair<double, double>> cellMetrics = GetCellMetricsPx()) {
         const double cellW = cellMetrics->first;
@@ -546,10 +546,10 @@ namespace draconis::ui {
       LogoRender render;
       // width/height reported back are used for shifting/padding the text box; ensure
       // height reflects any sizing we applied (cells or derived pixels).
-      render.width  = shiftWidthCells;
-      render.height = logoHeightCells > 0 ? logoHeightCells
-        : (sendHeightCells > 0 ? sendHeightCells
-                               : (renderHeightPx > 0 ? std::max<usize>(1, renderHeightPx / 10) : 0));
+      render.width    = shiftWidthCells;
+      render.height   = logoHeightCells > 0 ? logoHeightCells
+                                            : (sendHeightCells > 0 ? sendHeightCells
+                                                                   : (renderHeightPx > 0 ? std::max<usize>(1, renderHeightPx / 10) : 0));
       render.isInline = true;
       render.sequence = *sequence;
 
@@ -1435,37 +1435,36 @@ namespace draconis::ui {
     const usize logoHeight = isInlineLogo ? (logoHeightOpt ? logoHeightOpt : boxLines.size()) : logoLines.size();
     String      emptyLogo(maxLogoW, ' ');
 
-      // Inline logo: emit the image to stdout once, then print the box shifted right by logo width.
-      if (isInlineLogo) {
-        const usize shift        = maxLogoW + 2; // logo width plus gap
-        const usize totalHeight  = std::max(logoHeight, boxLines.size());
-        const usize logoPadTop   = (totalHeight > logoHeight) ? (totalHeight - logoHeight) / 2 : 0;
-        const usize boxPadTop    = (totalHeight > boxLines.size()) ? (totalHeight - boxLines.size()) / 2 : 0;
-        const usize boxPadBottom = totalHeight - boxPadTop - boxLines.size();
+    // Inline logo: emit the image to stdout once, then print the box shifted right by logo width.
+    if (isInlineLogo) {
+      const usize shift       = maxLogoW + 2; // logo width plus gap
+      const usize totalHeight = std::max(logoHeight, boxLines.size());
+      const usize logoPadTop  = (totalHeight > logoHeight) ? (totalHeight - logoHeight) / 2 : 0;
+      const usize boxPadTop   = (totalHeight > boxLines.size()) ? (totalHeight - boxLines.size()) / 2 : 0;
 
-        if (!inlineSequence.empty()) {
-          std::cout << "\033[s"; // save cursor
-          if (logoPadTop > 0)
-            std::cout << std::format("\033[{}B", logoPadTop); // move down to vertically center logo
-          std::cout << inlineSequence;
-          if (logoPadTop > 0)
-            std::cout << std::format("\033[{}A", logoPadTop); // move back up
-          std::cout << "\033[u" << std::flush; // restore cursor
-        }
-
-        String newOut;
-        for (usize i = 0; i < totalHeight; ++i) {
-          const bool   isBoxLine = i >= boxPadTop && i < boxPadTop + boxLines.size();
-          const String& line     = isBoxLine ? boxLines[i - boxPadTop] : emptyBox;
-
-          newOut += "\r";
-          newOut += std::format("\033[{}C", shift);
-          newOut += line;
-          newOut += "\n";
-        }
-
-        return newOut;
+      if (!inlineSequence.empty()) {
+        std::cout << "\033[s"; // save cursor
+        if (logoPadTop > 0)
+          std::cout << std::format("\033[{}B", logoPadTop); // move down to vertically center logo
+        std::cout << inlineSequence;
+        if (logoPadTop > 0)
+          std::cout << std::format("\033[{}A", logoPadTop); // move back up
+        std::cout << "\033[u" << std::flush;                // restore cursor
       }
+
+      String newOut;
+      for (usize i = 0; i < totalHeight; ++i) {
+        const bool    isBoxLine = i >= boxPadTop && i < boxPadTop + boxLines.size();
+        const String& line      = isBoxLine ? boxLines[i - boxPadTop] : emptyBox;
+
+        newOut += "\r";
+        newOut += std::format("\033[{}C", shift);
+        newOut += line;
+        newOut += "\n";
+      }
+
+      return newOut;
+    }
 
     // ASCII logo: center relative to box height
     const usize totalHeight = std::max(logoHeight, boxLines.size());

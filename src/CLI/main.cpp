@@ -66,7 +66,6 @@ struct CliOptions {
 
 fn main(const i32 argc, CStr* argv[]) -> i32 try {
 #ifdef _WIN32
-  // Initialize COM for NPSM (Now Playing) and other COM-based APIs
   CoInitializeEx(nullptr, COINIT_MULTITHREADED);
 #endif
 

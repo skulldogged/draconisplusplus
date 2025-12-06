@@ -71,10 +71,10 @@ namespace draconis::core::system {
      * @return Field value or empty string if not found
      */
     [[nodiscard]] fn getPluginField(const types::String& pluginId, const types::String& fieldName) const noexcept -> types::String {
-      if (auto pluginIter = pluginData.find(pluginId); pluginIter != pluginData.end()) {
+      if (auto pluginIter = pluginData.find(pluginId); pluginIter != pluginData.end())
         if (auto fieldIter = pluginIter->second.find(fieldName); fieldIter != pluginIter->second.end())
           return fieldIter->second;
-      }
+
       return {};
     }
 

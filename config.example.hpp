@@ -20,7 +20,6 @@
 
   #include <array>
 
-  #include <Drac++/Config/PrecompiledPlugins.hpp>
   #include <Drac++/Config/PrecompiledLayout.hpp>
 
   #if DRAC_ENABLE_PACKAGECOUNT
@@ -155,25 +154,39 @@ namespace draconis::config {
     Group("session", DRAC_UI_SESSION_ROWS),
   };
 
+  //============================================================================
+  // Plugin Configurations
+  //
+  // Only define configs for plugins you're actually using!
+  // If you don't include a plugin in -Dstatic_plugins, you don't need its config.
+  //============================================================================
+
+  //==============================================================================
+  // Weather Plugin Config - only needed if using -Dstatic_plugins=weather
+  //==============================================================================
+  #include "plugins/weather/WeatherConfig.hpp"
+
   /**
-   * @brief Precompiled plugin configurations written to ~/.config/draconis++/plugins
+   * @brief Weather Plugin Configuration
    *
-   * Each entry provides TOML content for a plugin. The filename will be
-   * <name>.toml (e.g., "weather.toml").
+   * Location can be either:
+   * - Coordinates{lat, lon} for OpenMeteo/MetNo/OpenWeatherMap
+   * - CityName{"city, country"} for OpenWeatherMap only (requires API key)
    */
-  inline constexpr bool DRAC_HAS_PLUGIN_CONFIGS = true;
-  inline constexpr std::array<PrecompiledPluginConfig, 1> DRAC_PLUGIN_CONFIGS = {{
-    PrecompiledPluginConfig {
-      .name   = "weather",
-      .config = R"(enabled = true
-provider = "openmeteo"
-units = "metric"
-[coords]
-lat = 40.7128
-lon = -74.0060
-)",
-    },
-  }};
+  inline constexpr auto WEATHER_CONFIG = weather::config::MakeConfig(
+    weather::config::Provider::OpenMeteo,
+    weather::config::Units::Metric,
+    weather::config::Coordinates { 40.7128, -74.0060 } // New York
+  );
+
+  // Example: Using city name with OpenWeatherMap (requires API key)
+  // inline constexpr auto WEATHER_CONFIG = weather::config::MakeConfig(
+  //   weather::config::Provider::OpenWeatherMap,
+  //   weather::config::Units::Imperial,
+  //   weather::config::CityName { "New York, US" },
+  //   "your_api_key_here"
+  // );
+
 } // namespace draconis::config
 
 #endif // DRAC_PRECOMPILED_CONFIG

@@ -12,8 +12,6 @@
 #include "Types.hpp"
 
 namespace draconis::utils::error {
-  namespace types = ::draconis::utils::types;
-
   /**
    * @enum DracErrorCode
    * @brief Error codes for general OS-level operations.
@@ -111,7 +109,6 @@ namespace draconis::utils::error {
     if (!DRAC_CONCAT(_drac_try_result_, __LINE__))                                            \
       return ::draconis::utils::types::Err(DRAC_CONCAT(_drac_try_result_, __LINE__).error()); \
     (var) = std::move(*DRAC_CONCAT(_drac_try_result_, __LINE__))
-
 #else
   #define TRY(expr)                                                                             \
     _Pragma("clang diagnostic push")                                                            \

@@ -85,16 +85,13 @@ namespace draconis::cli {
       PluginCache pluginCache(utils::cache::CacheManager::getPersistentCacheDir() / "plugins");
 
       // Then benchmark each info provider plugin
-      for (auto* plugin : pluginManager.getInfoProviderPlugins()) {
-        if (plugin && plugin->isReady() && plugin->isEnabled()) {
-          const String pluginName = std::format("Plugin: {}", plugin->getMetadata().name);
-          timeOperation(pluginName, [&]() -> Result<String> {
+      for (auto* plugin : pluginManager.getInfoProviderPlugins())
+        if (plugin && plugin->isReady() && plugin->isEnabled())
+          timeOperation(std::format("Plugin: {}", plugin->getMetadata().name), [&]() -> Result<String> {
             if (auto result = plugin->collectData(pluginCache); !result)
               return std::unexpected(result.error());
             return plugin->getDisplayValue();
           });
-        }
-      }
     }
 #endif
 

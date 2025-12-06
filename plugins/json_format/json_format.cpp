@@ -22,7 +22,6 @@
 #include <Drac++/Utils/Types.hpp>
 
 namespace {
-
   using namespace draconis::utils::types;
 
   /**
