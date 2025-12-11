@@ -20,7 +20,6 @@
   #include <Drac++/Core/PluginManager.hpp>
 
   #include <Drac++/Utils/CacheManager.hpp>
-
 #endif
 
 namespace draconis::cli {
