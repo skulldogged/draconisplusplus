@@ -94,9 +94,10 @@ libdrac = static_library(
 )
 
 # Standard dependency (for most targets)
+# Includes lib_deps so consumers get all transitive dependencies automatically
 draconis_dep = declare_dependency(
   link_with : libdrac,
-  dependencies : [includes_dep],
+  dependencies : [includes_dep] + lib_deps,
   link_args : link_args,
   compile_args : static_plugin_cpp_args,
 )
@@ -105,7 +106,7 @@ draconis_dep = declare_dependency(
 if get_option('precompiled_config') and static_plugins.length() > 0
   draconis_dep_whole = declare_dependency(
     link_whole : libdrac,
-    dependencies : [includes_dep],
+    dependencies : [includes_dep] + lib_deps,
     link_args : link_args,
     compile_args : static_plugin_cpp_args,
   )
