@@ -23,6 +23,13 @@ option(
   description: 'Build unit tests',
 )
 
+option(
+  'build_cli',
+  type: 'boolean',
+  value: true,
+  description: 'Build the CLI application',
+)
+
 # ===================== #
 #     Core Features     #
 # ===================== #

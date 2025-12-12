@@ -277,7 +277,10 @@ lib_deps += glaze_dep
 #   Subprojects   #
 # =============== #
 subdir('src/Lib')
-subdir('src/CLI')
+
+if get_option('build_cli')
+  subdir('src/CLI')
+endif
 
 if get_option('build_examples')
   lib_deps += dependency('asio', static: true, fallback: ['asio', 'asio_dep'])
