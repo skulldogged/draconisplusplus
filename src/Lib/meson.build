@@ -56,9 +56,13 @@ if get_option('precompiled_config')
     # Plugins self-register, so no per-plugin defines needed
     static_plugin_cpp_args += '-DDRAC_STATIC_PLUGIN_BUILD=1'
     
+    # Initialize empty list for static plugin dependencies
+    static_plugin_deps = []
+
     foreach plugin_name : static_plugins
-      # Dynamically find the plugin source file
+      # Dynamically find the plugin source file and metadata
       plugin_source_path = plugins_dir / plugin_name / (plugin_name + '.cpp')
+      plugin_json_path = plugins_dir / plugin_name / 'plugin.json'
       
       # Check if the plugin source exists
       if fs.is_file(plugin_source_path)
@@ -66,7 +70,54 @@ if get_option('precompiled_config')
       else
         error('Plugin source not found: "@0@". Expected file: @1@'.format(plugin_name, plugin_source_path))
       endif
+
+      # Load plugin's plugin.json to get its dependencies using Python
+      if fs.is_file(plugin_json_path)
+        # Use Python to parse JSON and output deps in a simple format
+        # Format: name|include_type|static|platforms (one per line)
+        parse_result = run_command(
+          'python', '-c', '''
+import json, sys
+with open(sys.argv[1]) as f:
+    data = json.load(f)
+for dep in data.get("deps", []):
+    name = dep.get("name", "")
+    inc_type = dep.get("include_type", "preserve")
+    static = "true" if dep.get("static", False) else "false"
+    platforms = ",".join(dep.get("platforms", []))
+    print(f"{name}|{inc_type}|{static}|{platforms}")
+''',
+          plugin_json_path,
+          check: true,
+        )
+        
+        deps_output = parse_result.stdout().strip()
+        if deps_output != ''
+          foreach dep_line : deps_output.split('\n')
+            dep_parts = dep_line.split('|')
+            dep_name = dep_parts[0]
+            dep_include_type = dep_parts[1]
+            dep_static = dep_parts[2] == 'true'
+            dep_platforms_str = dep_parts[3]
+            
+            # Check if this dependency is platform-specific
+            if dep_platforms_str != ''
+              dep_platforms = dep_platforms_str.split(',')
+              # Only add if current platform is in the list
+              if host_system in dep_platforms
+                static_plugin_deps += dependency(dep_name, include_type: dep_include_type, static: dep_static)
+              endif
+            else
+              # No platform restriction, add unconditionally
+              static_plugin_deps += dependency(dep_name, include_type: dep_include_type, static: dep_static)
+            endif
+          endforeach
+        endif
+      endif
     endforeach
+
+    # Add static plugin dependencies to lib_deps
+    lib_deps += static_plugin_deps
   endif
 else
   # Non-precompiled mode: use the plugins feature option for dynamic plugin loading

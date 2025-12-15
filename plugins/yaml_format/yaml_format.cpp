@@ -23,7 +23,6 @@
 #include "ryml_all.hpp"
 
 namespace {
-
   using namespace draconis::utils::types;
 
   class YamlFormatPlugin : public draconis::core::plugin::IOutputFormatPlugin {
@@ -214,7 +213,6 @@ namespace {
       return "yaml";
     }
   };
-
 } // anonymous namespace
 
 DRAC_PLUGIN(YamlFormatPlugin)

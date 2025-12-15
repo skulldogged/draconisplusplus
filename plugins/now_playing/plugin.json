@@ -1,0 +1,17 @@
+{
+  "name": "now_playing",
+  "description": "Provides currently playing media information (Windows: NPSM, macOS: MediaRemote, Linux/BSD: MPRIS/DBus)",
+  "platform": "all",
+  "deps": [
+    {
+      "name": "dbus-1",
+      "include_type": "system",
+      "platforms": [
+        "linux",
+        "freebsd",
+        "dragonfly",
+        "netbsd"
+      ]
+    }
+  ]
+}

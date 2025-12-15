@@ -1,0 +1,6 @@
+{
+  "name": "json_format",
+  "description": "Cross-platform output formatter for JSON output",
+  "platform": "all",
+  "deps": []
+}

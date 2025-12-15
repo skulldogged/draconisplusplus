@@ -1,0 +1,6 @@
+{
+  "name": "markdown_format",
+  "description": "Cross-platform output formatter for Markdown output",
+  "platform": "all",
+  "deps": []
+}

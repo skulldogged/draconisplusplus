@@ -6,7 +6,7 @@
   "dependencies": [
     "asio",
     "curl",
-    "glfw3",
-    "magic-enum"
+    "magic-enum",
+    "mimalloc"
   ]
 }

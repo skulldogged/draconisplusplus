@@ -1,0 +1,6 @@
+{
+  "name": "yaml_format",
+  "description": "Cross-platform output formatter for YAML output using RapidYAML (single-header)",
+  "platform": "all",
+  "deps": []
+}

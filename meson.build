@@ -174,10 +174,16 @@ includes_dep = declare_dependency(include_directories: [project_public_includes,
 fs = import('fs')
 lib_deps = [includes_dep]
 
-# Core dependencies
 lib_deps += dependency(
   'magic_enum',
   fallback: ['magic_enum', 'magic_enum_dep'],
+  include_type: 'system',
+  static: true,
+)
+
+lib_deps += dependency(
+  'mimalloc',
+  fallback: ['mimalloc', 'mi_dep'],
   include_type: 'system',
   static: true,
 )
@@ -193,28 +199,13 @@ if get_option('precompiled_config') == true
   endif
 endif
 
-# Add curl dependency if weather plugin is in static plugins
-if get_option('precompiled_config') and 'weather' in get_option('static_plugins')
-  lib_deps += dependency('libcurl', include_type: 'system', static: true)
-endif
-
-# Add dbus-1 dependency if now_playing plugin is in static plugins (Linux/BSD only)
-if get_option('precompiled_config') and 'now_playing' in get_option('static_plugins')
-  if host_system not in ['windows', 'darwin', 'serenity', 'haiku']
-    lib_deps += dependency('dbus-1', include_type: 'system')
-  endif
-endif
-
 if feature_states['packagecount'] and host_system in ['darwin', 'linux']
   lib_deps += dependency('SQLiteCpp')
 endif
 
 # Plugin system dependencies
 if feature_states['plugins']
-  if host_system == 'windows'
-    # Windows uses LoadLibrary/FreeLibrary from kernel32.dll (already linked)
-  else
-    # Unix-like systems use dlopen/dlclose from libdl
+  if host_system != 'windows'
     lib_deps += cpp.find_library('dl')
   endif
 endif

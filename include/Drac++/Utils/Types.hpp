@@ -9,20 +9,20 @@
 
 #pragma once
 
-#include <array>         // std::array (Array)
-#include <expected>      // std::expected
-#include <functional>    // std::function (Fn)
-#include <future>        // std::future (Future)
-#include <map>           // std::map (Map)
-#include <memory>        // std::shared_ptr and std::unique_ptr (SharedPointer, UniquePointer)
-#include <mutex>         // std::mutex and std::lock_guard (Mutex, LockGuard)
-#include <optional>      // std::optional (Option)
-#include <span>          // std::span (Span)
-#include <string>        // std::string (String, StringView)
-#include <string_view>   // std::string_view (StringView)
-#include <unordered_map> // std::unordered_map (UnorderedMap)
-#include <utility>       // std::pair (Pair)
-#include <vector>        // std::vector (Vec)
+#include <ankerl/unordered_dense.h> // ankerl::unordered_dense::map (UnorderedMap)
+#include <array>                    // std::array (Array)
+#include <expected>                 // std::expected
+#include <functional>               // std::function (Fn)
+#include <future>                   // std::future (Future)
+#include <map>                      // std::map (Map)
+#include <memory>                   // std::shared_ptr and std::unique_ptr (SharedPointer, UniquePointer)
+#include <mutex>                    // std::mutex and std::lock_guard (Mutex, LockGuard)
+#include <optional>                 // std::optional (Option)
+#include <span>                     // std::span (Span)
+#include <string>                   // std::string (String, StringView)
+#include <string_view>              // std::string_view (StringView)
+#include <utility>                  // std::pair (Pair)
+#include <vector>                   // std::vector (Vec)
 
 namespace draconis::utils {
   // Forward decl for Result and Err
@@ -294,14 +294,14 @@ namespace draconis::utils {
     using Map = std::map<Key, Val, std::less<>>;
 
     /**
-     * @brief Alias for std::unordered_map<Key, Val>.
+     * @brief Alias for ankerl::unordered_dense::map<Key, Val>.
      *
-     * Represents an unordered map (dictionary).
+     * High-performance unordered map using Robin Hood hashing.
      * @tparam Key The key type.
      * @tparam Val The value type.
      */
     template <typename Key, typename Val>
-    using UnorderedMap = std::unordered_map<Key, Val>;
+    using UnorderedMap = ankerl::unordered_dense::map<Key, Val>;
 
     /**
      * @brief Alias for std::shared_ptr<Tp>.
