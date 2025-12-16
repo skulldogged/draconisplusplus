@@ -11,9 +11,10 @@ lib_sources = {
   'plugins' : files('Core/PluginManager.cpp'),
 }
 
-# Static plugin sources - dynamically discovered from the plugins/ directory
-# These are the same source files used for dynamic plugins, but compiled
-# with DRAC_STATIC_PLUGIN_BUILD defined to use namespace exports
+# Static plugin sources - for precompiled builds with static plugins
+# Clone the plugins repo directly into the project root:
+#   git clone https://github.com/skulldogged/draconisplusplus-plugins.git plugins
+# Then build with: meson setup build -Dprecompiled_config=true -Dstatic_plugins=weather,now_playing
 plugins_dir = meson.project_source_root() / 'plugins'
 static_plugin_registry = files('Core/StaticPlugins.cpp')
 
@@ -68,7 +69,7 @@ if get_option('precompiled_config')
       if fs.is_file(plugin_source_path)
         lib_all_sources += files(plugin_source_path)
       else
-        error('Plugin source not found: "@0@". Expected file: @1@'.format(plugin_name, plugin_source_path))
+        error('Plugin source not found: "@0@". Expected file: @1@\nClone the plugins repo: git clone https://github.com/skulldogged/draconisplusplus-plugins.git plugins'.format(plugin_name, plugin_source_path))
       endif
 
       # Load plugin's plugin.json to get its dependencies using Python

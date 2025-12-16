@@ -283,11 +283,6 @@ if get_option('build_tests')
   subdir('tests')
 endif
 
-# Build example plugins if plugin support is enabled
-if feature_states['plugins']
-  subdir('plugins')
-endif
-
 # =========================== #
 #   Install Headers           #
 # =========================== #

@@ -12,6 +12,7 @@ build/
 cmake-build-debug/
 CMakeFiles/
 out/
+plugins/
 Testing/
 docs/
 
