@@ -15,7 +15,7 @@ lib_sources = {
 # Clone the plugins repo directly into the project root:
 #   git clone https://github.com/skulldogged/draconisplusplus-plugins.git plugins
 # Then build with: meson setup build -Dprecompiled_config=true -Dstatic_plugins=weather,now_playing
-plugins_dir = meson.project_source_root() / 'plugins'
+plugins_dir = meson.project_source_root() / 'plugins' / 'plugins'
 static_plugin_registry = files('Core/StaticPlugins.cpp')
 
 # Platform-specific sources
