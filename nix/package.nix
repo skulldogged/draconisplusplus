@@ -32,6 +32,7 @@
     ]
     ++ (with pkgs.pkgsStatic; [
       curl
+      mimalloc
       magic-enum
       sqlitecpp
     ])

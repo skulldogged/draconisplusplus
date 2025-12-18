@@ -74,6 +74,7 @@
     dbus
     glaze
     llvmPackages_20.libcxx
+    mimalloc
     magic-enum
     openssl
     sqlite
