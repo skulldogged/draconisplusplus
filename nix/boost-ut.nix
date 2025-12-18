@@ -11,8 +11,6 @@ stdenv.mkDerivation rec {
     hash = "sha256-VCTrs0CMr4pUrJ2zEsO8s7j16zOkyDNhBc5zw0rAAZI=";
   };
 
-  sourceRoot = "ut-${version}";
-
   dontConfigure = true;
   dontBuild = true;
 
