@@ -8,8 +8,7 @@ stdenv.mkDerivation rec {
     owner = "boost-ext";
     repo = "ut";
     rev = "v${version}";
-    # Replace with the real hash when network access is available.
-    hash = lib.fakeSha256;
+    hash = "1cd9bssapl5pclp8wiv5hl92c74d4sbx7lprqcq9g0856y3z26z5";
   };
 
   sourceRoot = "ut-${version}";
