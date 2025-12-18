@@ -82,6 +82,7 @@
     xorg.libXau
     xorg.libXdmcp
     xorg.libxcb
+    boost-ut
 
     (mkOverridden "cmake" pugixml)
     (mkOverridden "cmake" sqlitecpp)

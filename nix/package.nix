@@ -29,12 +29,14 @@
           hash = "sha256-H1paMc0LH743aMHCO/Ocp96SaaoXLcl/MDmmbtSJG+Q=";
         };
       })
+      boost-ut
     ]
     ++ (with pkgs.pkgsStatic; [
       curl
       mimalloc
       magic-enum
       sqlitecpp
+      boost-ut
     ])
     ++ darwinPkgs
     ++ linuxPkgs;

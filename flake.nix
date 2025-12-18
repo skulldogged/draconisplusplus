@@ -51,6 +51,7 @@
             libunistring
             magic-enum
             sqlitecpp
+            boost-ut
           ])
           ++ darwinPkgs
           ++ linuxPkgs;
