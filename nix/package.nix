@@ -2,6 +2,7 @@
   pkgs,
   lib,
   self,
+  pluginsSrc ? null,
   ...
 }: let
   llvmPackages = pkgs.llvmPackages_20;
@@ -73,6 +74,11 @@
           python3
         ]
         ++ lib.optional stdenv.isLinux xxd;
+
+      postPatch =
+        lib.optionalString (pluginsSrc != null) ''
+          ln -s ${pluginsSrc} plugins
+        '';
 
       buildInputs = deps;
 

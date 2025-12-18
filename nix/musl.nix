@@ -3,6 +3,7 @@
   nixpkgs,
   self,
   lib,
+  pluginsSrc ? null,
   ...
 }: let
   muslPkgs = import nixpkgs {
@@ -105,6 +106,11 @@
           python3
         ]
         ++ lib.optional stdenv.isLinux xxd;
+
+      postPatch =
+        lib.optionalString (pluginsSrc != null) ''
+          ln -s ${pluginsSrc} plugins
+        '';
 
       mesonFlags = [
         "-Dbuild_for_musl=true"
