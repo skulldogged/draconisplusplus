@@ -5,6 +5,8 @@
   pluginsSrc ? null,
   ...
 }: let
+  basePluginsSrc = pluginsSrc;
+
   llvmPackages = pkgs.llvmPackages_20;
 
   stdenv = with pkgs;
@@ -52,7 +54,10 @@
       wayland
     ]));
 
-  mkDraconisPackage = {native}:
+  mkDraconisPackage = lib.makeOverridable ({
+    native,
+    pluginsSrc ? basePluginsSrc,
+  }:
     stdenv.mkDerivation {
       name =
         "draconis++"
@@ -120,7 +125,7 @@
         if native
         then 0
         else 1;
-    };
+    });
 in {
   "generic" = mkDraconisPackage {native = false;};
   "native" = mkDraconisPackage {native = true;};

@@ -249,7 +249,9 @@ with lib; let
   packageWithPlugins =
     if cfg.pluginsSrc == null
     then cfg.package
-    else cfg.package.override {pluginsSrc = cfg.pluginsSrc;};
+    else if lib.hasAttr "override" cfg.package
+    then cfg.package.override {pluginsSrc = cfg.pluginsSrc;}
+    else cfg.package;
 
   draconisWithOverrides = packageWithPlugins.overrideAttrs (oldAttrs: {
     postPatch =
