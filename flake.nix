@@ -24,11 +24,18 @@
       then null
       else builtins.path {path = envPath; name = "draconisplusplus-plugins";};
   in
-    {homeModules.default = import ./nix/module.nix {inherit self;};}
+    {
+      overlays.default = final: prev: {
+        boost-ut = final.callPackage ./nix/boost-ut.nix {};
+      };
+
+      homeModules.default = import ./nix/module.nix {inherit self;};
+    }
     // utils.lib.eachDefaultSystem (
       system: let
         pkgs = import nixpkgs {
           inherit system;
+          overlays = [self.overlays.default];
         };
 
         llvmPackages = pkgs.llvmPackages_21;

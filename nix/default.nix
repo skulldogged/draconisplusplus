@@ -9,6 +9,7 @@
 }: let
   pkgs = import nixpkgs {
     inherit system;
+    overlays = [self.overlays.default];
     # overlays = lib.optional (devkitNix != null) devkitNix.overlays.default;
   };
 

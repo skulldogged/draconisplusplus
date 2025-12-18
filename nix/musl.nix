@@ -11,6 +11,7 @@
   muslPkgs = import nixpkgs {
     system = "x86_64-linux-musl";
     overlays = [
+      self.overlays.default
       (final: prev: {
         mimalloc = prev.mimalloc.overrideAttrs (oldAttrs: {
           cmakeFlags =

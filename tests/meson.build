@@ -5,7 +5,6 @@
 ut_dep = dependency(
   'boost.ut',
   include_type: 'system',
-  allow_fallback: false,
 )
 
 test_deps = [ut_dep, draconis_dep] + lib_deps
