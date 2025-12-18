@@ -3,6 +3,7 @@
   self,
   system,
   lib,
+  pluginsSrc ? null,
   # devkitNix ? null,
   ...
 }: let
@@ -11,11 +12,11 @@
     # overlays = lib.optional (devkitNix != null) devkitNix.overlays.default;
   };
 
-  dracPackages = import ./package.nix {inherit pkgs self lib;};
+  dracPackages = import ./package.nix {inherit pkgs self lib pluginsSrc;};
 
   muslPackages =
     if pkgs.stdenv.isLinux
-    then import ./musl.nix {inherit pkgs nixpkgs self lib;}
+    then import ./musl.nix {inherit pkgs nixpkgs self lib pluginsSrc;}
     else {};
 in
   dracPackages
