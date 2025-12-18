@@ -167,6 +167,8 @@ endif
 project_public_includes = include_directories('include', is_system: true)
 third_party_includes = include_directories('third_party', is_system: true)
 
+fs = import('fs')
+
 # For static plugins, add the cloned plugins repo to include path
 # This allows #include "plugins/..." to work with the cloned repo structure.
 plugins_dir = meson.project_source_root() / 'plugins'
@@ -185,7 +187,6 @@ includes_dep = declare_dependency(
 # ================ #
 #   Dependencies   #
 # ================ #
-fs = import('fs')
 lib_deps = [includes_dep]
 
 lib_deps += dependency(
