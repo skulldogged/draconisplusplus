@@ -2,8 +2,11 @@
   pkgs,
   lib,
   self,
+  pluginsSrc ? null,
   ...
 }: let
+  basePluginsSrc = pluginsSrc;
+
   llvmPackages = pkgs.llvmPackages_20;
 
   stdenv = with pkgs;
@@ -13,6 +16,8 @@
       else lib.id
     )
     llvmPackages.stdenv;
+
+  boostUt = pkgs.callPackage ./boost-ut.nix {};
 
   deps = with pkgs;
     [
@@ -26,11 +31,14 @@
           hash = "sha256-H1paMc0LH743aMHCO/Ocp96SaaoXLcl/MDmmbtSJG+Q=";
         };
       })
+      boostUt
     ]
     ++ (with pkgs.pkgsStatic; [
       curl
+      mimalloc
       magic-enum
       sqlitecpp
+      boostUt
     ])
     ++ darwinPkgs
     ++ linuxPkgs;
@@ -51,7 +59,10 @@
       wayland
     ]));
 
-  mkDraconisPackage = {native}:
+  mkDraconisPackage = lib.makeOverridable ({
+    native,
+    pluginsSrc ? basePluginsSrc,
+  }:
     stdenv.mkDerivation {
       name =
         "draconis++"
@@ -73,6 +84,11 @@
           python3
         ]
         ++ lib.optional stdenv.isLinux xxd;
+
+      postPatch =
+        lib.optionalString (pluginsSrc != null) ''
+          ln -s ${pluginsSrc} plugins
+        '';
 
       buildInputs = deps;
 
@@ -114,7 +130,7 @@
         if native
         then 0
         else 1;
-    };
+    });
 in {
   "generic" = mkDraconisPackage {native = false;};
   "native" = mkDraconisPackage {native = true;};

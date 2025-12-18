@@ -1,0 +1,34 @@
+{lib, stdenv, fetchFromGitHub}:
+
+stdenv.mkDerivation rec {
+  pname = "boost-ut";
+  version = "2.3.1";
+
+  src = fetchFromGitHub {
+    owner = "boost-ext";
+    repo = "ut";
+    rev = "v${version}";
+    sha256 = "1cd9bssapl5pclp8wiv5hl92c74d4sbx7lprqcq9g0856y3z26z5";
+  };
+
+  sourceRoot = "ut-${version}";
+
+  dontConfigure = true;
+  dontBuild = true;
+
+  installPhase = ''
+    runHook preInstall
+
+    mkdir -p $out/include
+    cp -r include/boost $out/include/
+
+    runHook postInstall
+  '';
+
+  meta = {
+    description = "C++20 unit testing framework (Boost.UT)";
+    homepage = "https://github.com/boost-ext/ut";
+    license = lib.licenses.boost;
+    platforms = lib.platforms.all;
+  };
+}

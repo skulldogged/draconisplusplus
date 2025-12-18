@@ -15,8 +15,18 @@
     ...
   }: let
     inherit (nixpkgs) lib;
+
+    # Optional override to provide a local/plugins source without requiring
+    # an additional flake input. When unset, plugins are not vendored.
+    pluginsSrc =
+      let envPath = builtins.getEnv "DRACONIS_PLUGINS_SRC"; in
+      if envPath == ""
+      then null
+      else builtins.path {path = envPath; name = "draconisplusplus-plugins";};
   in
-    {homeModules.default = import ./nix/module.nix {inherit self;};}
+    {
+      homeModules.default = import ./nix/module.nix {inherit self;};
+    }
     // utils.lib.eachDefaultSystem (
       system: let
         pkgs = import nixpkgs {
@@ -33,6 +43,8 @@
           )
           llvmPackages.stdenv;
 
+        boostUt = pkgs.callPackage ./nix/boost-ut.nix {};
+
         devShellDeps = with pkgs;
           [
             (glaze.override {enableAvx2 = hostPlatform.isx86;})
@@ -43,6 +55,7 @@
             libunistring
             magic-enum
             sqlitecpp
+            boostUt
           ])
           ++ darwinPkgs
           ++ linuxPkgs;
@@ -61,7 +74,7 @@
             wayland
           ]));
 
-        draconisPkgs = import ./nix {inherit nixpkgs self system lib;};
+        draconisPkgs = import ./nix {inherit nixpkgs self system lib pluginsSrc;};
       in {
         packages = draconisPkgs;
         checks = draconisPkgs;

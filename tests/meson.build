@@ -2,7 +2,10 @@
 #  Unit Tests  #
 # ============ #
 
-ut_dep = dependency('boost.ut', include_type: 'system')
+ut_dep = dependency(
+  'boost.ut',
+  include_type: 'system',
+)
 
 test_deps = [ut_dep, draconis_dep] + lib_deps
 
