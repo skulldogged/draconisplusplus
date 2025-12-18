@@ -5,7 +5,10 @@
   ...
 }:
 with lib; let
-  cfg = config.programs.draconisplusplus;
+  cfg =
+    config.programs.draconisplusplus
+    or config.myconfig.programs.draconisplusplus
+    or {};
 
   tomlFormat = pkgs.formats.toml {};
 
@@ -515,4 +518,9 @@ in {
       }
     ];
   };
+
+  # Compatibility: allow consumers that nest modules under `myconfig` to
+  # reference the same options.
+  options.myconfig.programs.draconisplusplus =
+    mkAliasDefinitions options.programs.draconisplusplus;
 }
