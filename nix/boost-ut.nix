@@ -17,8 +17,16 @@ stdenv.mkDerivation rec {
   installPhase = ''
     runHook preInstall
 
-    mkdir -p $out/include
+    mkdir -p $out/include $out/lib/pkgconfig
+
     cp -r include/boost $out/include/
+
+    cat > $out/lib/pkgconfig/boost.ut.pc << EOF
+    Name: boost.ut
+    Description: C++20 unit testing framework
+    Version: ${version}
+    Cflags: -I$out/include
+    EOF
 
     runHook postInstall
   '';
