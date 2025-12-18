@@ -168,9 +168,19 @@ project_public_includes = include_directories('include', is_system: true)
 third_party_includes = include_directories('third_party', is_system: true)
 
 # For static plugins, add the cloned plugins repo to include path
-# This allows #include "plugins/..." to work with the cloned repo structure
-plugins_includes = include_directories('plugins', is_system: true)
-includes_dep = declare_dependency(include_directories: [project_public_includes, third_party_includes, plugins_includes])
+# This allows #include "plugins/..." to work with the cloned repo structure.
+plugins_dir = meson.project_source_root() / 'plugins'
+plugins_includes = []
+
+if fs.is_dir(plugins_dir)
+  plugins_includes = [include_directories('plugins', is_system: true)]
+else
+  message('Plugins directory not found; static plugins will be unavailable unless provided externally.')
+endif
+
+includes_dep = declare_dependency(
+  include_directories: [project_public_includes, third_party_includes] + plugins_includes,
+)
 
 # ================ #
 #   Dependencies   #

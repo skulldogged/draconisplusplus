@@ -3,8 +3,11 @@
   nixpkgs,
   self,
   lib,
+  pluginsSrc ? null,
   ...
 }: let
+  basePluginsSrc = pluginsSrc;
+
   muslPkgs = import nixpkgs {
     system = "x86_64-linux-musl";
     overlays = [
@@ -83,7 +86,10 @@
     (mkOverridden "cmake" sqlitecpp)
   ];
 
-  mkDraconisPackage = {native}:
+  mkDraconisPackage = lib.makeOverridable ({
+    native,
+    pluginsSrc ? basePluginsSrc,
+  }:
     stdenv.mkDerivation {
       name =
         "draconis++-musl"
@@ -105,6 +111,11 @@
           python3
         ]
         ++ lib.optional stdenv.isLinux xxd;
+
+      postPatch =
+        lib.optionalString (pluginsSrc != null) ''
+          ln -s ${pluginsSrc} plugins
+        '';
 
       mesonFlags = [
         "-Dbuild_for_musl=true"
@@ -147,7 +158,7 @@
         else 1;
 
       meta.staticExecutable = true;
-    };
+    });
 in {
   "musl-generic" = mkDraconisPackage {native = false;};
   "musl-native" = mkDraconisPackage {native = true;};

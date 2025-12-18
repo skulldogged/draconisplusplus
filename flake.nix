@@ -15,6 +15,14 @@
     ...
   }: let
     inherit (nixpkgs) lib;
+
+    # Optional override to provide a local/plugins source without requiring
+    # an additional flake input. When unset, plugins are not vendored.
+    pluginsSrc =
+      let envPath = builtins.getEnv "DRACONIS_PLUGINS_SRC"; in
+      if envPath == ""
+      then null
+      else builtins.path {path = envPath; name = "draconisplusplus-plugins";};
   in
     {homeModules.default = import ./nix/module.nix {inherit self;};}
     // utils.lib.eachDefaultSystem (
@@ -61,7 +69,7 @@
             wayland
           ]));
 
-        draconisPkgs = import ./nix {inherit nixpkgs self system lib;};
+        draconisPkgs = import ./nix {inherit nixpkgs self system lib pluginsSrc;};
       in {
         packages = draconisPkgs;
         checks = draconisPkgs;
