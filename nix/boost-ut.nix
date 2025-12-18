@@ -8,7 +8,7 @@ stdenv.mkDerivation rec {
     owner = "boost-ext";
     repo = "ut";
     rev = "v${version}";
-    sha256 = "1cd9bssapl5pclp8wiv5hl92c74d4sbx7lprqcq9g0856y3z26z5";
+    hash = "sha256-VCTrs0CMr4pUrJ2zEsO8s7j16zOkyDNhBc5zw0rAAZI=";
   };
 
   sourceRoot = "ut-${version}";
