@@ -189,10 +189,12 @@ with lib; let
       else
         ''Coordinates { 0.0, 0.0 }'';
 
-  # Generate weather config struct (inside draconis::config namespace)
+  # Generate weather config include (OUTSIDE namespace to avoid collision)
+  weatherConfigInclude = ''#include "plugins/weather/WeatherConfig.hpp"'';
+
+  # Generate weather config variable (INSIDE namespace)
   weatherConfigCode =
     if hasWeatherConfig then ''
-      #include "plugins/weather/WeatherConfig.hpp"
       inline constexpr auto WEATHER_CONFIG = weather::config::MakeConfig(
         weather::config::Provider::${weatherProviderToEnum (weatherPluginConfig.provider or "openmeteo")},
         weather::config::Units::${weatherUnitsToEnum (weatherPluginConfig.units or "metric")},
@@ -201,7 +203,6 @@ with lib; let
     ''
     else ''
       // No weather plugin configured - using defaults
-      #include "plugins/weather/WeatherConfig.hpp"
       inline constexpr auto WEATHER_CONFIG = weather::config::MakeConfig(
         weather::config::Provider::OpenMeteo,
         weather::config::Units::Metric,
@@ -225,6 +226,8 @@ with lib; let
         #if DRAC_ENABLE_PACKAGECOUNT
           #include <Drac++/Services/Packages.hpp>
         #endif
+
+        ${lib.optionalString hasWeatherPlugin weatherConfigInclude}
 
       namespace draconis::config {
         constexpr const char* DRAC_USERNAME = "${cfg.username}";
