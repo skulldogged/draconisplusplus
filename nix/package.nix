@@ -17,6 +17,8 @@
     )
     llvmPackages.stdenv;
 
+  boostUt = pkgs.callPackage ./boost-ut.nix {};
+
   deps = with pkgs;
     [
       ((glaze.override {enableAvx2 = hostPlatform.isx86;}).overrideAttrs rec {
@@ -29,14 +31,14 @@
           hash = "sha256-H1paMc0LH743aMHCO/Ocp96SaaoXLcl/MDmmbtSJG+Q=";
         };
       })
-      boost-ut
+      boostUt
     ]
     ++ (with pkgs.pkgsStatic; [
       curl
       mimalloc
       magic-enum
       sqlitecpp
-      boost-ut
+      boostUt
     ])
     ++ darwinPkgs
     ++ linuxPkgs;

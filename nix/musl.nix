@@ -11,7 +11,6 @@
   muslPkgs = import nixpkgs {
     system = "x86_64-linux-musl";
     overlays = [
-      self.overlays.default
       (final: prev: {
         mimalloc = prev.mimalloc.overrideAttrs (oldAttrs: {
           cmakeFlags =
@@ -54,6 +53,8 @@
     enableAvx2 = stdenv.hostPlatform.isx86;
   });
 
+  boostUt = pkgs.callPackage ./boost-ut.nix {};
+
   mkOverridden = buildSystem: pkg: ((pkg.override {inherit stdenv;}).overrideAttrs (oldAttrs: {
     "${buildSystem}Flags" =
       (oldAttrs."${buildSystem}Flags" or [])
@@ -83,7 +84,7 @@
     xorg.libXau
     xorg.libXdmcp
     xorg.libxcb
-    boost-ut
+    boostUt
 
     (mkOverridden "cmake" pugixml)
     (mkOverridden "cmake" sqlitecpp)

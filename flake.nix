@@ -25,17 +25,12 @@
       else builtins.path {path = envPath; name = "draconisplusplus-plugins";};
   in
     {
-      overlays.default = final: prev: {
-        boost-ut = final.callPackage ./nix/boost-ut.nix {};
-      };
-
       homeModules.default = import ./nix/module.nix {inherit self;};
     }
     // utils.lib.eachDefaultSystem (
       system: let
         pkgs = import nixpkgs {
           inherit system;
-          overlays = [self.overlays.default];
         };
 
         llvmPackages = pkgs.llvmPackages_21;
@@ -48,6 +43,8 @@
           )
           llvmPackages.stdenv;
 
+        boostUt = pkgs.callPackage ./nix/boost-ut.nix {};
+
         devShellDeps = with pkgs;
           [
             (glaze.override {enableAvx2 = hostPlatform.isx86;})
@@ -58,7 +55,7 @@
             libunistring
             magic-enum
             sqlitecpp
-            boost-ut
+            boostUt
           ])
           ++ darwinPkgs
           ++ linuxPkgs;
