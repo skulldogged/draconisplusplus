@@ -21,7 +21,7 @@
 
   deps = with pkgs;
     [
-      ((glaze.override {enableAvx2 = hostPlatform.isx86;}).overrideAttrs rec {
+      (glaze.overrideAttrs rec {
         version = "6.1.0";
 
         src = pkgs.fetchFromGitHub {

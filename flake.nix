@@ -47,7 +47,7 @@
 
         devShellDeps = with pkgs;
           [
-            (glaze.override {enableAvx2 = hostPlatform.isx86;})
+            glaze
           ]
           ++ (with pkgsStatic; [
             asio

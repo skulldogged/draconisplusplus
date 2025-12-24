@@ -49,8 +49,6 @@
       ];
 
     doCheck = false;
-
-    enableAvx2 = stdenv.hostPlatform.isx86;
   });
 
   boostUt = pkgs.callPackage ./boost-ut.nix {};
