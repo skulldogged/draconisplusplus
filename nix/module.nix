@@ -107,7 +107,7 @@ with lib; let
     ["\\" "\""]
     ["\\\\"
       "\\\""]
-    s;
+    (toString s);
 
   layoutRowToHpp =
     row:
@@ -330,7 +330,7 @@ in {
       type = types.submodule {
         options = {
           path = mkOption {
-            type = types.nullOr types.str;
+            type = types.nullOr types.path;
             default = null;
             description = "Path to the logo image.";
           };
