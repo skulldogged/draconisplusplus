@@ -54,6 +54,17 @@ namespace draconis::config {
   [[nodiscard]] constexpr auto Group(const char* name, const std::array<PrecompiledLayoutRow, n>& rows) -> PrecompiledLayoutGroup {
     return { .name = name, .rows = std::span<const PrecompiledLayoutRow>(rows) };
   }
+
+  /**
+   * @brief Compile-time logo configuration used by precompiled configs.
+   * All fields are optional (nullptr/0 means not set).
+   */
+  struct PrecompiledLogo {
+    const char* path     = nullptr; ///< Path to image file, nullptr = not set
+    const char* protocol = nullptr; ///< "kitty", "kitty-direct", or "iterm2", nullptr = default (kitty)
+    unsigned    width    = 0;       ///< Width in pixels, 0 = not set
+    unsigned    height   = 0;       ///< Height in pixels, 0 = not set
+  };
 } // namespace draconis::config
 
 #endif // DRAC_PRECOMPILED_CONFIG
