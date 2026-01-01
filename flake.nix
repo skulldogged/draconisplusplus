@@ -58,7 +58,26 @@
               cmakeFlags = (old.cmakeFlags or []) ++ ["-DMAGIC_ENUM_OPT_BUILD_TESTS=OFF"];
             }))
             mimalloc
-            sqlitecpp
+            (sqlitecpp.overrideAttrs (old: {
+              postInstall =
+                (old.postInstall or "")
+                + ''
+                  mkdir -p $out/lib/pkgconfig
+                  cat <<EOF > $out/lib/pkgconfig/sqlitecpp.pc
+                  prefix=$out
+                  exec_prefix=\''${prefix}
+                  libdir=\''${prefix}/lib
+                  includedir=\''${prefix}/include
+
+                  Name: SQLiteCpp
+                  Description: SQLiteCpp is a smart and easy to use C++ SQLite3 wrapper.
+                  Version: ${old.version}
+                  Libs: -L\''${libdir} -lSQLiteCpp
+                  Cflags: -I\''${includedir}
+                  Requires: sqlite3
+                  EOF
+                '';
+            }))
             boostUt
           ])
           ++ darwinPkgs

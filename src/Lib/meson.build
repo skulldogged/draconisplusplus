@@ -44,6 +44,9 @@ lib_all_sources += platform_sources.get(host_system, files())
 static_plugin_cpp_args = []
 static_plugins = get_option('static_plugins')
 
+# Whether any plugin requires codesigning (macOS only, for private framework access)
+plugin_requires_codesign = false
+
 if get_option('precompiled_config')
   # In precompiled config mode, static_plugins is the single source of truth
   # If static_plugins is non-empty, plugins are enabled with those plugins compiled in
@@ -77,6 +80,7 @@ if get_option('precompiled_config')
         # Use Python to parse JSON and output deps in a simple format
         # Format: DEP|name|include_type|static|platforms (one per line)
         # Format: SRC|filename|platforms (one per line)
+        # Format: CODESIGN|true/false (one line if present)
         parse_result = run_command(
           'python', '-c', '''
 import json, sys
@@ -92,6 +96,8 @@ for src in data.get("sources", []):
     filename = src.get("file", "")
     platforms = ",".join(src.get("platforms", []))
     print(f"SRC|{filename}|{platforms}")
+if data.get("codesign", False):
+    print("CODESIGN|true")
 ''',
           plugin_json_path,
           check: true,
@@ -144,6 +150,9 @@ for src in data.get("sources", []):
                   warning('Plugin @0@: source file not found: @1@'.format(plugin_name, src_full_path))
                 endif
               endif
+            elif line_type == 'CODESIGN'
+              # Plugin requires codesigning (only relevant on macOS)
+              plugin_requires_codesign = true
             endif
           endforeach
         endif
