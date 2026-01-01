@@ -49,6 +49,16 @@ with lib; let
       height = cfg.logo.height;
     };
 
+  # Generate C++ logo config for precompiled builds
+  logoConfigCode = ''
+    inline constexpr PrecompiledLogo DRAC_LOGO = {
+      ${lib.optionalString (cfg.logo.path != null) ".path = \"${escapeCppString cfg.logo.path}\","}
+      ${lib.optionalString (cfg.logo.protocol != null) ".protocol = \"${cfg.logo.protocol}\","}
+      ${lib.optionalString (cfg.logo.width != null) ".width = ${toString cfg.logo.width},"}
+      ${lib.optionalString (cfg.logo.height != null) ".height = ${toString cfg.logo.height},"}
+    };
+  '';
+
   defaultLayout = [
     {
       name = "intro";
@@ -97,7 +107,7 @@ with lib; let
     ["\\" "\""]
     ["\\\\"
       "\\\""]
-    s;
+    (toString s);
 
   layoutRowToHpp =
     row:
@@ -232,6 +242,8 @@ with lib; let
       namespace draconis::config {
         constexpr const char* DRAC_USERNAME = "${cfg.username}";
 
+        ${logoConfigCode}
+
         #if DRAC_ENABLE_PACKAGECOUNT
         constexpr services::packages::Manager DRAC_ENABLED_PACKAGE_MANAGERS = ${packageManagerValue};
         #endif
@@ -318,7 +330,7 @@ in {
       type = types.submodule {
         options = {
           path = mkOption {
-            type = types.nullOr types.str;
+            type = types.nullOr types.path;
             default = null;
             description = "Path to the logo image.";
           };

@@ -301,6 +301,61 @@ namespace draconis::ui {
       return None;
     }
 
+    // Detect if the terminal supports inline image rendering (Kitty/iTerm2 protocols).
+    auto SupportsInlineImages(LogoProtocol protocol) -> bool {
+#ifdef _WIN32
+      // Windows terminals generally don't support inline images via these protocols
+      return false;
+#else
+      // Must be a TTY to render images
+      if (isatty(STDOUT_FILENO) == 0)
+        return false;
+
+      // Helper to get environment variable
+      const auto getEnv = [](const char* name) -> Option<String> {
+        if (const char* val = std::getenv(name))
+          return String(val);
+        return None;
+      };
+
+      // WezTerm supports both Kitty and iTerm2 protocols
+      if (const Option<String> termProgram = getEnv("TERM_PROGRAM"))
+        if (*termProgram == "WezTerm")
+          return true;
+
+      // Check for Kitty terminal
+      if (protocol == LogoProtocol::Kitty || protocol == LogoProtocol::KittyDirect) {
+        // KITTY_WINDOW_ID is set by Kitty terminal
+        if (getEnv("KITTY_WINDOW_ID"))
+          return true;
+
+        // Check TERM for kitty
+        if (const Option<String> term = getEnv("TERM"))
+          if (term->find("kitty") != String::npos)
+            return true;
+
+        return false;
+      }
+
+      // Check for iTerm2
+      if (protocol == LogoProtocol::Iterm2) {
+        // TERM_PROGRAM is set by iTerm2
+        if (const Option<String> termProgram = getEnv("TERM_PROGRAM"))
+          if (*termProgram == "iTerm.app")
+            return true;
+
+        // LC_TERMINAL is another indicator
+        if (const Option<String> lcTerminal = getEnv("LC_TERMINAL"))
+          if (*lcTerminal == "iTerm2")
+            return true;
+
+        return false;
+      }
+
+      return false;
+#endif
+    }
+
     // Best-effort probe for PNG and JPEG dimensions to estimate cell footprint.
     auto ProbeImageSize(const String& path) -> Option<ImageSize> {
       std::ifstream file(path, std::ios::binary);
@@ -471,6 +526,10 @@ namespace draconis::ui {
 
       const LogoProtocol protocol = logoCfg.getProtocol();
       if (protocol != LogoProtocol::Kitty && protocol != LogoProtocol::KittyDirect && protocol != LogoProtocol::Iterm2)
+        return None;
+
+      // Check if terminal supports the requested image protocol; fall back to ASCII if not
+      if (!SupportsInlineImages(protocol))
         return None;
 
       usize logoWidthPx  = logoCfg.width.value_or(0);
