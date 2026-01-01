@@ -49,6 +49,8 @@
   darwinPkgs = lib.optionals stdenv.isDarwin (with pkgs.pkgsStatic; [
     libiconv
     apple-sdk_15
+  ] ++ [
+    pkgs.darwin.sigtool
   ]);
 
   linuxPkgs = lib.optionals stdenv.isLinux (with pkgs;
