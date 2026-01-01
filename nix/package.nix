@@ -129,11 +129,14 @@
         mv build/src/Lib/libdrac++.a $out/lib/
         mkdir -p $out/include
         cp -r include/Drac++ $out/include/
-        runHook postInstall
-      '';
-
-      postInstall = lib.optionalString stdenv.isDarwin ''
-        codesign --force -s - --identifier com.apple.draconisplusplus $out/bin/draconis++
+        
+        echo "Checking for codesign..."
+        command -v codesign || echo "codesign not found"
+        
+        ${lib.optionalString stdenv.isDarwin ''
+          echo "Signing binary..."
+          codesign --force -s - --identifier com.apple.draconisplusplus $out/bin/draconis++
+        ''}
       '';
 
       NIX_ENFORCE_NO_NATIVE =
