@@ -129,6 +129,7 @@
         mv build/src/Lib/libdrac++.a $out/lib/
         mkdir -p $out/include
         cp -r include/Drac++ $out/include/
+        runHook postInstall
       '';
 
       postInstall = lib.optionalString stdenv.isDarwin ''
