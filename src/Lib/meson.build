@@ -72,10 +72,11 @@ if get_option('precompiled_config')
         error('Plugin source not found: "@0@". Expected file: @1@\nClone the plugins repo: git clone https://github.com/skulldogged/draconisplusplus-plugins.git plugins'.format(plugin_name, plugin_source_path))
       endif
 
-      # Load plugin's plugin.json to get its dependencies using Python
+      # Load plugin's plugin.json to get its dependencies and sources using Python
       if fs.is_file(plugin_json_path)
         # Use Python to parse JSON and output deps in a simple format
-        # Format: name|include_type|static|platforms (one per line)
+        # Format: DEP|name|include_type|static|platforms (one per line)
+        # Format: SRC|filename|platforms (one per line)
         parse_result = run_command(
           'python', '-c', '''
 import json, sys
@@ -86,31 +87,63 @@ for dep in data.get("deps", []):
     inc_type = dep.get("include_type", "preserve")
     static = "true" if dep.get("static", False) else "false"
     platforms = ",".join(dep.get("platforms", []))
-    print(f"{name}|{inc_type}|{static}|{platforms}")
+    print(f"DEP|{name}|{inc_type}|{static}|{platforms}")
+for src in data.get("sources", []):
+    filename = src.get("file", "")
+    platforms = ",".join(src.get("platforms", []))
+    print(f"SRC|{filename}|{platforms}")
 ''',
           plugin_json_path,
           check: true,
         )
         
-        deps_output = parse_result.stdout().strip()
-        if deps_output != ''
-          foreach dep_line : deps_output.split('\n')
-            dep_parts = dep_line.split('|')
-            dep_name = dep_parts[0]
-            dep_include_type = dep_parts[1]
-            dep_static = dep_parts[2] == 'true'
-            dep_platforms_str = dep_parts[3]
+        parse_output = parse_result.stdout().strip()
+        if parse_output != ''
+          foreach line : parse_output.split('\n')
+            parts = line.split('|')
+            line_type = parts[0]
             
-            # Check if this dependency is platform-specific
-            if dep_platforms_str != ''
-              dep_platforms = dep_platforms_str.split(',')
-              # Only add if current platform is in the list
-              if host_system in dep_platforms
+            if line_type == 'DEP'
+              dep_name = parts[1]
+              dep_include_type = parts[2]
+              dep_static = parts[3] == 'true'
+              dep_platforms_str = parts[4]
+              
+              # Check if this dependency is platform-specific
+              if dep_platforms_str != ''
+                dep_platforms = dep_platforms_str.split(',')
+                # Only add if current platform is in the list
+                if host_system in dep_platforms
+                  static_plugin_deps += dependency(dep_name, include_type: dep_include_type, static: dep_static)
+                endif
+              else
+                # No platform restriction, add unconditionally
                 static_plugin_deps += dependency(dep_name, include_type: dep_include_type, static: dep_static)
               endif
-            else
-              # No platform restriction, add unconditionally
-              static_plugin_deps += dependency(dep_name, include_type: dep_include_type, static: dep_static)
+            elif line_type == 'SRC'
+              src_filename = parts[1]
+              src_platforms_str = parts[2]
+              
+              # Check if this source is platform-specific
+              should_add = false
+              if src_platforms_str != ''
+                src_platforms = src_platforms_str.split(',')
+                if host_system in src_platforms
+                  should_add = true
+                endif
+              else
+                # No platform restriction, add unconditionally
+                should_add = true
+              endif
+              
+              if should_add
+                src_full_path = plugins_dir / plugin_name / src_filename
+                if fs.is_file(src_full_path)
+                  lib_all_sources += files(src_full_path)
+                else
+                  warning('Plugin @0@: source file not found: @1@'.format(plugin_name, src_full_path))
+                endif
+              endif
             endif
           endforeach
         endif

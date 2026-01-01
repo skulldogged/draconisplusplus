@@ -5,7 +5,7 @@
   #include <CoreGraphics/CGDirectDisplay.h>  // CGDisplayCopyDeviceDescription, CGDisplayCopyDisplayMode, CGDisplayIsMain, CGDisplayModeGetMaximumRefreshRate, CGDisplayModeGetRefreshRate, CGDisplayPixelsHigh, CGDisplayPixelsWide, CGDisplayRef, CGDisplayModeRef, CGDirectDisplayID
   #include <IOKit/ps/IOPSKeys.h>             // kIOPSCurrentCapacityKey, kIOPSInternalBatteryType, kIOPSIsChargingKey, kIOPSTimeToEmptyKey, kIOPSTypeKey
   #include <IOKit/ps/IOPowerSources.h>       // IOPSCopyPowerSourcesInfo, IOPSGetPowerSourceDescription
-  #include <flat_map>                        // std::flat_map
+  #include <map>                             // std::map
   #include <ifaddrs.h>                       // freeifaddrs, getifaddrs, ifaddrs, sockaddr
   #include <mach/mach_host.h>                // host_statistics64
   #include <mach/mach_init.h>                // host_page_size, mach_host_self
@@ -197,7 +197,7 @@ namespace draconis::core::system {
 
       // taken from https://github.com/fastfetch-cli/fastfetch/blob/dev/src/detection/host/host_mac.c
       // shortened a lot of the entries to remove unnecessary info
-      static const std::flat_map<StringView, StringView> MODEL_NAME_BY_HW_MODEL = {
+      static const std::map<StringView, StringView> MODEL_NAME_BY_HW_MODEL = {
         // MacBook Pro
         { "MacBookPro18,3",      "MacBook Pro (14-inch, 2021)" },
         { "MacBookPro18,4",      "MacBook Pro (14-inch, 2021)" },
@@ -627,7 +627,7 @@ namespace draconis::core::system {
       UniquePointer<ifaddrs, decltype(&freeifaddrs)> ifaddrsDeleter(ifaddrList, &freeifaddrs);
 
       // Use a map to collect interface information since getifaddrs returns multiple entries per interface
-      std::flat_map<String, NetworkInterface> interfaceMap;
+      std::map<String, NetworkInterface> interfaceMap;
 
       for (ifaddrs* ifa = ifaddrList; ifa != nullptr; ifa = ifa->ifa_next) {
         if (ifa->ifa_addr == nullptr)

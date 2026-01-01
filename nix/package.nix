@@ -36,7 +36,10 @@
     ++ (with pkgs.pkgsStatic; [
       curl
       mimalloc
-      magic-enum
+      (magic-enum.overrideAttrs (old: {
+        doCheck = false;
+        cmakeFlags = (old.cmakeFlags or []) ++ ["-DMAGIC_ENUM_OPT_BUILD_TESTS=OFF"];
+      }))
       sqlitecpp
       boostUt
     ])

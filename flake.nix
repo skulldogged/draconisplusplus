@@ -53,7 +53,11 @@
             asio
             curl
             libunistring
-            magic-enum
+            (magic-enum.overrideAttrs (old: {
+              doCheck = false;
+              cmakeFlags = (old.cmakeFlags or []) ++ ["-DMAGIC_ENUM_OPT_BUILD_TESTS=OFF"];
+            }))
+            mimalloc
             sqlitecpp
             boostUt
           ])
@@ -90,9 +94,9 @@
               just
               llvmPackages.clang-tools
               meson
-              mesonlsp
               ninja
               pkg-config
+              python3
 
               (writeScriptBin "build" "meson compile -C build")
               (writeScriptBin "clean" ("meson setup build --wipe -Dprecompiled_config=true" + lib.optionalString pkgs.stdenv.isLinux " -Duse_linked_pci_ids=true"))
@@ -108,11 +112,12 @@
             lib.optionalString pkgs.stdenv.hostPlatform.isDarwin ''
               export SDKROOT=${pkgs.pkgsStatic.apple-sdk_15}/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk
               export DEVELOPER_DIR=${pkgs.pkgsStatic.apple-sdk_15}
+              export MACOSX_DEPLOYMENT_TARGET=14.0
               export LDFLAGS="-L${pkgs.pkgsStatic.libiconvReal}/lib $LDFLAGS"
-              export NIX_CFLAGS_COMPILE="-isysroot $SDKROOT"
-              export NIX_CXXFLAGS_COMPILE="-isysroot $SDKROOT"
-              export NIX_OBJCFLAGS_COMPILE="-isysroot $SDKROOT"
-              export NIX_OBJCXXFLAGS_COMPILE="-isysroot $SDKROOT"
+              export NIX_CFLAGS_COMPILE="-isysroot $SDKROOT -mmacosx-version-min=14.0"
+              export NIX_CXXFLAGS_COMPILE="-isysroot $SDKROOT -mmacosx-version-min=14.0"
+              export NIX_OBJCFLAGS_COMPILE="-isysroot $SDKROOT -mmacosx-version-min=14.0"
+              export NIX_OBJCXXFLAGS_COMPILE="-isysroot $SDKROOT -mmacosx-version-min=14.0"
             ''
             + lib.optionalString pkgs.stdenv.hostPlatform.isLinux ''
               cp ${pkgs.pciutils}/share/pci.ids pci.ids

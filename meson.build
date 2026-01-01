@@ -196,12 +196,15 @@ lib_deps += dependency(
   static: true,
 )
 
-lib_deps += dependency(
-  'mimalloc',
-  fallback: ['mimalloc', 'mi_dep'],
-  include_type: 'system',
-  static: true,
-)
+# mimalloc causes issues on macOS due to mixed allocator usage with system libraries
+if host_system != 'darwin'
+  lib_deps += dependency(
+    'mimalloc',
+    fallback: ['mimalloc', 'mi_dep'],
+    include_type: 'system',
+    static: true,
+  )
+endif
 
 # Precompiled configuration
 if get_option('precompiled_config') == true
