@@ -131,6 +131,10 @@
         cp -r include/Drac++ $out/include/
       '';
 
+      postInstall = lib.optionalString stdenv.isDarwin ''
+        codesign --force -s - --identifier com.apple.draconisplusplus $out/bin/draconis++
+      '';
+
       NIX_ENFORCE_NO_NATIVE =
         if native
         then 0
