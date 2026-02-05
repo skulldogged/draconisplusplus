@@ -15,6 +15,22 @@ with lib; let
   isLinux = stdenvHost.isLinux or false;
   isDarwin = stdenvHost.isDarwin or false;
 
+  # Helper: Wrap a path in a fixed-output derivation
+  # This ensures the store path is stable based on file content, not flake changes
+  mkStablePath = filePath:
+    if filePath == null then null
+    else
+      pkgs.runCommand "draconis-asset" {
+        outputHashMode = "flat";
+        outputHashAlgo = "sha256";
+        outputHash = builtins.hashFile "sha256" filePath;
+      } ''
+        cp ${filePath} $out
+      '';
+
+  # Stabilize the logo path so it doesn't change with flake updates
+  stableLogoPath = mkStablePath cfg.logo.path;
+
   managerEnumMap = {
     cargo = "Cargo";
     nix = "Nix";
@@ -43,16 +59,17 @@ with lib; let
 
   logoAttrs =
     filterAttrs (_: v: v != null) {
-      path = cfg.logo.path;
+      path = stableLogoPath;
       protocol = cfg.logo.protocol;
       width = cfg.logo.width;
       height = cfg.logo.height;
     };
 
   # Generate C++ logo config for precompiled builds
+  # Use stableLogoPath so the embedded path is stable based on file content, not flake changes
   logoConfigCode = ''
     inline constexpr PrecompiledLogo DRAC_LOGO = {
-      ${lib.optionalString (cfg.logo.path != null) ".path = \"${escapeCppString cfg.logo.path}\","}
+      ${lib.optionalString (stableLogoPath != null) ".path = \"${stableLogoPath}\","}
       ${lib.optionalString (cfg.logo.protocol != null) ".protocol = \"${cfg.logo.protocol}\","}
       ${lib.optionalString (cfg.logo.width != null) ".width = ${toString cfg.logo.width},"}
       ${lib.optionalString (cfg.logo.height != null) ".height = ${toString cfg.logo.height},"}
