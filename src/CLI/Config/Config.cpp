@@ -292,7 +292,16 @@ namespace draconis::config {
   #endif
 
     PopulatePrecompiledLayout(cfg);
-    ;
+
+    // Logo settings from precompiled config
+    if (DRAC_LOGO.path != nullptr && std::strlen(DRAC_LOGO.path) > 0)
+      cfg.logo.imagePath = DRAC_LOGO.path;
+    if (DRAC_LOGO.protocol != nullptr && std::strlen(DRAC_LOGO.protocol) > 0)
+      cfg.logo.protocol = DRAC_LOGO.protocol;
+    if (DRAC_LOGO.width > 0)
+      cfg.logo.width = DRAC_LOGO.width;
+    if (DRAC_LOGO.height > 0)
+      cfg.logo.height = DRAC_LOGO.height;
 
     debug_log("Using precompiled configuration.");
     return cfg;

@@ -2,21 +2,26 @@
   pkgs,
   lib,
   self,
+  pluginsSrc ? null,
   ...
 }: let
+  basePluginsSrc = pluginsSrc;
+
   llvmPackages = pkgs.llvmPackages_20;
 
   stdenv = with pkgs;
     (
-      if hostPlatform.isLinux
+      if pkgs.stdenv.hostPlatform.isLinux
       then stdenvAdapters.useMoldLinker
       else lib.id
     )
     llvmPackages.stdenv;
 
+  boostUt = pkgs.callPackage ./boost-ut.nix {};
+
   deps = with pkgs;
     [
-      ((glaze.override {enableAvx2 = hostPlatform.isx86;}).overrideAttrs rec {
+      (glaze.overrideAttrs rec {
         version = "6.1.0";
 
         src = pkgs.fetchFromGitHub {
@@ -26,11 +31,17 @@
           hash = "sha256-H1paMc0LH743aMHCO/Ocp96SaaoXLcl/MDmmbtSJG+Q=";
         };
       })
+      boostUt
     ]
     ++ (with pkgs.pkgsStatic; [
       curl
-      magic-enum
+      mimalloc
+      (magic-enum.overrideAttrs (old: {
+        doCheck = false;
+        cmakeFlags = (old.cmakeFlags or []) ++ ["-DMAGIC_ENUM_OPT_BUILD_TESTS=OFF"];
+      }))
       sqlitecpp
+      boostUt
     ])
     ++ darwinPkgs
     ++ linuxPkgs;
@@ -38,6 +49,8 @@
   darwinPkgs = lib.optionals stdenv.isDarwin (with pkgs.pkgsStatic; [
     libiconv
     apple-sdk_15
+  ] ++ [
+    pkgs.darwin.sigtool
   ]);
 
   linuxPkgs = lib.optionals stdenv.isLinux (with pkgs;
@@ -51,7 +64,10 @@
       wayland
     ]));
 
-  mkDraconisPackage = {native}:
+  mkDraconisPackage = lib.makeOverridable ({
+    native,
+    pluginsSrc ? basePluginsSrc,
+  }:
     stdenv.mkDerivation {
       name =
         "draconis++"
@@ -73,6 +89,11 @@
           python3
         ]
         ++ lib.optional stdenv.isLinux xxd;
+
+      postPatch =
+        lib.optionalString (pluginsSrc != null) ''
+          ln -s ${pluginsSrc} plugins
+        '';
 
       buildInputs = deps;
 
@@ -110,11 +131,16 @@
         cp -r include/Drac++ $out/include/
       '';
 
+      postFixup = lib.optionalString stdenv.isDarwin ''
+        echo "Signing binary..."
+        codesign --force -s - --identifier com.apple.draconisplusplus $out/bin/draconis++
+      '';
+
       NIX_ENFORCE_NO_NATIVE =
         if native
         then 0
         else 1;
-    };
+    });
 in {
   "generic" = mkDraconisPackage {native = false;};
   "native" = mkDraconisPackage {native = true;};

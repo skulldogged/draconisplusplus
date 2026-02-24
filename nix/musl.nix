@@ -3,8 +3,11 @@
   nixpkgs,
   self,
   lib,
+  pluginsSrc ? null,
   ...
 }: let
+  basePluginsSrc = pluginsSrc;
+
   muslPkgs = import nixpkgs {
     system = "x86_64-linux-musl";
     overlays = [
@@ -46,9 +49,9 @@
       ];
 
     doCheck = false;
-
-    enableAvx2 = stdenv.hostPlatform.isx86;
   });
+
+  boostUt = pkgs.callPackage ./boost-ut.nix {};
 
   mkOverridden = buildSystem: pkg: ((pkg.override {inherit stdenv;}).overrideAttrs (oldAttrs: {
     "${buildSystem}Flags" =
@@ -71,19 +74,27 @@
     dbus
     glaze
     llvmPackages_20.libcxx
-    magic-enum
+    mimalloc
+    (magic-enum.overrideAttrs (old: {
+      doCheck = false;
+      cmakeFlags = (old.cmakeFlags or []) ++ ["-DMAGIC_ENUM_OPT_BUILD_TESTS=OFF"];
+    }))
     openssl
     sqlite
     wayland
     xorg.libXau
     xorg.libXdmcp
     libxcb
+    boostUt
 
     (mkOverridden "cmake" pugixml)
     (mkOverridden "cmake" sqlitecpp)
   ];
 
-  mkDraconisPackage = {native}:
+  mkDraconisPackage = lib.makeOverridable ({
+    native,
+    pluginsSrc ? basePluginsSrc,
+  }:
     stdenv.mkDerivation {
       name =
         "draconis++-musl"
@@ -105,6 +116,11 @@
           python3
         ]
         ++ lib.optional stdenv.isLinux xxd;
+
+      postPatch =
+        lib.optionalString (pluginsSrc != null) ''
+          ln -s ${pluginsSrc} plugins
+        '';
 
       mesonFlags = [
         "-Dbuild_for_musl=true"
@@ -147,7 +163,7 @@
         else 1;
 
       meta.staticExecutable = true;
-    };
+    });
 in {
   "musl-generic" = mkDraconisPackage {native = false;};
   "musl-native" = mkDraconisPackage {native = true;};

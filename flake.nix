@@ -15,8 +15,18 @@
     ...
   }: let
     inherit (nixpkgs) lib;
+
+    # Optional override to provide a local/plugins source without requiring
+    # an additional flake input. When unset, plugins are not vendored.
+    pluginsSrc =
+      let envPath = builtins.getEnv "DRACONIS_PLUGINS_SRC"; in
+      if envPath == ""
+      then null
+      else builtins.path {path = envPath; name = "draconisplusplus-plugins";};
   in
-    {homeModules.default = import ./nix/module.nix {inherit self;};}
+    {
+      homeModules.default = import ./nix/module.nix {inherit self;};
+    }
     // utils.lib.eachDefaultSystem (
       system: let
         pkgs = import nixpkgs {
@@ -27,22 +37,48 @@
 
         stdenv = with pkgs;
           (
-            if hostPlatform.isLinux
+            if pkgs.stdenv.hostPlatform.isLinux
             then stdenvAdapters.useMoldLinker
             else lib.id
           )
           llvmPackages.stdenv;
 
+        boostUt = pkgs.callPackage ./nix/boost-ut.nix {};
+
         devShellDeps = with pkgs;
           [
-            (glaze.override {enableAvx2 = hostPlatform.isx86;})
+            glaze
           ]
           ++ (with pkgsStatic; [
             asio
             curl
             libunistring
-            magic-enum
-            sqlitecpp
+            (magic-enum.overrideAttrs (old: {
+              doCheck = false;
+              cmakeFlags = (old.cmakeFlags or []) ++ ["-DMAGIC_ENUM_OPT_BUILD_TESTS=OFF"];
+            }))
+            mimalloc
+            (sqlitecpp.overrideAttrs (old: {
+              postInstall =
+                (old.postInstall or "")
+                + ''
+                  mkdir -p $out/lib/pkgconfig
+                  cat <<EOF > $out/lib/pkgconfig/sqlitecpp.pc
+                  prefix=$out
+                  exec_prefix=\''${prefix}
+                  libdir=\''${prefix}/lib
+                  includedir=\''${prefix}/include
+
+                  Name: SQLiteCpp
+                  Description: SQLiteCpp is a smart and easy to use C++ SQLite3 wrapper.
+                  Version: ${old.version}
+                  Libs: -L\''${libdir} -lSQLiteCpp
+                  Cflags: -I\''${includedir}
+                  Requires: sqlite3
+                  EOF
+                '';
+            }))
+            boostUt
           ])
           ++ darwinPkgs
           ++ linuxPkgs;
@@ -50,6 +86,8 @@
         darwinPkgs = lib.optionals stdenv.isDarwin (with pkgs.pkgsStatic; [
           libiconv
           apple-sdk_15
+        ] ++ [
+          pkgs.darwin.sigtool
         ]);
 
         linuxPkgs = lib.optionals stdenv.isLinux (with pkgs;
@@ -61,7 +99,7 @@
             wayland
           ]));
 
-        draconisPkgs = import ./nix {inherit nixpkgs self system lib;};
+        draconisPkgs = import ./nix {inherit nixpkgs self system lib pluginsSrc;};
       in {
         packages = draconisPkgs;
         checks = draconisPkgs;
@@ -77,9 +115,9 @@
               just
               llvmPackages.clang-tools
               meson
-              mesonlsp
               ninja
               pkg-config
+              python3
 
               (writeScriptBin "build" "meson compile -C build")
               (writeScriptBin "clean" ("meson setup build --wipe -Dprecompiled_config=true" + lib.optionalString pkgs.stdenv.isLinux " -Duse_linked_pci_ids=true"))
@@ -95,11 +133,12 @@
             lib.optionalString pkgs.stdenv.hostPlatform.isDarwin ''
               export SDKROOT=${pkgs.pkgsStatic.apple-sdk_15}/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk
               export DEVELOPER_DIR=${pkgs.pkgsStatic.apple-sdk_15}
+              export MACOSX_DEPLOYMENT_TARGET=14.0
               export LDFLAGS="-L${pkgs.pkgsStatic.libiconvReal}/lib $LDFLAGS"
-              export NIX_CFLAGS_COMPILE="-isysroot $SDKROOT"
-              export NIX_CXXFLAGS_COMPILE="-isysroot $SDKROOT"
-              export NIX_OBJCFLAGS_COMPILE="-isysroot $SDKROOT"
-              export NIX_OBJCXXFLAGS_COMPILE="-isysroot $SDKROOT"
+              export NIX_CFLAGS_COMPILE="-isysroot $SDKROOT -mmacosx-version-min=14.0"
+              export NIX_CXXFLAGS_COMPILE="-isysroot $SDKROOT -mmacosx-version-min=14.0"
+              export NIX_OBJCFLAGS_COMPILE="-isysroot $SDKROOT -mmacosx-version-min=14.0"
+              export NIX_OBJCXXFLAGS_COMPILE="-isysroot $SDKROOT -mmacosx-version-min=14.0"
             ''
             + lib.optionalString pkgs.stdenv.hostPlatform.isLinux ''
               cp ${pkgs.pciutils}/share/pci.ids pci.ids

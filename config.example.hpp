@@ -33,6 +33,23 @@ namespace draconis::config {
    */
   constexpr const char* DRAC_USERNAME = "User";
 
+  /**
+   * @brief Logo configuration for inline image rendering.
+   * @details Supports Kitty, Kitty-Direct, and iTerm2 protocols.
+   * Set path to nullptr to disable inline logo and use ASCII art instead.
+   *
+   * Example with custom logo:
+   * @code{.cpp}
+   * inline constexpr PrecompiledLogo DRAC_LOGO = {
+   *   .path     = "/path/to/logo.png",
+   *   .protocol = "kitty",  // or "kitty-direct", "iterm2"
+   *   .width    = 200,      // optional, in pixels
+   *   .height   = 0,        // optional, 0 = auto from aspect ratio
+   * };
+   * @endcode
+   */
+  inline constexpr PrecompiledLogo DRAC_LOGO = {};
+
   #if DRAC_ENABLE_PACKAGECOUNT
   /**
    * @brief Configures which package managers' counts are displayed.
