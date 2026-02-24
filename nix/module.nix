@@ -9,7 +9,7 @@ with lib; let
 
   tomlFormat = pkgs.formats.toml {};
 
-  defaultPackage = self.packages.${pkgs.system}.default;
+  defaultPackage = self.packages.${pkgs.stdenv.hostPlatform.system}.default;
 
   stdenvHost = pkgs.stdenv;
   isLinux = stdenvHost.isLinux or false;

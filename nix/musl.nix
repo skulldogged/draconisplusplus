@@ -77,7 +77,7 @@
     wayland
     xorg.libXau
     xorg.libXdmcp
-    xorg.libxcb
+    libxcb
 
     (mkOverridden "cmake" pugixml)
     (mkOverridden "cmake" sqlitecpp)

@@ -57,7 +57,7 @@
           ++ (with pkgsStatic; [
             dbus
             pugixml
-            xorg.libxcb
+            libxcb
             wayland
           ]));
 
